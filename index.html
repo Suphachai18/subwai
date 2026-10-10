@@ -215,7 +215,8 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .iconbtn:disabled{opacity:.35;cursor:not-allowed}
 .player{width:100%;display:grid;gap:8px;justify-items:center}
 .screen{position:relative;background:#000;border-radius:10px;overflow:hidden;max-width:100%}
-.screen video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;pointer-events:none}
+.screen video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;background:transparent}
+.screen .bgcv{inset:-10%;width:120%;height:120%;filter:blur(14px) brightness(.7);pointer-events:none;touch-action:auto}
 .screen canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:pointer;display:block}
 .fs-close{display:none}
 .pctl{display:flex;align-items:center;gap:8px;width:100%;max-width:640px}
@@ -915,7 +916,7 @@ function drawVideo(ctx, W, H, v, p, fallback) {
   ctx.drawImage(tinyCv, 0, 0, W, H); ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0, 0, W, H);
   const w = sw * contain, h = sh * contain; ctx.drawImage(src, (W - w) / 2, (H - h) / 2, w, h);
 }
-function renderFrame(ctx, W, H, v, p, t) { drawVideo(ctx, W, H, v, p, null); const c = captionAt(p.captions, t); if (c) drawCaption(ctx, W, H, c, p, t); }
+function renderFrame(ctx, W, H, v, p, t) { try { drawVideo(ctx, W, H, v, p, null); } catch {} const c = captionAt(p.captions, t); if (c) { try { drawCaption(ctx, W, H, c, p, t); } catch (e) { console.error(e); } } }
 
 /* ================= AI proofreading and keyword emphasis ================= */
 async function aiProofread(p, onProg) {
@@ -1388,7 +1389,7 @@ async function viewEditor(id) {
     }
     url = URL.createObjectURL(blob);
     col.innerHTML = `<div class="player" id="player">
-        <div class="screen" id="screen"><video id="vid" playsinline webkit-playsinline preload="auto"></video><canvas id="cv" aria-label="วิดีโอ แตะเพื่อเล่นหรือหยุด แตะซับเพื่อแก้ ลากซับขึ้นลงเพื่อย้าย"></canvas></div>
+        <div class="screen" id="screen"><canvas id="bgcv" class="bgcv" width="48" height="85" aria-hidden="true"></canvas><video id="vid" playsinline webkit-playsinline preload="auto"${p.thumb ? ` poster="${p.thumb}"` : ""}></video><canvas id="cv" aria-label="วิดีโอ แตะเพื่อเล่นหรือหยุด แตะซับเพื่อแก้ ลากซับขึ้นลงเพื่อย้าย"></canvas></div>
         <button class="fs-close" id="fsClose" aria-label="ออกจากเต็มจอ">✕</button>
         <div class="pctl">
           <button class="pbtn play" id="pPlay" aria-label="เล่น">▶</button>
@@ -1456,14 +1457,32 @@ async function viewEditor(id) {
     scr.style.width = w + "px"; scr.style.height = h + "px";
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const bg = $("#bgcv"); if (bg) { bg.width = 48; bg.height = Math.max(1, Math.round(48 / ratio)); }
     draw();
+  }
+  let bgAt = 0;
+  function paintBg(force) {
+    // blurred fill behind the video when the frame shape differs from the clip
+    const bg = $("#bgcv"); if (!bg || !video) return;
+    const vr = (video.videoWidth || p.width || 9) / (video.videoHeight || p.height || 16), fr = bg.width / bg.height;
+    const need = p.layout !== "orig" && p.fit !== "fill" && Math.abs(vr - fr) > 0.01;
+    bg.hidden = !need; video.style.objectFit = p.fit === "fill" && p.layout !== "orig" ? "cover" : "contain";
+    if (!need) return;
+    const now = performance.now(); if (!force && now - bgAt < 250) return; bgAt = now;
+    try {
+      const b = bg.getContext("2d"), src = video.readyState >= 2 && video.videoWidth ? video : (thumbImg && thumbImg.naturalWidth ? thumbImg : null);
+      b.fillStyle = "#222"; b.fillRect(0, 0, bg.width, bg.height); if (!src) return;
+      const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight, k = Math.max(bg.width / sw, bg.height / sh);
+      b.drawImage(src, (bg.width - sw * k) / 2, (bg.height - sh * k) / 2, sw * k, sh * k);
+    } catch {}
   }
   function draw() {
     if (!cv) return;
     const ctx = cv.getContext("2d"), t = video ? video.currentTime : 0;
-    drawVideo(ctx, cv.width, cv.height, video, p, thumbImg);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    paintBg(video && video.paused);
     const c = captionAt(p.captions, t);
-    if (c) drawCaption(ctx, cv.width, cv.height, c, p, t);
+    if (c) { try { drawCaption(ctx, cv.width, cv.height, c, p, t); } catch (e) { console.error(e); } }
     const d = (video && video.duration) || p.duration || 0;
     const pt = $("#pTime"); if (pt) pt.textContent = `${fmtDur(t)} / ${fmtDur(d)}`;
     const sk = $("#pSeek"); if (sk && document.activeElement !== sk) sk.value = d ? Math.round(t / d * 1000) : 0;
