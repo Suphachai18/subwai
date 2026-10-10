@@ -108,6 +108,17 @@ textarea.input{min-height:72px;resize:vertical}
 .ed-grid{display:grid;gap:18px}
 @media (min-width:900px){ .ed-grid{grid-template-columns:minmax(0,1fr) minmax(0,460px);align-items:start} .stage-col{position:sticky;top:84px} }
 .stage-col{display:grid;gap:10px;justify-items:center;min-width:0}
+@media (max-width:899px){ .stage-col{position:sticky;top:69px;z-index:4;background:var(--bg);padding-block:6px 10px;border-bottom:1px solid var(--line)} }
+.qe{width:100%;max-width:640px;display:grid;gap:6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:8px 10px}
+.qe-bar{display:flex;align-items:center;gap:6px}
+.qe-bar .mono{margin-left:auto;margin-right:auto;font-size:12.5px}
+.qbtn{min-width:40px;min-height:36px;border-radius:8px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-family:var(--ui);font-weight:600;font-size:14px;padding:0 10px}
+.qbtn.play{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.qe textarea{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg);resize:none;padding:6px 8px;font-family:var(--ui);font-size:16px;line-height:1.4}
+.qe textarea.tr{font-size:14.5px;color:var(--accent-text)}
+.qe-acts{display:flex;flex-wrap:wrap;gap:2px}
+.npprev{display:block;margin:0 auto;border-radius:10px;background:#3A4150;max-width:100%;max-height:46vh}
+.np-looks{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:104px;overflow-x:auto;padding-bottom:4px}
 .stage{position:relative;background:#000;border-radius:10px;overflow:hidden;max-width:100%}
 .stage video{display:block;width:100%;height:100%;object-fit:contain}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -788,6 +799,31 @@ function pickMime() {
   return list.find(m => MediaRecorder.isTypeSupported(m)) || "";
 }
 
+/* ================= shared style + AI effect helpers ================= */
+const KEEP_KEYS = ["size", "pos", "anim", "size2", "order"];
+function lookStyleFrom(base, L) { const keep = Object.fromEntries(KEEP_KEYS.map(k => [k, base[k]])); return { ...base, ...LOOK_BASE, ...L.s, ...keep, look: L.id }; }
+function paintThumbG(cv, style, cap, t, bg) {
+  const c = cv.getContext("2d"), W = cv.width, H = cv.height;
+  c.clearRect(0, 0, W, H);
+  if (bg && bg.complete && bg.naturalWidth) {
+    const k = Math.max(W / bg.naturalWidth, H / bg.naturalHeight), w = bg.naturalWidth * k, h = bg.naturalHeight * k;
+    c.drawImage(bg, (W - w) / 2, (H - h) / 2, w, h); c.fillStyle = "rgba(0,0,0,.28)"; c.fillRect(0, 0, W, H);
+  } else { c.fillStyle = "#3A4150"; c.fillRect(0, 0, W, H); }
+  if (t == null || (t >= cap.start && t < cap.end)) drawCaption(c, W, H, cap, { lang: "th", tr: { lang: "", mode: "main" }, style }, t);
+}
+async function aiSuggestSfx(p) {
+  const effects = Object.fromEntries(Object.entries(BUILTIN).map(([k, d]) => [k, d.en]));
+  const j = await chatJSON([
+    { role: "system", content: "You are a social-media video editor adding sound effects to a short video. Choose moments where a sound effect makes the video more engaging: the opening hook, a new tip, a price or deal, a reveal, a list item, a joke, a transition. Use a light touch: about one effect every 6 to 12 seconds at most, never two on neighbouring lines, and pick the effect whose meaning fits the line. Reply only with JSON: {\"items\":[{\"i\": line_index, \"s\": \"effect_key\"}]}" },
+    { role: "user", content: JSON.stringify({ duration_seconds: Math.round(p.duration), effects, lines: p.captions.map((c, i) => ({ i, t: c.start, text: c.text })) }) }
+  ]);
+  const items = (j.items || []).filter(x => p.captions[x.i] && BUILTIN[x.s]);
+  if (!items.length) throw new Error("AI ไม่ได้แนะนำจุดใดเลย");
+  const added = items.filter(x => !p.sfx.some(s => Math.abs(s.t - p.captions[x.i].start) < 0.5)).map(x => ({ id: uid(), key: "b:" + x.s, t: +p.captions[x.i].start.toFixed(2), vol: 1 }));
+  p.sfx.push(...added); p.sfx.sort((a, c) => a.t - c.t);
+  return added;
+}
+
 /* ================= views ================= */
 const app = $("#app");
 let cleanup = null;
@@ -842,17 +878,45 @@ function viewNew() {
       <div class="field"><label for="vocab">คำเฉพาะที่อยากให้ AI สะกดถูก <span class="muted">(ไม่บังคับ)</span></label>
         <textarea class="input" id="vocab" placeholder="เช่น ชื่อแบรนด์ ชื่อรุ่นสินค้า ชื่อคน คั่นด้วยจุลภาค">${esc(settings.vocab)}</textarea>
         <span class="hint">AI จะสะกดคำเหล่านี้ถูกขึ้น และคงชื่อไว้ตามเดิมตอนแปล</span></div>
+      <div class="field"><span class="lab">สไตล์ซับ</span><span class="hint">เลือกไว้ก่อน แก้ทีหลังได้ในหน้าตัวอย่าง</span>
+        <canvas id="npPrev" class="npprev" width="640" height="360"></canvas>
+        <div class="lookgrid np-looks" id="npLooks">${LOOKS.map(L => `<button type="button" class="look" data-id="${L.id}"><canvas width="240" height="150"></canvas><span>${L.n}</span></button>`).join("")}</div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="npFont">ฟอนต์</label><select class="input" id="npFont">${FONTS.map(([f]) => `<option value="${f}">${f}</option>`).join("")}</select></div>
+        <div class="field"><label for="npAnim">อนิเมชัน</label><select class="input" id="npAnim">${Object.entries(ANIMS).map(([k, a]) => `<option value="${k}">${a.n}</option>`).join("")}</select></div>
+      </div>
+      <label class="sw"><input type="checkbox" id="npSfx"> ให้ AI ใส่เอฟเฟกต์เสียงให้อัตโนมัติ</label>
       <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
       <ol class="steps" id="steps" hidden>
         <li data-s="audio"><span class="dot"></span><span id="audLab">แยกเสียงจากวิดีโอ</span></li>
         <li data-s="ai"><span class="dot"></span><span id="aiLab">ส่งให้ AI ถอดเสียง</span></li>
         <li data-s="cap"><span class="dot"></span>จัดบรรทัดซับ</li>
         <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
+        <li data-s="sfx" hidden><span class="dot"></span>AI ใส่เอฟเฟกต์เสียง</li>
       </ol>
       <div class="err" id="err" hidden></div>
     </div>`;
   $("#bk").onclick = () => { if (!busy) setView(viewHome); };
   $$("#mc button").forEach(b => b.onclick = () => { $$("#mc button").forEach(x => x.setAttribute("aria-pressed", x === b)); maxChars = +b.dataset.v; });
+  /* style picker */
+  let npStyle = { ...DEFAULT_STYLE, ...settings.style }, npBg = null, npRaf = 0;
+  const NP_SAMPLE = { id: "np", start: 0.3, end: 3, text: "ตัวอย่างซับของคุณ", tr: "" };
+  $("#npSfx").checked = settings.autoSfx !== false;
+  const syncNp = () => {
+    $("#npFont").value = npStyle.font; $("#npAnim").value = ANIMS[npStyle.anim] ? npStyle.anim : "none";
+    $$("#npLooks .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === npStyle.look));
+  };
+  const paintNpLooks = async () => { for (const b of $$("#npLooks .look")) { const st = lookStyleFrom(npStyle, LOOKS.find(L => L.id === b.dataset.id)); await ensureFont(st); paintThumbG($("canvas", b), { ...st, size: 290, pos: 52, anim: "none" }, THUMB_CAP, null, npBg); } };
+  const npTick = now => { const t = (now % 3500) / 1000; paintThumbG($("#npPrev"), npStyle, NP_SAMPLE, t, npBg); npRaf = requestAnimationFrame(npTick); };
+  npRaf = requestAnimationFrame(npTick);
+  cleanup = () => cancelAnimationFrame(npRaf);
+  $$("#npLooks .look").forEach(b => b.onclick = async () => { npStyle = lookStyleFrom(npStyle, LOOKS.find(L => L.id === b.dataset.id)); await ensureFont(npStyle); syncNp(); });
+  $("#npFont").onchange = async e => { const w = fontW(e.target.value); npStyle.font = e.target.value; npStyle.weight = npStyle.weight >= 600 ? w[1] : w[0]; npStyle.look = ""; await ensureFont(npStyle); syncNp(); };
+  $("#npAnim").onchange = e => { npStyle.anim = e.target.value; syncNp(); };
+  ensureFont(npStyle); syncNp(); paintNpLooks();
+  const setNpShape = (w, h) => { const cv = $("#npPrev"); if (w && h && h > w) { cv.width = 360; cv.height = 640; } else { cv.width = 640; cv.height = 360; } };
+
   const refresh = () => { $("#go").disabled = !file || busy; if (!busy) $("#go").textContent = hasKey() ? "เริ่มสร้างซับ" : "ใส่ API key แล้วเริ่มสร้างซับ"; };
   refresh();
 
@@ -866,6 +930,8 @@ function viewNew() {
     try {
       meta = await probeVideo(f);
       $("#fthumb").src = meta.thumb || "";
+      setNpShape(meta.width, meta.height);
+      if (meta.thumb) { npBg = new Image(); npBg.onload = paintNpLooks; npBg.src = meta.thumb; }
       const est = Math.max(0.01, meta.duration / 60 * 0.006);
       $("#fmeta").textContent = `${fmtSize(f.size)} · ยาว ${fmtDur(meta.duration)} · ${meta.width}×${meta.height} · ค่า AI ประมาณ $${est.toFixed(2)}`;
       if (meta.duration > 1800) toast("คลิปยาวเกิน 30 นาที อาจใช้เวลานานและเครื่องอาจค้าง", 4000);
@@ -887,11 +953,14 @@ function viewNew() {
     const steps = $("#steps"); steps.hidden = false;
     $$("li", steps).forEach(li => li.className = "");
     $('li[data-s="tr"]', steps).hidden = !lang2;
+    const autoSfx = $("#npSfx").checked;
+    $('li[data-s="sfx"]', steps).hidden = !autoSfx;
     if (lang2) $("#trLab").textContent = "แปลเป็นภาษา" + LNAME[lang2];
     const mark = (s, c) => { $(`li[data-s="${s}"]`, steps).className = c; };
     let stage = "audio";
     try {
-      settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim(); saveSettings();
+      settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
+      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; saveSettings();
       mark("audio", "doing");
       const { chunks, duration } = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
       if (cap) cap.dispose();
@@ -915,7 +984,7 @@ function viewNew() {
       const p = normalize({
         id, name: $("#pname").value.trim() || file.name, createdAt: Date.now(), updatedAt: Date.now(),
         duration: (meta && meta.duration) || duration, width: meta ? meta.width : 0, height: meta ? meta.height : 0,
-        thumb: meta ? meta.thumb : "", fileName: file.name, lang: plang, maxChars, raw, captions, style: { ...settings.style },
+        thumb: meta ? meta.thumb : "", fileName: file.name, lang: plang, maxChars, raw, captions, style: { ...npStyle },
         tr: { lang: lang2 && lang2 !== plang ? lang2 : "", mode: lang2 && lang2 !== plang ? "both" : "main" }, videoSaved: false
       });
       try { await DB.putVideo(id, file); p.videoSaved = true; } catch { tempVideos[id] = file; }
@@ -926,6 +995,11 @@ function viewNew() {
           await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trLab").textContent = `แปลเป็นภาษา${LNAME[p.tr.lang]} (${d}/${t})`);
           mark("tr", "done"); await DB.put(p);
         } catch (e) { mark("tr", "fail"); toast("ซับพร้อมแล้ว แต่แปลไม่สำเร็จ: " + e.message + " กดแปลใหม่ได้ในหน้าแก้ไข", 6000); await sleep(1500); }
+      }
+      if (autoSfx) {
+        stage = "sfx"; mark("sfx", "doing");
+        try { await aiSuggestSfx(p); mark("sfx", "done"); await DB.put(p); }
+        catch (e) { mark("sfx", "fail"); toast("ซับพร้อมแล้ว แต่ใส่เอฟเฟกต์ไม่สำเร็จ กดให้ AI ใส่ใหม่ได้ในแท็บเอฟเฟกต์", 5000); await sleep(1200); }
       }
       await sleep(300);
       busy = false;
@@ -1092,13 +1166,21 @@ async function viewEditor(id) {
       return;
     }
     url = URL.createObjectURL(blob);
-    col.innerHTML = `<div class="stage" id="stage"><video id="vid" playsinline controls preload="metadata"></video><canvas id="ov"></canvas></div><span class="hint">ซับและเอฟเฟกต์ในตัวอย่างนี้คือแบบเดียวกับวิดีโอที่ส่งออก</span>`;
+    col.innerHTML = `<div class="stage" id="stage"><video id="vid" playsinline controls preload="metadata"></video><canvas id="ov"></canvas></div>
+      <div class="qe" id="qe">
+        <div class="qe-bar"><button class="qbtn" id="qPrev" aria-label="บรรทัดก่อนหน้า">‹</button><button class="qbtn play" id="qPlay">▶ เล่น</button><span class="mono hint" id="qTime"></span><button class="qbtn" id="qNext" aria-label="บรรทัดถัดไป">›</button></div>
+        <textarea id="qText" rows="2" aria-label="แก้ซับบรรทัดนี้" placeholder="ช่วงนี้ไม่มีซับ"></textarea>
+        <textarea id="qTr" rows="1" class="tr" aria-label="แก้คำแปลบรรทัดนี้" hidden></textarea>
+        <div class="qe-acts"><button class="mini" data-q="early">⏪ ซับขึ้นช้าไป</button><button class="mini" data-q="late">⏩ ซับขึ้นเร็วไป</button><button class="mini" data-q="merge">รวมกับถัดไป</button><button class="mini del" data-q="del">ลบบรรทัด</button></div>
+      </div>`;
     video = $("#vid"); cv = $("#ov"); video.src = url;
     video.volume = Math.min(1, p.audio.orig);
     video.addEventListener("loadedmetadata", () => { if (!p.width) { p.width = video.videoWidth; p.height = video.videoHeight; } sizeStage(); draw(); });
     ["seeked", "timeupdate", "pause"].forEach(ev => video.addEventListener(ev, draw));
     ["seeking", "pause", "ended"].forEach(ev => video.addEventListener(ev, stopLive));
-    video.addEventListener("play", () => { getPAC(); loop(); });
+    video.addEventListener("play", () => { getPAC(); loop(); $("#qPlay").textContent = "❚❚ หยุด"; });
+    ["pause", "ended"].forEach(ev => video.addEventListener(ev, () => { const b = $("#qPlay"); if (b) b.textContent = "▶ เล่น"; }));
+    setupQuick();
     video.addEventListener("timeupdate", () => { const n = $("#nowPos"); if (n) n.textContent = fmtT(video.currentTime); });
     sizeStage();
   }
@@ -1106,7 +1188,7 @@ async function viewEditor(id) {
   function sizeStage() {
     const st = $("#stage"); if (!st) return;
     const ratio = (p.width && p.height) ? p.width / p.height : 16 / 9;
-    const aw = $("#stageCol").clientWidth, maxH = window.innerHeight * (window.innerWidth >= 900 ? 0.78 : 0.58);
+    const aw = $("#stageCol").clientWidth, maxH = window.innerHeight * (window.innerWidth >= 900 ? 0.7 : 0.36);
     let w = Math.min(aw, maxH * ratio), h = w / ratio;
     st.style.width = w + "px"; st.style.height = h + "px";
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -1125,9 +1207,61 @@ async function viewEditor(id) {
       $$(".cap.on").forEach(x => x.classList.remove("on"));
       if (nid) {
         const el = $(`.cap[data-id="${nid}"]`);
-        if (el) { el.classList.add("on"); if (video && !video.paused && !el.contains(document.activeElement) && !$('.pane[data-p="text"]').hidden) el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+        if (el) {
+          el.classList.add("on");
+          // follow along only inside the list's own scroll box (desktop); never move the page
+          const box = $("#caps");
+          if (video && !video.paused && box && box.scrollHeight > box.clientHeight + 4 && !box.contains(document.activeElement))
+            box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 3;
+        }
       }
     }
+    syncQuick(t);
+  }
+  /* quick edit: the caption under the playhead */
+  let qId;
+  const qCap = () => p.captions.find(c => c.id === qId);
+  function syncQuick(t, force) {
+    const qt = $("#qText"); if (!qt) return;
+    if (!force && (document.activeElement === qt || document.activeElement === $("#qTr"))) return;
+    let c = captionAt(p.captions, t);
+    if (!c) { for (const x of p.captions) { if (x.start <= t) c = x; else break; } c = c || p.captions[0]; }
+    const nid = c ? c.id : null;
+    if (nid === qId && !force) return;
+    qId = nid;
+    qt.value = c ? c.text : ""; const tr = $("#qTr"); tr.hidden = !p.tr.lang; tr.value = c ? (c.tr || "") : "";
+    tr.placeholder = p.tr.lang ? "คำแปลภาษา" + LNAME[p.tr.lang] : "";
+    $("#qTime").textContent = c ? `${fmtT(c.start)}–${fmtT(c.end)}` : "";
+  }
+  function setupQuick() {
+    const go = (c, play) => { if (!c || !video) return; video.currentTime = c.start + 0.01; qId = undefined; syncQuick(c.start + 0.01, true); if (play) video.play().catch(() => {}); };
+    $("#qPlay").onclick = () => { if (!video) return; if (!video.paused) { video.pause(); return; } const c = qCap(); if (c) go(c, true); else video.play().catch(() => {}); };
+    $("#qPrev").onclick = () => { const i = p.captions.findIndex(c => c.id === qId); video.pause(); go(p.captions[Math.max(0, i - 1)]); };
+    $("#qNext").onclick = () => { const i = p.captions.findIndex(c => c.id === qId); video.pause(); go(p.captions[Math.min(p.captions.length - 1, i + 1)]); };
+    const edit = (f, ta) => { const c = qCap(); if (!c) return; c[f] = ta.value; const li = $(`.cap[data-id="${c.id}"] textarea[data-f="${f}"]`); if (li) { li.value = ta.value; autoH(li); } draw(); scheduleSave(); };
+    $("#qText").addEventListener("focus", () => video && video.pause());
+    $("#qTr").addEventListener("focus", () => video && video.pause());
+    $("#qText").oninput = e => edit("text", e.target);
+    $("#qTr").oninput = e => edit("tr", e.target);
+    $("#qe").addEventListener("click", e => {
+      const b = e.target.closest("[data-q]"); if (!b) return;
+      const i = p.captions.findIndex(c => c.id === qId), c = p.captions[i]; if (!c) return;
+      const a = b.dataset.q;
+      if (a === "early" || a === "late") {
+        const d = a === "early" ? -0.2 : 0.2, len = c.end - c.start;
+        c.start = +Math.max(0, c.start + d).toFixed(2); c.end = +(c.start + len).toFixed(2);
+        p.captions.sort((x, y) => x.start - y.start); scheduleSave(); renderCaps(); go(c, true);
+        toast(a === "early" ? "ให้ซับขึ้นเร็วขึ้น 0.2 วินาที" : "ให้ซับขึ้นช้าลง 0.2 วินาที", 1400);
+      } else if (a === "merge") {
+        const n = p.captions[i + 1]; if (!n) { toast("เป็นบรรทัดสุดท้ายแล้ว"); return; }
+        c.text = joinTok(c.text, n.text); c.tr = joinTok(c.tr || "", n.tr || ""); c.end = n.end; p.captions.splice(i + 1, 1);
+        scheduleSave(); renderCaps(); go(c);
+      } else if (a === "del") {
+        if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบบรรทัด"; } }, 3000); return; }
+        delete b.dataset.sure; b.textContent = "ลบบรรทัด";
+        p.captions.splice(i, 1); scheduleSave(); renderCaps(); go(p.captions[Math.min(i, p.captions.length - 1)]);
+      }
+    });
   }
   function scheduleSfxPreview() {
     if (!video || video.paused || !pac) return;
@@ -1199,13 +1333,16 @@ async function viewEditor(id) {
         ${has ? `<textarea rows="1" class="tr" data-f="tr" aria-label="คำแปล" placeholder="คำแปลภาษา${LNAME[p.tr.lang]}"></textarea>` : ""}
       </li>`).join("");
     $$(".cap", ol).forEach(li => { const c = p.captions.find(x => x.id === li.dataset.id); $$("textarea", li).forEach(ta => { ta.value = c[ta.dataset.f] || ""; autoH(ta); }); });
-    activeId = undefined; draw();
+    activeId = undefined; qId = undefined; draw();
   }
   const autoH = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
   const capsEl = $("#caps");
   capsEl.addEventListener("input", e => {
     const li = e.target.closest(".cap"); if (!li) return; const c = p.captions.find(x => x.id === li.dataset.id);
-    if (e.target.tagName === "TEXTAREA") { c[e.target.dataset.f] = e.target.value; autoH(e.target); draw(); scheduleSave(); }
+    if (e.target.tagName === "TEXTAREA") {
+      c[e.target.dataset.f] = e.target.value; autoH(e.target); draw(); scheduleSave();
+      if (c.id === qId) { const q = e.target.dataset.f === "tr" ? $("#qTr") : $("#qText"); if (q) q.value = e.target.value; }
+    }
   });
   capsEl.addEventListener("change", e => {
     const li = e.target.closest(".cap"); if (!li || !e.target.dataset.k) return; const c = p.captions.find(x => x.id === li.dataset.id);
@@ -1322,15 +1459,7 @@ async function viewEditor(id) {
     if (!hasKey()) { openSettings(); return; }
     const b = $("#aiSfx"), st = $("#aiSfxStat"); b.disabled = true; st.textContent = "AI กำลังฟังเนื้อหา…";
     try {
-      const effects = Object.fromEntries(Object.entries(BUILTIN).map(([k, d]) => [k, d.en]));
-      const j = await chatJSON([
-        { role: "system", content: "You are a social-media video editor adding sound effects to a short video. Choose moments where a sound effect makes the video more engaging: a new tip, a price or deal, a reveal, a list item, a joke, a transition. Use a light touch: about one effect every 6 to 12 seconds at most, never two on neighbouring lines, and pick the effect whose meaning fits the line. Reply only with JSON: {\"items\":[{\"i\": line_index, \"s\": \"effect_key\"}]}" },
-        { role: "user", content: JSON.stringify({ duration_seconds: Math.round(p.duration), effects, lines: p.captions.map((c, i) => ({ i, t: c.start, text: c.text })) }) }
-      ]);
-      const items = (j.items || []).filter(x => p.captions[x.i] && BUILTIN[x.s]);
-      if (!items.length) throw new Error("AI ไม่ได้แนะนำจุดใดเลย");
-      const added = items.filter(x => !p.sfx.some(s => Math.abs(s.t - p.captions[x.i].start) < 0.5)).map(x => ({ id: uid(), key: "b:" + x.s, t: +p.captions[x.i].start.toFixed(2), vol: 1 }));
-      p.sfx.push(...added); p.sfx.sort((a, c) => a.t - c.t);
+      const added = await aiSuggestSfx(p);
       scheduleSave(); renderSfx(); renderCaps();
       st.textContent = `เพิ่ม ${added.length} จุด ลองเล่นวิดีโอฟัง แล้วลบจุดที่ไม่ชอบได้`;
     } catch (e) { st.textContent = ""; toast(e.message, 5000); }
@@ -1339,17 +1468,9 @@ async function viewEditor(id) {
 
   /* ---- style ---- */
   const KEEP = ["size", "pos", "anim", "size2", "order"];
-  const lookStyle = L => { const keep = Object.fromEntries(KEEP.map(k => [k, p.style[k]])); return { ...p.style, ...LOOK_BASE, ...L.s, ...keep, look: L.id }; };
+  const lookStyle = L => lookStyleFrom(p.style, L);
   let bgImg = null;
-  function paintThumb(cv, style, cap, t) {
-    const c = cv.getContext("2d"), W = cv.width, H = cv.height;
-    c.clearRect(0, 0, W, H);
-    if (bgImg && bgImg.complete && bgImg.naturalWidth) {
-      const k = Math.max(W / bgImg.naturalWidth, H / bgImg.naturalHeight), w = bgImg.naturalWidth * k, h = bgImg.naturalHeight * k;
-      c.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h); c.fillStyle = "rgba(0,0,0,.28)"; c.fillRect(0, 0, W, H);
-    } else { c.fillStyle = "#3A4150"; c.fillRect(0, 0, W, H); }
-    if (t == null || (t >= cap.start && t < cap.end)) drawCaption(c, W, H, cap, { lang: "th", tr: { lang: "", mode: "main" }, style }, t);
-  }
+  const paintThumb = (cv, style, cap, t) => paintThumbG(cv, style, cap, t, bgImg);
   const thumbStyle = st => ({ ...st, size: 290, pos: 52, anim: "none" });
   $("#lookgrid").innerHTML = LOOKS.map(L => `<button type="button" class="look" data-id="${L.id}"><canvas width="240" height="150"></canvas><span>${L.n}</span></button>`).join("");
   async function paintLooks() {
