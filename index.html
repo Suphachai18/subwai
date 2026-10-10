@@ -1,0 +1,1550 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0D1117">
+<title>ซับไว</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;700;800&family=Prompt:wght@500;700;800&family=Mitr:wght@500;600&family=Sarabun:wght@500;700;800&family=Noto+Sans+Thai:wght@500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Bai+Jamjuree:wght@500;700&family=K2D:wght@500;700;800&family=Krub:wght@500;700&family=Athiti:wght@500;700&family=Niramit:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Itim&family=Sriracha&family=Mali:wght@500;700&family=Pattaya&family=Chonburi&family=Kodchasan:wght@500;700&family=Fahkwang:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Charmonman:wght@400;700&family=Srisakdi:wght@400;700&family=Pridi:wght@500;700&family=Trirong:wght@500;700;800&family=Taviraj:wght@500;700;800&family=Noto+Serif+Thai:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: one narrow column of projects; editor = sticky video stage + tabbed side panel on wide screens */
+:root{
+  --bg:#0D1117; --surface:#151B24; --raise:#1C2430; --line:#2A3341;
+  --fg:#E8ECF2; --muted:#8B95A6;
+  --accent:#F4C430; --on-accent:#1B1503; --accent-text:#F4C430;
+  --danger:#F0605A; --ok:#43C08A;
+  --ui:"Anuphan","IBM Plex Sans Thai",system-ui,sans-serif;
+  --body:"IBM Plex Sans Thai","Anuphan",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:12px;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#F3F5F8; --surface:#FFFFFF; --raise:#ECEFF4; --line:#D9DEE6; --fg:#121821; --muted:#5A6473; --accent-text:#866200; --danger:#C93A34; --ok:#1F8A5B; color-scheme:light }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:0 48px}
+h1,h2,h3{font-family:var(--ui);margin:0;text-wrap:balance;line-height:1.25}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+
+.bar{display:flex;align-items:center;gap:12px;padding-block:14px;position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin-bottom:20px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--ui);font-weight:700;font-size:20px;letter-spacing:.2px;margin-right:auto;cursor:pointer;background:none;border:0;padding:0}
+.brand .mark{background:var(--accent);color:var(--on-accent);font-size:13px;padding:3px 7px;border-radius:4px;line-height:1.2}
+.iconbtn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer}
+.iconbtn svg{width:20px;height:20px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-family:var(--ui);font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn.danger{color:var(--danger)}
+.btn.small{min-height:34px;padding:0 12px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.block{width:100%}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.field{display:grid;gap:6px}
+.field>label,.lab{font-family:var(--ui);font-weight:600;font-size:14px}
+.input,select.input,textarea.input{width:100%;min-height:46px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface)}
+textarea.input{min-height:72px;resize:vertical}
+.hint{font-size:13px;color:var(--muted)}
+
+.home-head{display:flex;flex-wrap:wrap;align-items:end;gap:12px;justify-content:space-between;margin-bottom:18px}
+.home-head h1{font-size:30px}
+.notice{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 16px;border:1px solid var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 8%,var(--surface));margin-bottom:18px}
+.notice p{margin:0;flex:1;min-width:200px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.pcard{display:grid;grid-template-rows:auto 1fr;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden;cursor:pointer;text-align:left;padding:0}
+.pcard:hover{border-color:var(--muted)}
+.thumb{aspect-ratio:16/10;background:var(--raise);display:grid;place-items:center;overflow:hidden;position:relative}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb .dur{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.72);color:#fff;font-size:12px;padding:2px 6px;border-radius:4px}
+.pcard .meta{padding:12px 14px;display:grid;gap:4px;min-width:0}
+.pcard .meta b{font-family:var(--ui);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:40px 20px;text-align:center;display:grid;gap:12px;justify-items:center}
+.empty .sample{font-family:"Kanit",var(--ui);font-weight:700;font-size:22px;color:#fff;background:#000;padding:6px 14px;border-radius:6px;line-height:1.35}
+.empty .sample small{display:block;font-size:15px;color:#FFE14D;font-weight:500}
+
+.np{max-width:640px;display:grid;gap:20px}
+.back{background:none;border:0;color:var(--muted);cursor:pointer;padding:0;font-family:var(--ui);display:inline-flex;gap:6px;align-items:center;justify-self:start}
+.np h1{font-size:30px}
+.two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:32px 18px;text-align:center;display:grid;gap:10px;justify-items:center;cursor:pointer;background:var(--surface)}
+.drop.over{border-color:var(--accent)}
+.drop .up{width:56px;height:56px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center}
+.fileinfo{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.fileinfo img{width:80px;height:56px;object-fit:cover;border-radius:6px;background:var(--raise)}
+.fileinfo div{min-width:0;flex:1}
+.fileinfo b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{flex:1;min-height:42px;border:0;background:none;cursor:pointer;font-family:var(--ui);font-weight:600;font-size:14px;padding:0 6px}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+.steps{list-style:none;margin:0;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);display:grid;gap:10px}
+.steps li{display:flex;gap:10px;align-items:center}
+.steps .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex:none}
+.steps li.doing .dot{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.steps li.done .dot{background:var(--ok);border-color:var(--ok)}
+.steps li.fail .dot{background:var(--danger);border-color:var(--danger)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:var(--danger);font-size:14px;white-space:pre-wrap}
+
+.ed-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.ed-top .name{flex:1;min-width:180px;font-family:var(--ui);font-weight:700;font-size:20px;border:1px solid transparent;background:none;border-radius:8px;padding:6px 8px}
+.ed-top .name:hover,.ed-top .name:focus{border-color:var(--line);background:var(--surface)}
+.saved{font-size:12px;color:var(--muted)}
+.ed-grid{display:grid;gap:18px}
+@media (min-width:900px){ .ed-grid{grid-template-columns:minmax(0,1fr) minmax(0,460px);align-items:start} .stage-col{position:sticky;top:84px} }
+.stage-col{display:grid;gap:10px;justify-items:center;min-width:0}
+.stage{position:relative;background:#000;border-radius:10px;overflow:hidden;max-width:100%}
+.stage video{display:block;width:100%;height:100%;object-fit:contain}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.missing{display:grid;gap:10px;justify-items:center;padding:30px 16px;text-align:center;border:1px dashed var(--line);border-radius:var(--r);width:100%}
+.panel{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);min-width:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;min-height:48px;background:none;border:0;border-bottom:2px solid transparent;cursor:pointer;font-family:var(--ui);font-weight:600;color:var(--muted);font-size:14px;padding:0 4px}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.pane{padding:14px;display:grid;gap:14px}
+.tools{display:grid;gap:10px}
+details.box{border:1px solid var(--line);border-radius:10px;padding:0 12px}
+details.box summary{min-height:42px;display:flex;align-items:center;cursor:pointer;font-family:var(--ui);font-weight:600;font-size:14px}
+details.box .in{display:grid;gap:8px;padding-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>.input{flex:1;min-width:120px}
+.caps{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:62vh;overflow:auto;padding-right:2px}
+@media (max-width:899px){.caps{max-height:none}}
+.cap{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:4px;background:var(--bg)}
+.cap.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.cap-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tc{border:0;background:var(--raise);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12.5px}
+.cap textarea{width:100%;border:0;background:none;resize:none;padding:2px 0;min-height:28px;font-family:var(--ui);font-size:16px;line-height:1.45;overflow:hidden}
+.cap textarea.tr{font-size:14.5px;color:var(--accent-text);border-top:1px dashed var(--line);padding-top:5px}
+.cap textarea:focus{outline:none}
+.cap-acts{margin-left:auto;display:flex;gap:2px;flex-wrap:wrap}
+.mini{border:0;background:none;color:var(--muted);font-size:12.5px;padding:4px 6px;border-radius:6px;cursor:pointer;font-family:var(--ui)}
+.mini:hover{background:var(--raise);color:var(--fg)}
+.mini.del:hover{color:var(--danger)}
+.times{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.times input,.sfxrow input.t{width:96px;min-height:34px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);font-family:var(--mono);font-size:13px}
+.sfxtag{font-size:11.5px;background:var(--raise);border-radius:99px;padding:1px 8px;color:var(--muted)}
+.presets{display:flex;gap:8px;flex-wrap:wrap}
+.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.subtabs button{flex:1;min-height:42px;background:none;border:0;border-bottom:2px solid transparent;cursor:pointer;font-family:var(--ui);font-weight:600;font-size:14px;color:var(--muted)}
+.subtabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--fg)}
+.badge{font-size:11px;background:var(--raise);color:var(--fg);border-radius:6px;padding:1px 6px;margin-left:4px;font-weight:600}
+.lookgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.look{display:grid;gap:4px;padding:5px 5px 7px;border:1px solid var(--line);border-radius:12px;background:var(--bg);cursor:pointer;text-align:center;font-family:var(--ui);font-weight:600;font-size:12.5px;min-width:0}
+.look canvas{width:100%;aspect-ratio:8/5;border-radius:8px;display:block;background:#3A4150}
+.look span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.look[aria-pressed="true"]{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg) inset}
+.mycard{display:grid;gap:2px;min-width:0}
+.mycard .mini{justify-self:center}
+.fontgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;max-height:300px;overflow:auto;padding:2px}
+.fontbtn{display:grid;gap:2px;justify-items:center;padding:8px 4px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;min-width:0}
+.fontbtn b{font-size:20px;line-height:1.35;font-weight:inherit}
+.fontbtn span{font-family:var(--mono);font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.fontbtn[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.fxgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.fx{display:grid;gap:4px;padding:4px 4px 6px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;text-align:center;font-family:var(--ui);font-weight:600;font-size:12.5px}
+.fx canvas{width:100%;aspect-ratio:16/9;border-radius:6px;display:block;background:#222831}
+.fx[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.preset{border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:700;font-size:14px;min-height:40px}
+.ctl{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:10px;align-items:center}
+.ctl label{font-size:14px;font-family:var(--ui);font-weight:600}
+.ctl output{font-family:var(--mono);font-size:12.5px;color:var(--muted);min-width:40px;text-align:right}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+.ctl input[type=color]{width:44px;height:34px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px}
+.sw{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.sw input{width:18px;height:18px;accent-color:var(--accent)}
+.prog{height:8px;border-radius:99px;background:var(--raise);overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.result video{width:100%;max-height:50vh;border-radius:10px;background:#000}
+.divider{height:1px;background:var(--line)}
+.sub-h{font-family:var(--ui);font-weight:700;font-size:13px;letter-spacing:.4px;color:var(--muted)}
+
+/* sound effects */
+.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:6px}
+.chip{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg);min-width:0}
+.chip button{border:0;background:none;cursor:pointer;min-height:40px}
+.chip .pl{width:36px;flex:none;border-right:1px solid var(--line);color:var(--muted)}
+.chip .pl:hover{color:var(--fg);background:var(--raise)}
+.chip .ad{flex:1;text-align:left;padding:0 10px;font-family:var(--ui);font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .ad:hover{background:var(--raise)}
+.chip.mine .ad{color:var(--accent-text)}
+.sfxlist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.sfxrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--bg)}
+.sfxrow .nm{font-family:var(--ui);font-weight:600;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sfxrow .vol{grid-column:1 / -1;display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.sfxrow .vol input{flex:1;accent-color:var(--accent)}
+.nowpos{font-family:var(--mono);font-size:13px;background:var(--raise);border-radius:6px;padding:2px 8px}
+
+.modal{position:fixed;inset:0;background:rgba(5,8,12,.6);display:grid;place-items:end center;z-index:20;padding:16px}
+@media (min-width:640px){.modal{place-items:center}}
+.sheet{width:100%;max-width:520px;max-height:90vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:grid;gap:16px}
+.sheet h2{font-size:20px}
+.sheet ol{margin:0;padding-left:20px;display:grid;gap:4px;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-family:var(--ui);font-weight:600;font-size:14px;z-index:30;max-width:90vw}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <button class="brand" id="goHome" aria-label="หน้าแรก"><span class="mark">ซับ</span>ซับไว</button>
+    <button class="iconbtn" id="openSettings" aria-label="ตั้งค่า">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+  <main id="app"></main>
+</div>
+<div id="modalRoot"></div>
+
+<script>
+"use strict";
+/* ================= helpers ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const once = (el, ev) => new Promise(r => el.addEventListener(ev, r, { once: true }));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = (n, l = 2) => String(n).padStart(l, "0");
+function fmtT(t) { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = t - m * 60; return pad(m) + ":" + s.toFixed(1).padStart(4, "0"); }
+function fmtDur(t) { t = Math.round(t || 0); return Math.floor(t / 60) + ":" + pad(t % 60); }
+function parseT(str) {
+  str = String(str).trim().replace(",", ".");
+  if (!str) return NaN;
+  const p = str.split(":").map(Number);
+  if (p.some(isNaN)) return NaN;
+  return p.reduce((a, b) => a * 60 + b, 0);
+}
+function fmtSize(b) { return b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : (b / 1e6).toFixed(1) + " MB"; }
+function toast(msg, ms = 2600) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+async function shareOrSave(blob, name) {
+  try {
+    const f = new File([blob], name, { type: blob.type });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return; }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  downloadBlob(blob, name);
+}
+const safeName = s => (s || "video").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 60) || "video";
+
+/* ================= languages ================= */
+const LANGS = [
+  ["th", "ไทย", "Thai"], ["en", "อังกฤษ", "English"], ["zh", "จีน", "Simplified Chinese"], ["ja", "ญี่ปุ่น", "Japanese"],
+  ["ko", "เกาหลี", "Korean"], ["lo", "ลาว", "Lao"], ["my", "พม่า", "Burmese"], ["km", "กัมพูชา", "Khmer"],
+  ["vi", "เวียดนาม", "Vietnamese"], ["ms", "มาเลย์", "Malay"], ["id", "อินโดนีเซีย", "Indonesian"], ["hi", "ฮินดี", "Hindi"],
+  ["fr", "ฝรั่งเศส", "French"], ["de", "เยอรมัน", "German"], ["es", "สเปน", "Spanish"], ["ru", "รัสเซีย", "Russian"]
+];
+const LNAME = Object.fromEntries(LANGS.map(l => [l[0], l[1]]));
+const LEN = Object.fromEntries(LANGS.map(l => [l[0], l[2]]));
+const langOptions = (sel, extra = "") => extra + LANGS.map(([v, n]) => `<option value="${v}"${v === sel ? " selected" : ""}>${n}</option>`).join("");
+
+/* ================= settings ================= */
+const SKEY = "subwai.settings.v1";
+const DEFAULT_STYLE = { font: "Kanit", weight: 700, size: 64, pos: 80, color: "#FFFFFF", strokeColor: "#000000", stroke: 5, box: false, boxColor: "#000000", boxOpacity: 0.7, shadow: true, size2: 72, color2: "#FFE14D", order: "below", anim: "none", hl: "#FFD400", glow: "", dshadow: "", look: "" };
+const settings = Object.assign({ provider: "", groqKey: "", apiKey: "", lang: "th", lang2: "", vocab: "", maxChars: 22, chatModel: "", style: { ...DEFAULT_STYLE } }, (() => { try { return JSON.parse(localStorage.getItem(SKEY)) || {}; } catch { return {}; } })());
+settings.style = { ...DEFAULT_STYLE, ...settings.style };
+if (!settings.provider) settings.provider = settings.apiKey && !settings.groqKey ? "openai" : "groq";
+function saveSettings() { try { localStorage.setItem(SKEY, JSON.stringify(settings)); } catch {} }
+
+/* ================= IndexedDB ================= */
+const DB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open("subwai", 2);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        if (!d.objectStoreNames.contains("projects")) d.createObjectStore("projects", { keyPath: "id" });
+        if (!d.objectStoreNames.contains("videos")) d.createObjectStore("videos");
+        if (!d.objectStoreNames.contains("sfx")) d.createObjectStore("sfx", { keyPath: "id" });
+      };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  st(name, mode) { return this.db.transaction(name, mode).objectStore(name); },
+  q(r) { return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  all() { return this.q(this.st("projects", "readonly").getAll()); },
+  get(id) { return this.q(this.st("projects", "readonly").get(id)); },
+  put(p) { return this.q(this.st("projects", "readwrite").put(p)); },
+  putVideo(id, b) { return this.q(this.st("videos", "readwrite").put(b, id)); },
+  getVideo(id) { return this.q(this.st("videos", "readonly").get(id)); },
+  async del(id) { await this.q(this.st("projects", "readwrite").delete(id)); await this.q(this.st("videos", "readwrite").delete(id)); },
+  sfxAll() { return this.q(this.st("sfx", "readonly").getAll()); },
+  sfxPut(x) { return this.q(this.st("sfx", "readwrite").put(x)); },
+  sfxDel(id) { return this.q(this.st("sfx", "readwrite").delete(id)); }
+};
+function normalize(p) {
+  p.style = { ...DEFAULT_STYLE, ...(p.style || {}) };
+  p.tr = p.tr || { lang: "", mode: "main" };
+  p.sfx = p.sfx || [];
+  p.audio = p.audio || { orig: 1, sfx: 0.9 };
+  p.lang = p.lang || "th";
+  return p;
+}
+
+/* ================= text tools ================= */
+const segCache = {};
+function seg(lang) {
+  if (typeof Intl === "undefined" || !Intl.Segmenter) return null;
+  const l = (!lang || lang === "auto") ? "th" : lang;
+  return segCache[l] || (segCache[l] = new Intl.Segmenter(l, { granularity: "word" }));
+}
+const tokens = (s, lang) => { const S = seg(lang); return S ? [...S.segment(s)].map(x => x.segment) : s.split(/(\s+)/).filter(Boolean); };
+const vlen = s => s.replace(/[\sัิ-ฺ็-๎]/g, "").length;
+const isLatin = c => /[A-Za-z0-9À-ɏЀ-ӿ]/.test(c || "");
+function joinTok(a, b) { if (!a) return b; if (!b) return a; return (isLatin(a.slice(-1)) && isLatin(b[0])) ? a + " " + b : a + b; }
+function isBoundary(text, idx, lang) {
+  const S = seg(lang);
+  if (!S || idx <= 0 || idx >= text.length) return true;
+  for (const s of S.segment(text)) { if (s.index === idx) return true; if (s.index > idx) return false; }
+  return false;
+}
+function fromWords(words, maxChars, lang) {
+  const out = []; let cur = null;
+  const push = () => { if (cur && cur.text.trim()) out.push({ start: cur.start, end: cur.end, text: cur.text.trim() }); cur = null; };
+  for (const w of words) {
+    const t = String(w.word || "").trim(); if (!t) continue;
+    if (!cur) { cur = { start: w.start, end: w.end, text: t }; continue; }
+    const next = joinTok(cur.text, t);
+    const gap = w.start - cur.end;
+    const over = vlen(next) > maxChars;
+    const boundary = isBoundary(next, next.length - t.length, lang);
+    const brk = gap > 0.6 || /[.?!…。？！]$/.test(cur.text) || (over && boundary) || vlen(next) > maxChars + 8 || (w.end - cur.start) > 6;
+    if (brk) { push(); cur = { start: w.start, end: w.end, text: t }; }
+    else { cur.text = next; cur.end = w.end; }
+  }
+  push();
+  return out;
+}
+function fromSegments(segs, maxChars, lang) {
+  const out = [];
+  for (const s of segs) {
+    const text = String(s.text || "").trim(); if (!text) continue;
+    if (vlen(text) <= maxChars) { out.push({ start: s.start, end: s.end, text }); continue; }
+    const groups = []; let g = "";
+    for (const tk of tokens(text, lang)) {
+      if (vlen(g + tk) > maxChars && g.trim()) { groups.push(g.trim()); g = tk.trimStart(); }
+      else g += tk;
+    }
+    if (g.trim()) groups.push(g.trim());
+    const total = groups.reduce((a, x) => a + Math.max(1, vlen(x)), 0);
+    let t = s.start;
+    for (const x of groups) { const d = (s.end - s.start) * Math.max(1, vlen(x)) / total; out.push({ start: t, end: t + d, text: x }); t += d; }
+  }
+  return out;
+}
+function tidy(caps) {
+  caps.sort((a, b) => a.start - b.start);
+  for (let i = 0; i < caps.length; i++) {
+    const c = caps[i], n = caps[i + 1];
+    if (c.end - c.start < 0.4) c.end = c.start + 0.4;
+    if (n) { if (n.start - c.end < 0.3 && n.start > c.start) c.end = n.start; if (c.end > n.start) c.end = n.start; }
+  }
+  return caps.map(c => ({ id: uid(), start: +c.start.toFixed(2), end: +c.end.toFixed(2), text: c.text, tr: "" }));
+}
+function buildCaptions(raw, maxChars, lang) {
+  const caps = raw.words && raw.words.length ? fromWords(raw.words, maxChars, lang) : fromSegments(raw.segments || [], maxChars, lang);
+  return tidy(caps);
+}
+
+/* ================= AI providers ================= */
+// Groq: free account, no card, Whisper large-v3. OpenAI: paid credits.
+const PROVIDERS = {
+  groq: { n: "Groq", tag: "ฟรี", base: "https://api.groq.com/openai/v1", stt: "whisper-large-v3", chat: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b"], keyField: "groqKey", ph: "gsk_..." },
+  openai: { n: "OpenAI", tag: "เสียเงิน", base: "https://api.openai.com/v1", stt: "whisper-1", chat: ["gpt-4.1-mini", "gpt-4o-mini", "gpt-5-mini"], keyField: "apiKey", ph: "sk-..." }
+};
+const prov = () => PROVIDERS[settings.provider] || PROVIDERS.groq;
+const curKey = () => (settings[prov().keyField] || "").trim();
+const hasKey = () => !!curKey();
+function apiError(status, j) {
+  const P = prov().n, code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || "";
+  if (status === 401) return new Error(`API key ของ ${P} ไม่ถูกต้อง เปิดตั้งค่าแล้ววาง key ใหม่`);
+  if (status === 429 && code === "insufficient_quota") return new Error("เครดิต OpenAI หมดหรือยังไม่ได้เติม ลองเปลี่ยนไปใช้ Groq (ฟรี) ในหน้าตั้งค่า");
+  if (status === 429) return new Error(`ใช้งาน ${P} ถี่เกินโควตาฟรีชั่วคราว รอสักครู่แล้วกดลองใหม่`);
+  if (status === 413) return new Error(`ไฟล์เสียงใหญ่เกินที่ ${P} รับ`);
+  return new Error(`${P} แจ้งข้อผิดพลาด (${status}): ${msg}`);
+}
+const authH = () => ({ Authorization: "Bearer " + curKey() });
+async function apiFetch(path, opts) {
+  for (let attempt = 0; ; attempt++) {
+    let r;
+    try { r = await fetch(prov().base + path, opts); }
+    catch { throw new Error(`เชื่อมต่อ ${prov().n} ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่`); }
+    if (r.status !== 429 || attempt >= 3) return r;
+    let j = {}; try { j = await r.clone().json(); } catch {}
+    if (j.error && j.error.code === "insufficient_quota") return r;
+    const ra = parseFloat(r.headers.get("retry-after"));
+    await sleep(Math.min(30, isNaN(ra) ? 5 * (attempt + 1) : ra + 0.5) * 1000);
+  }
+}
+function encodeWav(samples, rate) {
+  const b = new ArrayBuffer(44 + samples.length * 2), v = new DataView(b);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, samples.length * 2, true);
+  let o = 44;
+  for (let i = 0; i < samples.length; i++, o += 2) { const s = Math.max(-1, Math.min(1, samples[i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+  return new Blob([b], { type: "audio/wav" });
+}
+async function extractAudio(file) {
+  let buf;
+  try { buf = await file.arrayBuffer(); } catch { throw new Error("อ่านไฟล์ไม่ได้ ไฟล์อาจใหญ่เกินหน่วยความจำของเครื่อง ลองส่งออกคลิปที่ความละเอียด 1080p แล้วลองใหม่"); }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC();
+  let decoded;
+  try {
+    decoded = await new Promise((res, rej) => { const p = ac.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); });
+  } catch {
+    throw new Error("แยกเสียงจากวิดีโอนี้ไม่ได้ อาจไม่มีเสียงในคลิป หรือเบราว์เซอร์ไม่รองรับรูปแบบเสียงนี้ ลองไฟล์ MP4 หรือเปิดใน Chrome/Safari รุ่นใหม่");
+  } finally { try { ac.close(); } catch {} }
+  buf = null;
+  const rate = 16000, len = Math.ceil(decoded.duration * rate);
+  const off = new OfflineAudioContext(1, len, rate);
+  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+  const data = (await off.startRendering()).getChannelData(0);
+  let peak = 0; for (let i = 0; i < data.length; i += 50) peak = Math.max(peak, Math.abs(data[i]));
+  if (peak < 0.002) throw new Error("คลิปนี้แทบไม่มีเสียง จึงถอดเสียงไม่ได้");
+  const CH = 600 * rate, chunks = [];
+  for (let i = 0; i < data.length; i += CH) chunks.push({ offset: i / rate, blob: encodeWav(data.subarray(i, Math.min(i + CH, data.length)), rate) });
+  return { chunks, duration: decoded.duration };
+}
+async function whisper(blob, { lang, prompt }) {
+  const fd = new FormData();
+  fd.append("file", blob, "audio.wav");
+  fd.append("model", prov().stt);
+  fd.append("response_format", "verbose_json");
+  fd.append("timestamp_granularities[]", "word");
+  fd.append("timestamp_granularities[]", "segment");
+  fd.append("temperature", "0");
+  if (lang && lang !== "auto") fd.append("language", lang);
+  if (prompt) fd.append("prompt", prompt);
+  const r = await apiFetch("/audio/transcriptions", { method: "POST", headers: authH(), body: fd });
+  if (!r.ok) { let j = {}; try { j = await r.json(); } catch {} throw apiError(r.status, j); }
+  return r.json();
+}
+async function chatJSON(messages) {
+  const P = prov(), mk = "chat_" + settings.provider;
+  const models = [settings[mk], ...P.chat].filter((m, i, a) => m && a.indexOf(m) === i);
+  let lastErr = null;
+  for (const m of models) {
+    const body = { model: m, messages, response_format: { type: "json_object" } };
+    if (m.startsWith("openai/gpt-oss")) body.reasoning_effort = "low";
+    const r = await apiFetch("/chat/completions", { method: "POST", headers: { ...authH(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) {
+      const j = await r.json();
+      if (settings[mk] !== m) { settings[mk] = m; saveSettings(); }
+      const txt = String(j.choices[0].message.content || "").replace(/^```(?:json)?\s*|\s*```$/g, "");
+      try { return JSON.parse(txt); } catch { lastErr = new Error("AI ตอบกลับในรูปแบบที่อ่านไม่ได้ ลองใหม่อีกครั้ง"); continue; }
+    }
+    let j = {}; try { j = await r.json(); } catch {}
+    if (r.status === 401 || r.status === 429) throw apiError(r.status, j);
+    lastErr = apiError(r.status, j); // model missing or not supported: try the next one
+  }
+  throw lastErr || new Error("ไม่พบโมเดล AI สำหรับแปลภาษาที่ใช้กับ key นี้ได้");
+}
+async function translateCaptions(caps, src, tgt, onProg) {
+  const B = 50;
+  const vocab = settings.vocab ? ` such as ${settings.vocab}` : "";
+  for (let i = 0; i < caps.length; i += B) {
+    const batch = caps.slice(i, i + B);
+    const msgs = [
+      { role: "system", content: `You translate video subtitles from ${LEN[src] || "the spoken language"} into ${LEN[tgt]}. Translate every line separately and keep exactly the same number of lines in the same order. Lines may be fragments of one sentence; use the context so each line reads naturally on screen. Keep each line short. Keep brand names, product names and model names exactly as written${vocab}. Reply only with JSON: {"t": ["line 1", "line 2", ...]}` },
+      { role: "user", content: JSON.stringify({ previous_lines: caps.slice(Math.max(0, i - 4), i).map(c => c.text), lines: batch.map(c => c.text) }) }
+    ];
+    let out = null;
+    for (let a = 0; a < 2 && !out; a++) { const j = await chatJSON(msgs); if (Array.isArray(j.t) && j.t.length === batch.length) out = j.t; }
+    if (!out) throw new Error("AI แปลไม่ครบทุกบรรทัด กดแปลใหม่อีกครั้ง");
+    batch.forEach((c, k) => c.tr = String(out[k] || "").trim());
+    if (onProg) onProg(Math.min(caps.length, i + B), caps.length);
+  }
+}
+
+/* ================= sound effects ================= */
+// Built-in sounds are synthesized in the browser, so they need no download and are free to use.
+function nz(c, dur) { const len = Math.ceil(dur * c.sampleRate), b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; const s = c.createBufferSource(); s.buffer = b; return s; }
+function env(c, pts) { const g = c.createGain(); g.gain.setValueAtTime(pts[0][1], pts[0][0]); for (const [t, v] of pts.slice(1)) g.gain.linearRampToValueAtTime(v, t); return g; }
+function tone(c, out, type, f0, f1, start, dur, peak) {
+  const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, start); if (f1) o.frequency.exponentialRampToValueAtTime(f1, start + dur);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, start); g.gain.exponentialRampToValueAtTime(peak, start + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  o.connect(g).connect(out); o.start(start); o.stop(start + dur + 0.02); return o;
+}
+function filt(c, type, f, q = 1) { const b = c.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
+function burst(c, out, start, dur, f, type = "bandpass", peak = 1) { const n = nz(c, dur + 0.02), b = filt(c, type, f, 1.5), g = env(c, [[start, 0], [start + 0.002, peak], [start + dur, 0]]); n.connect(b).connect(g).connect(out); n.start(start); }
+function sweep(c, out, dur, f0, fMid, f1, peakAt) {
+  const n = nz(c, dur), b = filt(c, "bandpass", f0, 1.2);
+  b.frequency.setValueAtTime(f0, 0); b.frequency.exponentialRampToValueAtTime(fMid, peakAt); b.frequency.exponentialRampToValueAtTime(f1, dur);
+  const g = env(c, [[0, 0], [peakAt, 1], [dur, 0]]); n.connect(b).connect(g).connect(out); n.start(0);
+}
+const BUILTIN = {
+  whoosh: { n: "วูช", d: 0.65, en: "whoosh, fast transition or movement", f: (c, o) => sweep(c, o, 0.65, 300, 3500, 700, 0.3) },
+  whooshdown: { n: "วูชลง", d: 0.65, en: "downward whoosh, closing or dropping", f: (c, o) => sweep(c, o, 0.65, 4000, 1200, 250, 0.2) },
+  swipe: { n: "ปัด", d: 0.28, en: "quick swipe, switching item", f: (c, o) => sweep(c, o, 0.28, 800, 5000, 2000, 0.12) },
+  pop: { n: "ป๊อป", d: 0.16, en: "pop, a new point or list item appears", f: (c, o) => tone(c, o, "sine", 900, 160, 0, 0.13, 1) },
+  click: { n: "คลิก", d: 0.06, en: "mouse click, pressing a button", f: (c, o) => burst(c, o, 0, 0.03, 2500, "highpass") },
+  ding: { n: "ติ๊ง", d: 1.6, en: "ding bell, tip or important idea", f: (c, o) => { tone(c, o, "sine", 1568, 0, 0, 1.5, 0.6); tone(c, o, "sine", 4327, 0, 0, 0.45, 0.18); tone(c, o, "sine", 3136, 0, 0, 0.8, 0.15); } },
+  notify: { n: "แจ้งเตือน", d: 0.6, en: "notification chime, new message or update", f: (c, o) => { tone(c, o, "sine", 1046.5, 0, 0, 0.22, 0.55); tone(c, o, "sine", 1568, 0, 0.1, 0.45, 0.55); } },
+  correct: { n: "ถูกต้อง", d: 0.9, en: "correct answer chime, yes, agreement, success", f: (c, o) => { tone(c, o, "triangle", 880, 0, 0, 0.25, 0.5); tone(c, o, "triangle", 1318.5, 0, 0.12, 0.7, 0.6); } },
+  wrong: { n: "ผิด", d: 0.7, en: "wrong buzzer, mistake, no", f: (c, o) => { const lp = filt(c, "lowpass", 1400); lp.connect(o); tone(c, lp, "square", 150, 0, 0, 0.6, 0.35); tone(c, lp, "square", 157, 0, 0, 0.6, 0.35); } },
+  kaching: { n: "กริ๊งเงิน", d: 1.2, en: "cash register ka-ching, price, money, deal, sale", f: (c, o) => { burst(c, o, 0, 0.04, 3000); tone(c, o, "sine", 2093, 0, 0.05, 0.9, 0.45); tone(c, o, "sine", 2637, 0, 0.15, 0.9, 0.45); tone(c, o, "sine", 5274, 0, 0.15, 0.4, 0.12); } },
+  boom: { n: "ตูม", d: 1.4, en: "deep boom impact, big reveal or dramatic moment", f: (c, o) => { tone(c, o, "sine", 110, 32, 0, 1.3, 1); const n = nz(c, 0.7), lp = filt(c, "lowpass", 380), g = env(c, [[0, 0], [0.01, 0.9], [0.6, 0]]); n.connect(lp).connect(g).connect(o); n.start(0); } },
+  riser: { n: "ไต่ระดับ", d: 2.2, en: "rising tension build-up before a reveal", f: (c, o) => { sweep(c, o, 2.2, 200, 6000, 6000, 2.05); const s = c.createOscillator(); s.type = "sawtooth"; s.frequency.setValueAtTime(110, 0); s.frequency.exponentialRampToValueAtTime(880, 2.1); const g = env(c, [[0, 0], [2.05, 0.12], [2.2, 0]]); s.connect(g).connect(o); s.start(0); s.stop(2.2); } },
+  boing: { n: "ดึ๋ง", d: 0.75, en: "cartoon boing, funny or silly moment", f: (c, o) => { const s = c.createOscillator(); s.type = "sine"; s.frequency.setValueAtTime(180, 0); s.frequency.exponentialRampToValueAtTime(420, 0.5); const l = c.createOscillator(); l.frequency.value = 14; const lg = c.createGain(); lg.gain.setValueAtTime(90, 0); lg.gain.linearRampToValueAtTime(5, 0.7); l.connect(lg).connect(s.frequency); const g = env(c, [[0, 0], [0.01, 0.8], [0.72, 0]]); s.connect(g).connect(o); s.start(0); l.start(0); s.stop(0.75); l.stop(0.75); } },
+  shutter: { n: "ชัตเตอร์", d: 0.25, en: "camera shutter, photo or screenshot moment", f: (c, o) => { burst(c, o, 0, 0.035, 2500); burst(c, o, 0.09, 0.05, 1800); } },
+  typing: { n: "พิมพ์ดีด", d: 1.0, en: "keyboard typing, text or search appearing", f: (c, o) => { let t = 0.02; while (t < 0.9) { burst(c, o, t, 0.018, 2500 + Math.random() * 2500, "bandpass", 0.5 + Math.random() * 0.5); t += 0.06 + Math.random() * 0.07; } } },
+  glitch: { n: "กลิตช์", d: 0.5, en: "digital glitch, error or techy transition", f: (c, o) => { for (let i = 0; i < 10; i++) tone(c, o, "square", 200 + Math.random() * 1800, 0, i * 0.045, 0.04, 0.25); } }
+};
+const bufCache = new Map();
+async function renderBuiltin(key) {
+  const d = BUILTIN[key]; const rate = 44100;
+  const c = new OfflineAudioContext(1, Math.ceil(d.d * rate), rate);
+  const master = c.createGain(); master.connect(c.destination);
+  d.f(c, master);
+  const b = await c.startRendering();
+  const ch = b.getChannelData(0); let pk = 0; for (let i = 0; i < ch.length; i++) pk = Math.max(pk, Math.abs(ch[i]));
+  if (pk > 0) { const k = 0.9 / pk; for (let i = 0; i < ch.length; i++) ch[i] *= k; }
+  return b;
+}
+let customLib = []; // [{id,name,blob}]
+async function loadCustomLib() { try { customLib = await DB.sfxAll(); } catch { customLib = []; } }
+function sfxName(key) { if (key.startsWith("b:")) return (BUILTIN[key.slice(2)] || {}).n || key; const c = customLib.find(x => "c:" + x.id === key); return c ? c.name : "เสียงที่ถูกลบ"; }
+async function getSfxBuffer(key) {
+  if (bufCache.has(key)) return bufCache.get(key);
+  let b = null;
+  if (key.startsWith("b:") && BUILTIN[key.slice(2)]) b = await renderBuiltin(key.slice(2));
+  else {
+    const c = customLib.find(x => "c:" + x.id === key);
+    if (c) { const ab = await c.blob.arrayBuffer(); const tmp = new OfflineAudioContext(1, 1, 44100); b = await new Promise((res, rej) => { const pr = tmp.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); }); }
+  }
+  if (b) bufCache.set(key, b);
+  return b;
+}
+let pac = null; // preview audio context
+function getPAC() { if (!pac) { const AC = window.AudioContext || window.webkitAudioContext; pac = new AC(); } if (pac.state === "suspended") pac.resume().catch(() => {}); return pac; }
+document.addEventListener("pointerdown", () => { if (pac && pac.state === "suspended") pac.resume().catch(() => {}); }, true);
+async function playSfx(key, vol = 1, when = 0) {
+  const ctx = getPAC(); const b = await getSfxBuffer(key); if (!b) return null;
+  const s = ctx.createBufferSource(); s.buffer = b; const g = ctx.createGain(); g.gain.value = vol; s.connect(g).connect(ctx.destination);
+  s.start(Math.max(ctx.currentTime, when || 0)); return s;
+}
+
+/* ================= caption drawing (shared by preview + export) ================= */
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
+function wrapLines(ctx, text, maxW, lang) {
+  const out = [];
+  for (const para of text.split("\n")) {
+    let line = "";
+    for (const t of tokens(para, lang)) {
+      const test = line + t;
+      if (ctx.measureText(test).width > maxW && line.trim()) { out.push(line.trim()); line = t.trimStart(); }
+      else line = test;
+    }
+    if (line.trim()) out.push(line.trim());
+  }
+  return out;
+}
+function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+const FALLBACK = `"Noto Sans Thai","PingFang SC","Hiragino Sans","Apple SD Gothic Neo","Noto Sans CJK SC","Microsoft YaHei","Malgun Gothic",sans-serif`;
+/* Subtitle animations. "line" effects move the whole caption; "word" effects work word by word,
+   timing each word across the caption by its length (works even after you edit the text). */
+const ANIMS = {
+  none: { n: "ปกติ" }, fade: { n: "ค่อยๆ ขึ้น" }, pop: { n: "เด้งขึ้น" }, slide: { n: "เลื่อนขึ้น" },
+  zoom: { n: "ซูมเข้า" }, shake: { n: "สั่น" }, glow: { n: "เรืองแสง" }, type: { n: "พิมพ์ทีละตัว", w: 1 },
+  word: { n: "ขึ้นทีละคำ", w: 1 }, karaoke: { n: "คาราโอเกะ", w: 1 }, current: { n: "ไฮไลต์คำที่พูด", w: 1 },
+  box: { n: "กล่องไฮไลต์คำ", w: 1 }, bounce: { n: "เด้งทีละคำ", w: 1 }
+};
+/* Thai-capable fonts. w = weights available (lightest, boldest). */
+const FONTS = [
+  ["Kanit", [500, 800]], ["Prompt", [500, 800]], ["Mitr", [500, 600]], ["Sarabun", [500, 800]], ["Noto Sans Thai", [500, 800]],
+  ["Chakra Petch", [500, 700]], ["Bai Jamjuree", [500, 700]], ["K2D", [500, 800]], ["Krub", [500, 700]], ["Athiti", [500, 700]],
+  ["Niramit", [500, 700]], ["Kodchasan", [500, 700]], ["Fahkwang", [500, 700]], ["Mali", [500, 700]], ["Itim", [400, 400]],
+  ["Sriracha", [400, 400]], ["Pattaya", [400, 400]], ["Chonburi", [400, 400]], ["Charm", [400, 700]], ["Charmonman", [400, 700]],
+  ["Srisakdi", [400, 700]], ["Pridi", [500, 700]], ["Trirong", [500, 800]], ["Taviraj", [500, 800]], ["Noto Serif Thai", [500, 800]]
+];
+const fontW = f => (FONTS.find(x => x[0] === f) || [f, [500, 700]])[1];
+/* Fixed looks. Each one resets the look of the text but keeps size, position and animation. */
+const LOOK_BASE = { weight: 700, color: "#FFFFFF", stroke: 0, strokeColor: "#000000", box: false, boxColor: "#000000", boxOpacity: 1, shadow: false, glow: "", dshadow: "" };
+const LOOKS = [
+  ["standard", "มาตรฐาน", { font: "Kanit", box: true, boxOpacity: 0.85 }],
+  ["minimal", "มินิมอล", { font: "Sarabun", weight: 500, shadow: true }],
+  ["bold", "ตัวหนาเด่น", { font: "Kanit", weight: 800, color: "#FFD400", stroke: 6, color2: "#FFFFFF" }],
+  ["neongreen", "นีออนเขียว", { font: "Kanit", color: "#9CFFC4", glow: "#19FF7A" }],
+  ["karaoke", "คาราโอเกะ", { font: "Prompt", color: "#FFC94D", box: true, boxOpacity: 0.9, hl: "#FFFFFF" }],
+  ["popline", "ป๊อปไลน์", { font: "Kanit", weight: 800, stroke: 7, shadow: true }],
+  ["pastel", "พาสเทล", { font: "Mitr", weight: 600, color: "#FFB3DA", stroke: 4, strokeColor: "#FFFFFF", dshadow: "#8A4A86" }],
+  ["classic", "คลาสสิก", { font: "Sarabun", weight: 500, box: true }],
+  ["hormozi", "Hormozi", { font: "Kanit", weight: 800, stroke: 7, shadow: true, hl: "#FFD400" }],
+  ["beast", "Beast", { font: "Kanit", weight: 800, stroke: 10, dshadow: "#000000", hl: "#FF3B3B" }],
+  ["whitebox", "กล่องขาว", { font: "Kanit", color: "#111111", box: true, boxColor: "#FFFFFF", color2: "#1B2A4A" }],
+  ["yellowbox", "กล่องเหลือง", { font: "Kanit", color: "#111111", box: true, boxColor: "#FFD400", color2: "#111111" }],
+  ["retro", "เรโทร", { font: "Chonburi", weight: 400, color: "#FFE9B0", dshadow: "#E2582B" }],
+  ["outline", "เส้นขอบชัด", { font: "Prompt", weight: 800, stroke: 12 }],
+  ["hand", "ลายมือ", { font: "Sriracha", weight: 400, shadow: true }],
+  ["news", "ข่าว", { font: "Sarabun", box: true, boxColor: "#B00020" }],
+  ["neonred", "นีออนแดง", { font: "Kanit", color: "#FFB0B0", glow: "#FF2D2D" }],
+  ["neonblue", "นีออนฟ้า", { font: "Kanit", color: "#BDEEFF", glow: "#1EA7FF" }],
+  ["navy", "กรมท่า-ขาว", { font: "Prompt", box: true, boxColor: "#1B2A4A", boxOpacity: 0.95, color2: "#BFD3F5" }],
+  ["cartoon", "การ์ตูน", { font: "Mali", color: "#FFE14D", stroke: 6, strokeColor: "#3B1F00", dshadow: "#3B1F00" }],
+  ["cinema", "ภาพยนตร์", { font: "Noto Serif Thai", weight: 500, color: "#F5F1E6", shadow: true }],
+  ["sweet", "ลายมือหวาน", { font: "Charm", stroke: 4, strokeColor: "#E46A9B", color2: "#FFD6E7" }],
+  ["tech", "เทค", { font: "Chakra Petch", color: "#7DF9FF", stroke: 3, strokeColor: "#002B36", glow: "#00C2FF" }],
+  ["comic", "พิมพ์ดีด", { font: "Itim", weight: 400, color: "#111111", box: true, boxColor: "#F4F1E8" }]
+].map(([id, n, s]) => ({ id, n, s }));
+const THUMB_CAP = { id: "t", start: 0, end: 100, text: "ตัวอย่าง", tr: "" };
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const easeOutBack = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
+let gsegR = null;
+const graphemes = s => { if (!gsegR && typeof Intl !== "undefined" && Intl.Segmenter) gsegR = new Intl.Segmenter(undefined, { granularity: "grapheme" }); return gsegR ? [...gsegR.segment(s)].map(x => x.segment) : [...s]; };
+function textOn(hex) { const n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? "#111111" : "#FFFFFF"; }
+function drawCaption(ctx, W, H, cap, p, t) {
+  if (!cap) return;
+  const st = p.style, base = Math.min(W, H) / 1080, mode = p.tr.lang ? p.tr.mode : "main";
+  if (t == null) t = cap.end - 0.01;
+  const A = ANIMS[st.anim] ? st.anim : "none";
+  const main = { text: cap.text || "", px: st.size * base, color: st.color, lang: p.lang, prim: true };
+  const sec = { text: cap.tr || "", px: st.size * st.size2 / 100 * base, color: st.color2, lang: p.tr.lang };
+  let blocks = mode === "tr" ? [{ ...sec, px: main.px, color: st.color, prim: true }] : mode === "both" ? (st.order === "above" ? [sec, main] : [main, sec]) : [main];
+  blocks = blocks.filter(b => b.text.trim());
+  if (!blocks.length) return;
+  ctx.save();
+  ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  const font = px => `${st.weight} ${px}px "${st.font}", ${FALLBACK}`;
+
+  // layout rows of words
+  const rows = [];
+  for (const b of blocks) {
+    ctx.font = font(b.px);
+    for (const ln of wrapLines(ctx, b.text, W * 0.88, b.lang)) {
+      const toks = tokens(ln, b.lang).map(s => ({ s, w: ctx.measureText(s).width, sp: !s.trim() }));
+      rows.push({ b, toks, w: toks.reduce((a, x) => a + x.w, 0), px: b.px, lh: b.px * 1.42 });
+    }
+  }
+  const total = rows.reduce((a, r) => a + r.lh, 0);
+  const pad0 = main.px * 0.3;
+  const cy = Math.min(H - total / 2 - pad0, Math.max(total / 2 + pad0, H * st.pos / 100));
+  let y = cy - total / 2;
+  rows.forEach(r => { r.y = y + r.lh / 2; y += r.lh; });
+
+  // word timing for the primary language
+  const words = [];
+  rows.forEach(r => { if (r.b.prim) r.toks.forEach(tk => { if (!tk.sp) { tk.wi = words.length; words.push(Math.max(1, vlen(tk.s))); } }); });
+  const wsum = words.reduce((a, x) => a + x, 0) || 1;
+  let acc = 0; const wStart = words.map(x => { const s = acc / wsum; acc += x; return s; });
+  const wEnd = wStart.map((s, i) => s + words[i] / wsum);
+  const dur = Math.max(0.3, cap.end - cap.start), e = t - cap.start, r = cap.end - t;
+  const prog = clamp01(e / Math.max(0.3, dur - 0.12));
+  const totalG = A === "type" ? rows.filter(r => r.b.prim).reduce((a, r) => a + r.toks.reduce((b, tk) => b + (tk.sp ? 0 : graphemes(tk.s).length), 0), 0) : 0;
+  let gBudget = A === "type" ? Math.floor(clamp01(e / Math.min(dur * 0.8, totalG * 0.045 + 0.05)) * totalG + 0.0001) : 0;
+
+  // whole-caption motion
+  let alpha = 1, sc = 1, dx = 0, dy = 0;
+  const k = d => clamp01(e / d), out = d => clamp01(r / d);
+  if (A === "fade") alpha = Math.min(k(0.22), out(0.14));
+  else if (A === "pop") { sc = 0.55 + 0.45 * easeOutBack(k(0.3)); alpha = k(0.08); }
+  else if (A === "slide") { const q = easeOutCubic(k(0.28)); dy = (1 - q) * main.px * 0.7; alpha = Math.min(q, out(0.14)); }
+  else if (A === "zoom") { const q = easeOutCubic(k(0.28)); sc = 1.4 - 0.4 * q; alpha = q; }
+  else if (A === "shake" && e < 0.4) { const f = 1 - e / 0.4; dx = Math.sin(e * 90) * main.px * 0.08 * f; dy = Math.cos(e * 70) * main.px * 0.05 * f; }
+  else if (A === "glow") alpha = k(0.15);
+  else if (ANIMS[A].w) alpha = k(0.06);
+  if (alpha <= 0.001) { ctx.restore(); return; }
+  ctx.globalAlpha = alpha;
+  ctx.translate(W / 2 + dx, cy + dy); ctx.scale(sc, sc); ctx.translate(-W / 2, -cy);
+
+  if (st.box) {
+    ctx.fillStyle = hexA(st.boxColor, st.boxOpacity);
+    rows.forEach(rw => { const padX = rw.px * 0.42; rrect(ctx, W / 2 - rw.w / 2 - padX, rw.y - rw.lh / 2, rw.w + padX * 2, rw.lh + 0.5, rw.px * 0.18); ctx.fill(); });
+  }
+  // per-word state
+  const state = tk => {
+    if (tk.wi == null) return { show: tk.s };
+    const i = tk.wi, active = prog >= wStart[i] && prog < wEnd[i] || (i === words.length - 1 && prog >= 1), said = prog >= wStart[i];
+    if (A === "type") { const g = graphemes(tk.s); const n = Math.max(0, Math.min(g.length, gBudget)); gBudget -= g.length; return { show: g.slice(0, n).join("") }; }
+    if (A === "word") return { show: said ? tk.s : "", pop: said ? easeOutBack(clamp01((prog - wStart[i]) * dur / 0.18)) : 1 };
+    if (A === "karaoke") return { show: tk.s, color: said ? st.hl : null };
+    if (A === "current") return { show: tk.s, color: active ? st.hl : null };
+    if (A === "box") return { show: tk.s, hbox: active };
+    if (A === "bounce") return { show: tk.s, color: active ? st.hl : null, pop: active ? 1 + 0.18 * Math.sin(Math.PI * clamp01((prog - wStart[i]) / (wEnd[i] - wStart[i]))) : 1 };
+    return { show: tk.s };
+  };
+  rows.forEach(rw => {
+    ctx.font = font(rw.px);
+    const yy = rw.y + rw.px * 0.04;
+    let x = W / 2 - rw.w / 2;
+    const items = rw.toks.map(tk => { const it = { tk, x, ...(tk.sp ? { show: "" } : state(tk)) }; x += tk.w; return it; });
+    const withPop = (it, fn) => {
+      if (!it.pop || it.pop === 1) { fn(); return; }
+      ctx.save(); const cx = it.x + it.tk.w / 2; ctx.translate(cx, yy); ctx.scale(it.pop, it.pop); ctx.translate(-cx, -yy); fn(); ctx.restore();
+    };
+    items.forEach(it => { if (it.hbox && it.show) withPop(it, () => { const p2 = rw.px * 0.14; ctx.fillStyle = st.hl; rrect(ctx, it.x - p2, rw.y - rw.px * 0.66, it.tk.w + p2 * 2, rw.px * 1.32, rw.px * 0.2); ctx.fill(); }); });
+    if (st.dshadow) {
+      const off = rw.px * 0.075;
+      ctx.fillStyle = st.dshadow; ctx.strokeStyle = st.dshadow; ctx.lineWidth = rw.px * st.stroke * 0.04;
+      items.forEach(it => { if (it.show && !it.hbox) withPop(it, () => { if (st.stroke > 0) ctx.strokeText(it.show, it.x + off, yy + off); ctx.fillText(it.show, it.x + off, yy + off); }); });
+    }
+    if (st.stroke > 0) {
+      ctx.strokeStyle = st.strokeColor; ctx.lineWidth = rw.px * st.stroke * 0.04;
+      items.forEach(it => { if (it.show && !it.hbox) withPop(it, () => ctx.strokeText(it.show, it.x, yy)); });
+    }
+    items.forEach(it => {
+      if (!it.show) return;
+      withPop(it, () => {
+        if (A === "glow") { ctx.shadowColor = st.hl; ctx.shadowBlur = rw.px * 0.7; ctx.fillStyle = it.color || rw.b.color; ctx.fillText(it.show, it.x, yy); }
+        else if (st.glow && !it.hbox) { ctx.shadowColor = st.glow; ctx.shadowBlur = rw.px * 0.55; ctx.fillStyle = it.color || rw.b.color; ctx.fillText(it.show, it.x, yy); ctx.shadowBlur = rw.px * 0.2; }
+        else if (st.shadow && !st.box && !it.hbox) { ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = rw.px * 0.18; ctx.shadowOffsetY = rw.px * 0.05; }
+        ctx.fillStyle = it.hbox ? textOn(st.hl) : (it.color || rw.b.color);
+        ctx.fillText(it.show, it.x, yy);
+        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      });
+    });
+  });
+  ctx.restore();
+}
+function captionAt(caps, t) { for (const c of caps) { if (t >= c.start && t < c.end) return c; if (c.start > t) break; } return null; }
+async function ensureFont(st) { try { await document.fonts.load(`${st.weight} 40px "${st.font}"`, "ทดสอบ Test"); } catch {} }
+
+function pickMime() {
+  const list = ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1,mp4a", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  if (!window.MediaRecorder) return null;
+  return list.find(m => MediaRecorder.isTypeSupported(m)) || "";
+}
+
+/* ================= views ================= */
+const app = $("#app");
+let cleanup = null;
+function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null; } window.scrollTo(0, 0); fn(); }
+
+/* ---------- Home ---------- */
+async function viewHome() {
+  const projects = (await DB.all()).sort((a, b) => b.createdAt - a.createdAt);
+  app.innerHTML = `
+    ${hasKey() ? "" : `<div class="notice"><p><b>เริ่มต้นใช้งาน:</b> ใส่ API key ก่อน แนะนำ Groq ใช้ฟรีและไม่ต้องใช้บัตร สมัครได้ในหน้าตั้งค่า</p><button class="btn primary small" id="nkey">ใส่ API key</button></div>`}
+    <div class="home-head">
+      <div><h1>โปรเจกต์ของฉัน</h1><div class="muted">${projects.length ? projects.length + " โปรเจกต์ เก็บไว้ในเครื่องนี้" : "อัปโหลดวิดีโอ แล้ว AI จะถอดเสียงและใส่ซับให้"}</div></div>
+      <button class="btn primary" id="newp">+ โปรเจกต์ใหม่</button>
+    </div>
+    ${projects.length ? `<div class="grid">${projects.map(p => `
+      <button class="pcard" data-id="${p.id}">
+        <div class="thumb">${p.thumb ? `<img src="${p.thumb}" alt="">` : ""}<span class="dur mono">${fmtDur(p.duration)}</span></div>
+        <div class="meta"><b>${esc(p.name)}</b><span class="hint">${p.captions.length} บรรทัด${p.tr && p.tr.lang ? " · " + (LNAME[p.lang] || "") + "+" + LNAME[p.tr.lang] : ""}${p.sfx && p.sfx.length ? " · เอฟเฟกต์ " + p.sfx.length : ""} · ${new Date(p.createdAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span></div>
+      </button>`).join("")}</div>`
+      : `<div class="empty"><span class="sample">ซับขึ้นแบบนี้ อ่านง่าย<small>Subtitles look like this</small></span><p class="muted" style="margin:0;max-width:42ch">ยังไม่มีโปรเจกต์ เลือกวิดีโอจากเครื่อง AI จะถอดเสียง แปลเป็นภาษาที่สองได้ ใส่ซาวด์เอฟเฟกต์ แล้วดาวน์โหลดวิดีโอที่ฝังซับแล้ว</p><button class="btn primary" id="newp2">สร้างโปรเจกต์แรก</button></div>`}
+  `;
+  $("#newp").onclick = () => setView(viewNew);
+  const n2 = $("#newp2"); if (n2) n2.onclick = () => setView(viewNew);
+  const nk = $("#nkey"); if (nk) nk.onclick = openSettings;
+  $$(".pcard").forEach(b => b.onclick = () => setView(() => viewEditor(b.dataset.id)));
+}
+
+/* ---------- New project ---------- */
+function viewNew() {
+  let file = null, meta = null, maxChars = settings.maxChars || 22, busy = false;
+  app.innerHTML = `
+    <div class="np">
+      <button class="back" id="bk">← กลับ</button>
+      <div><h1>โปรเจกต์ใหม่</h1><p class="muted" style="margin:4px 0 0">อัปโหลดวิดีโอ แล้ว AI จะถอดเสียง ใส่ซับ และแปลเป็นภาษาที่สองให้อัตโนมัติ</p></div>
+      <div class="field"><label for="pname">ชื่อโปรเจกต์</label><input class="input" id="pname" placeholder="เช่น รีวิวรถกอล์ฟ EP.1"></div>
+      <div class="field"><span class="lab">วิดีโอ</span>
+        <label class="drop" id="drop" for="vfile">
+          <span class="up"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span>
+          <b>แตะเพื่อเลือกวิดีโอ หรือลากไฟล์มาวาง</b>
+          <span class="hint">MP4, MOV · แนะนำไม่เกิน 30 นาที</span>
+        </label>
+        <input type="file" id="vfile" accept="video/*,.mov,.mp4,.m4v,.webm" hidden>
+        <div id="finfo" hidden></div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="lang">ภาษาที่พูดในคลิป</label><select class="input" id="lang">${langOptions(settings.lang, `<option value="auto"${settings.lang === "auto" ? " selected" : ""}>ให้ AI ตรวจเอง</option>`)}</select></div>
+        <div class="field"><label for="lang2">ซับภาษาที่สอง</label><select class="input" id="lang2">${langOptions(settings.lang2, `<option value=""${!settings.lang2 ? " selected" : ""}>ไม่ใช้ (ภาษาเดียว)</option>`)}</select></div>
+      </div>
+      <div class="field"><span class="lab">ความยาวซับต่อบรรทัด</span>
+        <div class="seg" id="mc">${[[14, "สั้น · TikTok"], [22, "กลาง"], [34, "ยาว"]].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v == maxChars}">${l}</button>`).join("")}</div>
+      </div>
+      <div class="field"><label for="vocab">คำเฉพาะที่อยากให้ AI สะกดถูก <span class="muted">(ไม่บังคับ)</span></label>
+        <textarea class="input" id="vocab" placeholder="เช่น ชื่อแบรนด์ ชื่อรุ่นสินค้า ชื่อคน คั่นด้วยจุลภาค">${esc(settings.vocab)}</textarea>
+        <span class="hint">AI จะสะกดคำเหล่านี้ถูกขึ้น และคงชื่อไว้ตามเดิมตอนแปล</span></div>
+      <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
+      <ol class="steps" id="steps" hidden>
+        <li data-s="audio"><span class="dot"></span>แยกเสียงจากวิดีโอ</li>
+        <li data-s="ai"><span class="dot"></span><span id="aiLab">ส่งให้ AI ถอดเสียง</span></li>
+        <li data-s="cap"><span class="dot"></span>จัดบรรทัดซับ</li>
+        <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
+      </ol>
+      <div class="err" id="err" hidden></div>
+    </div>`;
+  $("#bk").onclick = () => { if (!busy) setView(viewHome); };
+  $$("#mc button").forEach(b => b.onclick = () => { $$("#mc button").forEach(x => x.setAttribute("aria-pressed", x === b)); maxChars = +b.dataset.v; });
+  const refresh = () => { $("#go").disabled = !file || busy; if (!busy) $("#go").textContent = hasKey() ? "เริ่มสร้างซับ" : "ใส่ API key แล้วเริ่มสร้างซับ"; };
+  refresh();
+
+  async function takeFile(f) {
+    if (!f) return;
+    if (!/^video\//.test(f.type) && !/\.(mov|mp4|m4v|webm|avi|mkv)$/i.test(f.name)) { toast("กรุณาเลือกไฟล์วิดีโอ"); return; }
+    file = f; meta = null;
+    const fi = $("#finfo"); fi.hidden = false; fi.innerHTML = `<div class="fileinfo"><img id="fthumb" alt=""><div><b>${esc(f.name)}</b><span class="hint" id="fmeta">${fmtSize(f.size)} · กำลังอ่านไฟล์…</span></div><button class="btn small" id="chg">เปลี่ยน</button></div>`;
+    $("#chg").onclick = e => { e.preventDefault(); $("#vfile").click(); };
+    if (!$("#pname").value.trim()) $("#pname").value = f.name.replace(/\.[^.]+$/, "");
+    try {
+      meta = await probeVideo(f);
+      $("#fthumb").src = meta.thumb || "";
+      const est = Math.max(0.01, meta.duration / 60 * 0.006);
+      $("#fmeta").textContent = `${fmtSize(f.size)} · ยาว ${fmtDur(meta.duration)} · ${meta.width}×${meta.height} · ค่า AI ประมาณ $${est.toFixed(2)}`;
+      if (meta.duration > 1800) toast("คลิปยาวเกิน 30 นาที อาจใช้เวลานานและเครื่องอาจค้าง", 4000);
+    } catch { $("#fmeta").textContent = fmtSize(f.size) + " · อ่านข้อมูลวิดีโอไม่ได้ แต่ยังลองถอดเสียงได้"; }
+    refresh();
+  }
+  $("#vfile").onchange = e => takeFile(e.target.files[0]);
+  const drop = $("#drop");
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); takeFile(e.dataTransfer.files[0]); });
+
+  $("#go").onclick = async () => {
+    if (!hasKey()) { openSettings(); return; }
+    const lang = $("#lang").value, lang2 = $("#lang2").value;
+    if (lang2 && lang2 === lang) { toast("ภาษาที่สองต้องต่างจากภาษาที่พูด"); return; }
+    busy = true; refresh(); $("#go").textContent = "กำลังทำงาน… อย่าปิดหน้านี้"; $("#err").hidden = true;
+    const steps = $("#steps"); steps.hidden = false;
+    $$("li", steps).forEach(li => li.className = "");
+    $('li[data-s="tr"]', steps).hidden = !lang2;
+    if (lang2) $("#trLab").textContent = "แปลเป็นภาษา" + LNAME[lang2];
+    const mark = (s, c) => { $(`li[data-s="${s}"]`, steps).className = c; };
+    let stage = "audio";
+    try {
+      settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim(); saveSettings();
+      mark("audio", "doing");
+      const { chunks, duration } = await extractAudio(file);
+      mark("audio", "done"); stage = "ai"; mark("ai", "doing");
+      const raw = { words: [], segments: [] };
+      let detected = lang;
+      for (let i = 0; i < chunks.length; i++) {
+        if (chunks.length > 1) $("#aiLab").textContent = `ส่งให้ AI ถอดเสียง (ช่วงที่ ${i + 1}/${chunks.length})`;
+        const res = await whisper(chunks[i].blob, { lang, prompt: settings.vocab });
+        if (lang === "auto" && res.language) { const hit = LANGS.find(l => l[2].toLowerCase() === String(res.language).toLowerCase() || l[0] === res.language); if (hit) detected = hit[0]; }
+        const o = chunks[i].offset;
+        (res.words || []).forEach(w => raw.words.push({ word: w.word, start: w.start + o, end: w.end + o }));
+        (res.segments || []).forEach(s => raw.segments.push({ text: s.text, start: s.start + o, end: s.end + o }));
+      }
+      mark("ai", "done"); stage = "cap"; mark("cap", "doing");
+      const plang = detected === "auto" ? "th" : detected;
+      const captions = buildCaptions(raw, maxChars, plang);
+      if (!captions.length) throw new Error("AI ไม่พบคำพูดในคลิปนี้");
+      mark("cap", "done");
+      const id = uid();
+      const p = normalize({
+        id, name: $("#pname").value.trim() || file.name, createdAt: Date.now(), updatedAt: Date.now(),
+        duration: (meta && meta.duration) || duration, width: meta ? meta.width : 0, height: meta ? meta.height : 0,
+        thumb: meta ? meta.thumb : "", fileName: file.name, lang: plang, maxChars, raw, captions, style: { ...settings.style },
+        tr: { lang: lang2 && lang2 !== plang ? lang2 : "", mode: lang2 && lang2 !== plang ? "both" : "main" }, videoSaved: false
+      });
+      try { await DB.putVideo(id, file); p.videoSaved = true; } catch { tempVideos[id] = file; }
+      await DB.put(p);
+      if (p.tr.lang) {
+        stage = "tr"; mark("tr", "doing");
+        try {
+          await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trLab").textContent = `แปลเป็นภาษา${LNAME[p.tr.lang]} (${d}/${t})`);
+          mark("tr", "done"); await DB.put(p);
+        } catch (e) { mark("tr", "fail"); toast("ซับพร้อมแล้ว แต่แปลไม่สำเร็จ: " + e.message + " กดแปลใหม่ได้ในหน้าแก้ไข", 6000); await sleep(1500); }
+      }
+      await sleep(300);
+      busy = false;
+      setView(() => viewEditor(id));
+    } catch (e) {
+      mark(stage, "fail");
+      const er = $("#err"); er.hidden = false; er.textContent = e.message || String(e);
+      busy = false; refresh(); $("#go").textContent = "ลองใหม่";
+    }
+  };
+}
+const tempVideos = {};
+async function probeVideo(f) {
+  const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto";
+  const url = URL.createObjectURL(f); v.src = url;
+  try {
+    await Promise.race([once(v, "loadedmetadata"), sleep(15000).then(() => { throw new Error("timeout"); })]);
+    const out = { duration: v.duration, width: v.videoWidth, height: v.videoHeight, thumb: "" };
+    try {
+      v.currentTime = Math.min(1, v.duration / 3);
+      await Promise.race([once(v, "seeked"), sleep(5000)]);
+      const c = document.createElement("canvas"), k = 360 / Math.max(v.videoWidth, v.videoHeight);
+      c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+      out.thumb = c.toDataURL("image/jpeg", 0.7);
+    } catch {}
+    return out;
+  } finally { URL.revokeObjectURL(url); v.removeAttribute("src"); }
+}
+
+/* ---------- Editor ---------- */
+async function viewEditor(id) {
+  const got = await DB.get(id);
+  if (!got) { setView(viewHome); return; }
+  const p = normalize(got);
+  await loadCustomLib();
+  let blob = tempVideos[id] || (p.videoSaved ? await DB.getVideo(id) : null);
+  let url = null, raf = 0, activeId = null, saveT = 0, exporting = null;
+  let sched = new Set(), live = [];
+
+  const scheduleSave = () => { clearTimeout(saveT); const s0 = $("#saved"); if (s0) s0.textContent = "กำลังบันทึก…"; saveT = setTimeout(async () => { p.updatedAt = Date.now(); await DB.put(p); const s = $("#saved"); if (s) s.textContent = "บันทึกแล้ว"; }, 500); };
+  const modeBtns = [["main", "ภาษาหลัก"], ["both", "สองภาษา"], ["tr", "เฉพาะคำแปล"]];
+
+  app.innerHTML = `
+    <div class="ed-top">
+      <button class="back" id="bk">←</button>
+      <input class="name" id="pn" aria-label="ชื่อโปรเจกต์">
+      <span class="saved" id="saved">บันทึกแล้ว</span>
+    </div>
+    <div class="ed-grid">
+      <div class="stage-col" id="stageCol"></div>
+      <div class="panel">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-t="text" aria-selected="true">ข้อความ</button>
+          <button role="tab" data-t="sfx" aria-selected="false">เอฟเฟกต์</button>
+          <button role="tab" data-t="style" aria-selected="false">สไตล์</button>
+          <button role="tab" data-t="export" aria-selected="false">ส่งออก</button>
+        </div>
+
+        <div class="pane" data-p="text">
+          <div class="tools">
+            <details class="box" open><summary>ภาษาของซับ</summary><div class="in">
+              <div class="two">
+                <div class="field"><label for="mLang" class="hint">ภาษาหลัก (ที่พูดในคลิป)</label><select class="input" id="mLang">${langOptions(p.lang)}</select></div>
+                <div class="field"><label for="trLang" class="hint">ภาษาที่สอง</label><select class="input" id="trLang">${langOptions(p.tr.lang, `<option value="">ไม่ใช้</option>`)}</select></div>
+              </div>
+              <div class="seg" id="trMode">${modeBtns.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join("")}</div>
+              <div class="row"><button class="btn small" id="trGo">แปลทุกบรรทัด</button><span class="hint" id="trStat"></span></div>
+            </div></details>
+            <details class="box"><summary>ค้นหาและแทนที่คำ</summary><div class="in">
+              <div class="row"><input class="input" id="fFind" placeholder="คำที่ผิด"><input class="input" id="fRep" placeholder="แก้เป็น"></div>
+              <button class="btn small" id="fGo" disabled>แทนที่ทั้งหมด</button></div></details>
+            <details class="box"><summary>จัดบรรทัดซับใหม่</summary><div class="in">
+              <div class="seg" id="rmc">${[[14, "สั้น"], [22, "กลาง"], [34, "ยาว"]].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v == p.maxChars}">${l}</button>`).join("")}</div>
+              <span class="hint">สร้างบรรทัดซับใหม่จากผลถอดเสียงเดิม คำที่แก้ไว้และคำแปลจะหายไป</span>
+              <button class="btn small" id="rGo">จัดบรรทัดใหม่</button></div></details>
+          </div>
+          <ol class="caps" id="caps"></ol>
+          <button class="btn small" id="addEnd">+ เพิ่มบรรทัดท้ายสุด</button>
+        </div>
+
+        <div class="pane" data-p="sfx" hidden>
+          <div class="field"><span class="lab">คลังเสียง</span>
+            <span class="hint">แตะ ▶ เพื่อฟัง · แตะชื่อเสียงเพื่อวางที่ตำแหน่งวิดีโอตอนนี้ <span class="nowpos" id="nowPos">00:00.0</span></span>
+            <div class="lib" id="lib"></div>
+            <div class="row"><label class="btn small" for="sfxUp">+ นำเข้าเสียงของคุณ</label><input type="file" id="sfxUp" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple hidden><span class="hint">mp3, wav, m4a เช่น เสียงปรบมือ เสียงหัวเราะ เพลงสั้น</span></div>
+          </div>
+          <div class="divider"></div>
+          <div class="row"><button class="btn small" id="aiSfx">ให้ AI แนะนำจุดใส่เอฟเฟกต์</button><span class="hint" id="aiSfxStat"></span></div>
+          <div class="field"><span class="lab" id="sfxCount">เอฟเฟกต์ในคลิป</span><ol class="sfxlist" id="sfxList"></ol></div>
+          <div class="divider"></div>
+          <div class="ctl"><label for="aOrig">เสียงคลิปเดิม</label><input type="range" id="aOrig" min="0" max="1.5" step="0.05"><output id="oOrig"></output></div>
+          <div class="ctl"><label for="aSfx">เสียงเอฟเฟกต์รวม</label><input type="range" id="aSfx" min="0" max="1.5" step="0.05"><output id="oSfx"></output></div>
+        </div>
+
+        <div class="pane" data-p="style" hidden>
+          <div class="subtabs" id="stTabs" role="tablist">
+            <button type="button" data-s="look" aria-selected="true">สไตล์คงที่</button>
+            <button type="button" data-s="anim" aria-selected="false">อนิเมชัน <span class="badge">แนะนำ</span></button>
+            <button type="button" data-s="mine" aria-selected="false">ของฉัน</button>
+          </div>
+          <div data-sp="look"><div class="lookgrid" id="lookgrid"></div></div>
+          <div data-sp="anim" hidden class="field">
+            <span class="hint">อนิเมชันใช้ร่วมกับสไตล์ที่เลือกไว้</span>
+            <div class="fxgrid" id="fxgrid"></div>
+            <div class="ctl"><label for="sHl">สีไฮไลต์</label><input type="color" id="sHl"><span class="hint">คำที่ถูกเน้น</span></div>
+          </div>
+          <div data-sp="mine" hidden class="field">
+            <div class="row"><input class="input" id="myName" placeholder="ตั้งชื่อ เช่น Golf Hub รีวิว" maxlength="24"><button class="btn small" id="mySave">บันทึกสไตล์ปัจจุบัน</button></div>
+            <div class="lookgrid" id="mygrid"></div>
+          </div>
+          <div class="divider"></div>
+          <div class="ctl"><label for="sSize">ขนาด</label><input type="range" id="sSize" min="30" max="120" step="1"><output id="oSize"></output></div>
+          <div class="ctl"><label for="sPos">ตำแหน่ง</label><input type="range" id="sPos" min="8" max="94" step="1"><output id="oPos"></output></div>
+          <div class="field"><span class="lab">ฟอนต์</span><div class="fontgrid" id="fontgrid"></div></div>
+          <details class="box"><summary>ปรับสีและขอบเอง</summary><div class="in">
+            <div class="ctl"><label for="sColor">สีตัวอักษร</label><input type="color" id="sColor"><label class="sw"><input type="checkbox" id="sBold"> ตัวหนา</label></div>
+            <div class="ctl"><label for="sStroke">ขอบตัวอักษร</label><input type="range" id="sStroke" min="0" max="12" step="1"><input type="color" id="sStrokeC" aria-label="สีขอบ"></div>
+            <div class="ctl"><label for="sBoxO">กล่องพื้นหลัง</label><input type="range" id="sBoxO" min="0.2" max="1" step="0.05" aria-label="ความทึบกล่อง"><input type="color" id="sBoxC" aria-label="สีกล่อง"></div>
+            <div class="row"><label class="sw"><input type="checkbox" id="sBox"> ใช้กล่องพื้นหลัง</label><label class="sw"><input type="checkbox" id="sShadow"> เงานุ่ม</label></div>
+            <div class="row"><label class="sw"><input type="checkbox" id="sGlow"> แสงเรือง</label><input type="color" id="sGlowC" aria-label="สีแสงเรือง"><label class="sw" style="margin-left:12px"><input type="checkbox" id="sDsh"> เงาทึบ</label><input type="color" id="sDshC" aria-label="สีเงาทึบ"></div>
+          </div></details>
+          <details class="box"><summary>ภาษาที่สอง</summary><div class="in">
+            <div class="ctl"><label for="sSize2">ขนาด</label><input type="range" id="sSize2" min="40" max="110" step="1"><output id="oSize2"></output></div>
+            <div class="ctl"><label for="sColor2">สีคำแปล</label><input type="color" id="sColor2"><span></span></div>
+            <div class="seg" id="sOrder"><button type="button" data-v="below">คำแปลอยู่ใต้</button><button type="button" data-v="above">คำแปลอยู่บน</button></div>
+          </div></details>
+          <button class="btn small" id="sDef">ใช้สไตล์นี้เป็นค่าเริ่มต้นของโปรเจกต์ใหม่</button>
+        </div>
+
+        <div class="pane" data-p="export" hidden>
+          <div class="field"><span class="lab">ไฟล์ซับ (.srt)</span><span class="hint">ใช้อัปโหลดคู่กับวิดีโอใน YouTube, Facebook หรือโปรแกรมตัดต่อ</span>
+            <div class="row"><select class="input" id="srtMode"></select><button class="btn" id="srt">ดาวน์โหลด .srt</button></div></div>
+          <div class="divider"></div>
+          <div class="field"><span class="lab">วิดีโอที่ฝังซับและเอฟเฟกต์แล้ว</span>
+            <span class="hint" id="exHint">ใช้เวลาประมาณเท่าความยาวคลิป (${fmtDur(p.duration)}) เปิดหน้าจอและหน้านี้ค้างไว้จนเสร็จ ห้ามสลับแอป</span>
+            <button class="btn primary" id="burn">สร้างวิดีโอ</button>
+            <div id="exProg" hidden class="field"><div class="prog"><i id="exBar"></i></div><div class="row"><span class="hint mono" id="exTxt">0%</span><button class="btn small" id="exCancel" style="margin-left:auto">ยกเลิก</button></div></div>
+            <div class="result field" id="exRes" hidden></div>
+          </div>
+          <div class="divider"></div>
+          <button class="btn danger small" id="delP">ลบโปรเจกต์นี้</button>
+        </div>
+      </div>
+    </div>`;
+
+  $("#pn").value = p.name;
+  $("#pn").oninput = e => { p.name = e.target.value; scheduleSave(); };
+  $("#bk").onclick = () => { if (exporting) { toast("กำลังสร้างวิดีโอ กดยกเลิกก่อน"); return; } setView(viewHome); };
+  $$(".tabs button").forEach(b => b.onclick = () => {
+    $$(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+    $$(".pane").forEach(pn => pn.hidden = pn.dataset.p !== b.dataset.t);
+    if (b.dataset.t === "style") startFx(); else stopFx();
+  });
+
+  /* ---- stage ---- */
+  let video = null, cv = null;
+  function buildStage() {
+    const col = $("#stageCol");
+    if (!blob) {
+      col.innerHTML = `<div class="missing"><b>ไม่พบไฟล์วิดีโอในเครื่องนี้</b><span class="hint">เลือกไฟล์ “${esc(p.fileName || "")}” อีกครั้งเพื่อดูตัวอย่างและส่งออก</span><label class="btn small" for="rpick">เลือกไฟล์วิดีโอ</label><input type="file" id="rpick" accept="video/*" hidden></div>`;
+      $("#rpick").onchange = async e => { const f = e.target.files[0]; if (!f) return; blob = f; try { await DB.putVideo(id, f); p.videoSaved = true; scheduleSave(); } catch { tempVideos[id] = f; } buildStage(); };
+      return;
+    }
+    url = URL.createObjectURL(blob);
+    col.innerHTML = `<div class="stage" id="stage"><video id="vid" playsinline controls preload="metadata"></video><canvas id="ov"></canvas></div><span class="hint">ซับและเอฟเฟกต์ในตัวอย่างนี้คือแบบเดียวกับวิดีโอที่ส่งออก</span>`;
+    video = $("#vid"); cv = $("#ov"); video.src = url;
+    video.volume = Math.min(1, p.audio.orig);
+    video.addEventListener("loadedmetadata", () => { if (!p.width) { p.width = video.videoWidth; p.height = video.videoHeight; } sizeStage(); draw(); });
+    ["seeked", "timeupdate", "pause"].forEach(ev => video.addEventListener(ev, draw));
+    ["seeking", "pause", "ended"].forEach(ev => video.addEventListener(ev, stopLive));
+    video.addEventListener("play", () => { getPAC(); loop(); });
+    video.addEventListener("timeupdate", () => { const n = $("#nowPos"); if (n) n.textContent = fmtT(video.currentTime); });
+    sizeStage();
+  }
+  function stopLive() { live.forEach(s => { try { s.stop(); } catch {} }); live = []; sched = new Set(); }
+  function sizeStage() {
+    const st = $("#stage"); if (!st) return;
+    const ratio = (p.width && p.height) ? p.width / p.height : 16 / 9;
+    const aw = $("#stageCol").clientWidth, maxH = window.innerHeight * (window.innerWidth >= 900 ? 0.78 : 0.58);
+    let w = Math.min(aw, maxH * ratio), h = w / ratio;
+    st.style.width = w + "px"; st.style.height = h + "px";
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    draw();
+  }
+  function draw() {
+    if (!cv) return;
+    const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, cv.width, cv.height);
+    const t = video ? video.currentTime : 0;
+    const c = captionAt(p.captions, t);
+    if (c) drawCaption(ctx, cv.width, cv.height, c, p, t);
+    const nid = c ? c.id : null;
+    if (nid !== activeId) {
+      activeId = nid;
+      $$(".cap.on").forEach(x => x.classList.remove("on"));
+      if (nid) {
+        const el = $(`.cap[data-id="${nid}"]`);
+        if (el) { el.classList.add("on"); if (video && !video.paused && !el.contains(document.activeElement) && !$('.pane[data-p="text"]').hidden) el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+      }
+    }
+  }
+  function scheduleSfxPreview() {
+    if (!video || video.paused || !pac) return;
+    const now = video.currentTime;
+    for (const s of p.sfx) {
+      if (sched.has(s.id)) continue;
+      if (s.t >= now - 0.05 && s.t < now + 0.3) {
+        sched.add(s.id);
+        playSfx(s.key, s.vol * p.audio.sfx, pac.currentTime + Math.max(0, s.t - now)).then(src => { if (src) live.push(src); });
+      }
+    }
+  }
+  function loop() { cancelAnimationFrame(raf); const f = () => { draw(); scheduleSfxPreview(); if (video && !video.paused && !video.ended) raf = requestAnimationFrame(f); }; f(); }
+  const onResize = () => sizeStage();
+  window.addEventListener("resize", onResize);
+
+  /* ---- languages ---- */
+  function syncLang() {
+    const has = !!p.tr.lang, anyTr = p.captions.some(c => c.tr && c.tr.trim());
+    if (!has) p.tr.mode = "main";
+    $$("#trMode button").forEach(b => { b.disabled = !has && b.dataset.v !== "main"; b.setAttribute("aria-pressed", b.dataset.v === p.tr.mode); });
+    $("#trGo").hidden = !has;
+    $("#trGo").textContent = anyTr ? "แปลใหม่ทุกบรรทัด" : "แปลทุกบรรทัด";
+    $("#trStat").textContent = has ? (anyTr ? `มีคำแปล${LNAME[p.tr.lang]}แล้ว แก้คำได้ในแต่ละบรรทัด` : `ยังไม่ได้แปลเป็นภาษา${LNAME[p.tr.lang]}`) : "";
+    const sm = $("#srtMode");
+    sm.innerHTML = `<option value="main">ภาษาหลัก (${LNAME[p.lang] || ""})</option>` + (has ? `<option value="tr">ภาษาที่สอง (${LNAME[p.tr.lang]})</option><option value="both">สองภาษาในไฟล์เดียว</option>` : "");
+    sm.value = has && p.tr.mode !== "main" ? p.tr.mode : "main";
+  }
+  $("#mLang").onchange = e => { p.lang = e.target.value; scheduleSave(); syncLang(); draw(); };
+  $("#trLang").onchange = async e => {
+    const v = e.target.value;
+    if (v && v === p.lang) { toast("ภาษาที่สองต้องต่างจากภาษาหลัก"); e.target.value = p.tr.lang; return; }
+    const changed = v !== p.tr.lang;
+    p.tr.lang = v;
+    if (changed) p.captions.forEach(c => c.tr = "");
+    if (v && p.tr.mode === "main") p.tr.mode = "both";
+    scheduleSave(); syncLang(); renderCaps();
+    if (v) runTranslate();
+  };
+  $$("#trMode button").forEach(b => b.onclick = () => { p.tr.mode = b.dataset.v; scheduleSave(); syncLang(); draw(); });
+  async function runTranslate() {
+    if (!hasKey()) { openSettings(); return; }
+    const b = $("#trGo"); b.disabled = true; $("#trLang").disabled = true;
+    try {
+      await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trStat").textContent = `กำลังแปล ${d}/${t} บรรทัด…`);
+      scheduleSave(); renderCaps(); toast("แปลเสร็จแล้ว");
+    } catch (e) { $("#trStat").textContent = ""; toast(e.message, 5000); }
+    b.disabled = false; $("#trLang").disabled = false; syncLang();
+  }
+  $("#trGo").onclick = runTranslate;
+
+  /* ---- caption list ---- */
+  function renderCaps() {
+    const ol = $("#caps"), has = !!p.tr.lang;
+    const sfxAt = c => p.sfx.filter(s => s.t >= c.start && s.t < c.end).map(s => `<span class="sfxtag">♪ ${esc(sfxName(s.key))}</span>`).join("");
+    ol.innerHTML = p.captions.map(c => `
+      <li class="cap" data-id="${c.id}">
+        <div class="cap-h">
+          <button class="tc mono" data-a="seek">${fmtT(c.start)} – ${fmtT(c.end)}</button>${sfxAt(c)}
+          <div class="cap-acts">
+            <button class="mini" data-a="time">เวลา</button>
+            <button class="mini" data-a="merge">รวมถัดไป</button>
+            <button class="mini" data-a="ins">แทรก</button>
+            <button class="mini del" data-a="del">ลบ</button>
+          </div>
+        </div>
+        <div class="times" hidden><input data-k="start" aria-label="เวลาเริ่ม" value="${fmtT(c.start)}"><span>ถึง</span><input data-k="end" aria-label="เวลาจบ" value="${fmtT(c.end)}"><button class="mini" data-a="setnow">ใช้ตำแหน่งวิดีโอเป็นเวลาเริ่ม</button></div>
+        <textarea rows="1" data-f="text" aria-label="ข้อความซับ"></textarea>
+        ${has ? `<textarea rows="1" class="tr" data-f="tr" aria-label="คำแปล" placeholder="คำแปลภาษา${LNAME[p.tr.lang]}"></textarea>` : ""}
+      </li>`).join("");
+    $$(".cap", ol).forEach(li => { const c = p.captions.find(x => x.id === li.dataset.id); $$("textarea", li).forEach(ta => { ta.value = c[ta.dataset.f] || ""; autoH(ta); }); });
+    activeId = undefined; draw();
+  }
+  const autoH = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+  const capsEl = $("#caps");
+  capsEl.addEventListener("input", e => {
+    const li = e.target.closest(".cap"); if (!li) return; const c = p.captions.find(x => x.id === li.dataset.id);
+    if (e.target.tagName === "TEXTAREA") { c[e.target.dataset.f] = e.target.value; autoH(e.target); draw(); scheduleSave(); }
+  });
+  capsEl.addEventListener("change", e => {
+    const li = e.target.closest(".cap"); if (!li || !e.target.dataset.k) return; const c = p.captions.find(x => x.id === li.dataset.id);
+    const v = parseT(e.target.value);
+    if (isNaN(v)) { e.target.value = fmtT(c[e.target.dataset.k]); toast("รูปแบบเวลา เช่น 01:23.5"); return; }
+    c[e.target.dataset.k] = Math.max(0, v);
+    if (c.end <= c.start) c.end = c.start + 0.5;
+    p.captions.sort((a, b) => a.start - b.start);
+    $(".tc", li).textContent = `${fmtT(c.start)} – ${fmtT(c.end)}`; draw(); scheduleSave();
+  });
+  capsEl.addEventListener("click", e => {
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const li = b.closest(".cap"); const i = p.captions.findIndex(x => x.id === li.dataset.id); const c = p.captions[i];
+    const a = b.dataset.a;
+    if (a === "seek") { if (video) { video.currentTime = c.start + 0.01; video.play().catch(() => {}); } }
+    else if (a === "time") { const t = $(".times", li); t.hidden = !t.hidden; }
+    else if (a === "setnow") { if (!video) return; const d = c.end - c.start; c.start = +video.currentTime.toFixed(2); c.end = +(c.start + d).toFixed(2); p.captions.sort((x, y) => x.start - y.start); scheduleSave(); renderCaps(); }
+    else if (a === "merge") {
+      const n = p.captions[i + 1]; if (!n) { toast("เป็นบรรทัดสุดท้ายแล้ว"); return; }
+      c.text = joinTok(c.text, n.text); c.tr = joinTok(c.tr || "", n.tr || ""); c.end = n.end; p.captions.splice(i + 1, 1); scheduleSave(); renderCaps();
+    }
+    else if (a === "ins") {
+      const n = p.captions[i + 1]; const s = c.end, en = n ? Math.max(s + 0.5, Math.min(n.start, s + 2)) : s + 2;
+      p.captions.splice(i + 1, 0, { id: uid(), start: +s.toFixed(2), end: +en.toFixed(2), text: "", tr: "" }); scheduleSave(); renderCaps();
+      const nt = $(`.cap[data-id="${p.captions[i + 1].id}"] textarea`); if (nt) nt.focus();
+    }
+    else if (a === "del") {
+      if (b.dataset.sure) { p.captions.splice(i, 1); scheduleSave(); renderCaps(); }
+      else { b.dataset.sure = "1"; b.textContent = "ยืนยันลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบ"; } }, 3000); }
+    }
+  });
+  $("#addEnd").onclick = () => {
+    const last = p.captions[p.captions.length - 1]; const s = last ? last.end : (video ? video.currentTime : 0);
+    p.captions.push({ id: uid(), start: +s.toFixed(2), end: +(s + 2).toFixed(2), text: "", tr: "" }); scheduleSave(); renderCaps();
+    const t = $(`.cap:last-child textarea`); if (t) { t.focus(); t.scrollIntoView({ block: "center" }); }
+  };
+  const countIn = (s, f) => s ? s.split(f).length - 1 : 0;
+  const countMatches = () => { const f = $("#fFind").value; if (!f) return 0; return p.captions.reduce((n, c) => n + countIn(c.text, f) + countIn(c.tr, f), 0); };
+  const updFind = () => { const n = countMatches(); $("#fGo").disabled = !n; $("#fGo").textContent = n ? `แทนที่ทั้งหมด (${n} จุด)` : ($("#fFind").value ? "ไม่พบคำนี้" : "แทนที่ทั้งหมด"); };
+  $("#fFind").oninput = updFind;
+  $("#fGo").onclick = () => { const f = $("#fFind").value, r = $("#fRep").value, n = countMatches(); p.captions.forEach(c => { c.text = c.text.split(f).join(r); if (c.tr) c.tr = c.tr.split(f).join(r); }); scheduleSave(); renderCaps(); updFind(); toast(`แทนที่แล้ว ${n} จุด`); };
+  let rmc = p.maxChars || 22;
+  $$("#rmc button").forEach(b => b.onclick = () => { $$("#rmc button").forEach(x => x.setAttribute("aria-pressed", x === b)); rmc = +b.dataset.v; });
+  $("#rGo").onclick = e => {
+    const b = e.currentTarget;
+    if (!p.raw) { toast("โปรเจกต์นี้ไม่มีผลถอดเสียงเดิม"); return; }
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "ยืนยัน: สร้างบรรทัดใหม่ทั้งหมด"; b.classList.add("primary"); return; }
+    delete b.dataset.sure; b.textContent = "จัดบรรทัดใหม่"; b.classList.remove("primary");
+    p.maxChars = rmc; p.captions = buildCaptions(p.raw, rmc, p.lang); scheduleSave(); renderCaps(); syncLang();
+    toast(p.tr.lang ? `ได้ ${p.captions.length} บรรทัด กด “แปลทุกบรรทัด” เพื่อแปลใหม่` : `ได้ ${p.captions.length} บรรทัด`, 4000);
+  };
+
+  /* ---- sound effects ---- */
+  function renderLib() {
+    $("#lib").innerHTML =
+      Object.entries(BUILTIN).map(([k, d]) => `<div class="chip"><button class="pl" data-play="b:${k}" aria-label="ฟังเสียง ${d.n}">▶</button><button class="ad" data-add="b:${k}">${d.n}</button></div>`).join("") +
+      customLib.map(c => `<div class="chip mine"><button class="pl" data-play="c:${c.id}" aria-label="ฟังเสียง ${esc(c.name)}">▶</button><button class="ad" data-add="c:${c.id}" title="${esc(c.name)}">${esc(c.name)}</button></div>`).join("");
+  }
+  $("#lib").addEventListener("click", async e => {
+    const pl = e.target.closest("[data-play]"), ad = e.target.closest("[data-add]");
+    if (pl) { try { await playSfx(pl.dataset.play, p.audio.sfx); } catch { toast("เล่นเสียงนี้ไม่ได้"); } }
+    if (ad) {
+      const t = video ? +video.currentTime.toFixed(2) : 0;
+      p.sfx.push({ id: uid(), key: ad.dataset.add, t, vol: 1 }); p.sfx.sort((a, b) => a.t - b.t);
+      scheduleSave(); renderSfx(); renderCaps(); toast(`วาง “${sfxName(ad.dataset.add)}” ที่ ${fmtT(t)}`);
+      try { await playSfx(ad.dataset.add, p.audio.sfx); } catch {}
+    }
+  });
+  $("#sfxUp").onchange = async e => {
+    for (const f of e.target.files) {
+      if (f.size > 15e6) { toast(`${f.name} ใหญ่เกิน 15 MB`); continue; }
+      const item = { id: uid(), name: f.name.replace(/\.[^.]+$/, "").slice(0, 30), blob: f };
+      try {
+        const ab = await f.arrayBuffer(); const tmp = new OfflineAudioContext(1, 1, 44100);
+        await new Promise((res, rej) => { const pr = tmp.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); });
+        await DB.sfxPut(item); customLib.push(item);
+      } catch { toast(`เปิดไฟล์เสียง ${f.name} ไม่ได้`); }
+    }
+    e.target.value = ""; renderLib(); toast("เพิ่มเสียงลงคลังแล้ว ใช้ได้ทุกโปรเจกต์");
+  };
+  function renderSfx() {
+    $("#sfxCount").textContent = `เอฟเฟกต์ในคลิป (${p.sfx.length})`;
+    $("#sfxList").innerHTML = p.sfx.length ? p.sfx.map(s => `
+      <li class="sfxrow" data-id="${s.id}">
+        <input class="t" value="${fmtT(s.t)}" aria-label="เวลา">
+        <span class="nm">♪ ${esc(sfxName(s.key))}</span>
+        <span class="row" style="gap:2px"><button class="mini" data-a="go">ไปที่จุดนี้</button><button class="mini" data-a="here">ย้ายมาตอนนี้</button><button class="mini del" data-a="del">ลบ</button></span>
+        <label class="vol">ดัง<input type="range" min="0" max="1.5" step="0.05" value="${s.vol}" aria-label="ความดัง"><span class="mono">${Math.round(s.vol * 100)}%</span></label>
+      </li>`).join("") : `<li class="hint">ยังไม่มีเอฟเฟกต์ เลื่อนวิดีโอไปจุดที่ต้องการ แล้วแตะชื่อเสียงด้านบน</li>`;
+  }
+  const sfxList = $("#sfxList");
+  sfxList.addEventListener("click", e => {
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const li = b.closest(".sfxrow"); const i = p.sfx.findIndex(x => x.id === li.dataset.id); const s = p.sfx[i];
+    if (b.dataset.a === "go") { if (video) { video.currentTime = Math.max(0, s.t - 1); video.play().catch(() => {}); } }
+    else if (b.dataset.a === "here") { if (!video) return; s.t = +video.currentTime.toFixed(2); p.sfx.sort((a, c) => a.t - c.t); scheduleSave(); renderSfx(); renderCaps(); }
+    else if (b.dataset.a === "del") { p.sfx.splice(i, 1); scheduleSave(); renderSfx(); renderCaps(); }
+  });
+  sfxList.addEventListener("input", e => {
+    if (e.target.type !== "range") return;
+    const s = p.sfx.find(x => x.id === e.target.closest(".sfxrow").dataset.id);
+    s.vol = +e.target.value; e.target.nextElementSibling.textContent = Math.round(s.vol * 100) + "%"; scheduleSave();
+  });
+  sfxList.addEventListener("change", e => {
+    if (!e.target.classList.contains("t")) return;
+    const s = p.sfx.find(x => x.id === e.target.closest(".sfxrow").dataset.id);
+    const v = parseT(e.target.value); if (isNaN(v)) { e.target.value = fmtT(s.t); toast("รูปแบบเวลา เช่น 01:23.5"); return; }
+    s.t = Math.max(0, v); p.sfx.sort((a, c) => a.t - c.t); scheduleSave(); renderSfx(); renderCaps();
+  });
+  const syncAudio = () => { $("#aOrig").value = p.audio.orig; $("#oOrig").textContent = Math.round(p.audio.orig * 100) + "%"; $("#aSfx").value = p.audio.sfx; $("#oSfx").textContent = Math.round(p.audio.sfx * 100) + "%"; };
+  $("#aOrig").oninput = e => { p.audio.orig = +e.target.value; if (video) video.volume = Math.min(1, p.audio.orig); syncAudio(); scheduleSave(); };
+  $("#aSfx").oninput = e => { p.audio.sfx = +e.target.value; syncAudio(); scheduleSave(); };
+  $("#aiSfx").onclick = async () => {
+    if (!hasKey()) { openSettings(); return; }
+    const b = $("#aiSfx"), st = $("#aiSfxStat"); b.disabled = true; st.textContent = "AI กำลังฟังเนื้อหา…";
+    try {
+      const effects = Object.fromEntries(Object.entries(BUILTIN).map(([k, d]) => [k, d.en]));
+      const j = await chatJSON([
+        { role: "system", content: "You are a social-media video editor adding sound effects to a short video. Choose moments where a sound effect makes the video more engaging: a new tip, a price or deal, a reveal, a list item, a joke, a transition. Use a light touch: about one effect every 6 to 12 seconds at most, never two on neighbouring lines, and pick the effect whose meaning fits the line. Reply only with JSON: {\"items\":[{\"i\": line_index, \"s\": \"effect_key\"}]}" },
+        { role: "user", content: JSON.stringify({ duration_seconds: Math.round(p.duration), effects, lines: p.captions.map((c, i) => ({ i, t: c.start, text: c.text })) }) }
+      ]);
+      const items = (j.items || []).filter(x => p.captions[x.i] && BUILTIN[x.s]);
+      if (!items.length) throw new Error("AI ไม่ได้แนะนำจุดใดเลย");
+      const added = items.filter(x => !p.sfx.some(s => Math.abs(s.t - p.captions[x.i].start) < 0.5)).map(x => ({ id: uid(), key: "b:" + x.s, t: +p.captions[x.i].start.toFixed(2), vol: 1 }));
+      p.sfx.push(...added); p.sfx.sort((a, c) => a.t - c.t);
+      scheduleSave(); renderSfx(); renderCaps();
+      st.textContent = `เพิ่ม ${added.length} จุด ลองเล่นวิดีโอฟัง แล้วลบจุดที่ไม่ชอบได้`;
+    } catch (e) { st.textContent = ""; toast(e.message, 5000); }
+    b.disabled = false;
+  };
+
+  /* ---- style ---- */
+  const KEEP = ["size", "pos", "anim", "size2", "order"];
+  const lookStyle = L => { const keep = Object.fromEntries(KEEP.map(k => [k, p.style[k]])); return { ...p.style, ...LOOK_BASE, ...L.s, ...keep, look: L.id }; };
+  let bgImg = null;
+  function paintThumb(cv, style, cap, t) {
+    const c = cv.getContext("2d"), W = cv.width, H = cv.height;
+    c.clearRect(0, 0, W, H);
+    if (bgImg && bgImg.complete && bgImg.naturalWidth) {
+      const k = Math.max(W / bgImg.naturalWidth, H / bgImg.naturalHeight), w = bgImg.naturalWidth * k, h = bgImg.naturalHeight * k;
+      c.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h); c.fillStyle = "rgba(0,0,0,.28)"; c.fillRect(0, 0, W, H);
+    } else { c.fillStyle = "#3A4150"; c.fillRect(0, 0, W, H); }
+    if (t == null || (t >= cap.start && t < cap.end)) drawCaption(c, W, H, cap, { lang: "th", tr: { lang: "", mode: "main" }, style }, t);
+  }
+  const thumbStyle = st => ({ ...st, size: 290, pos: 52, anim: "none" });
+  $("#lookgrid").innerHTML = LOOKS.map(L => `<button type="button" class="look" data-id="${L.id}"><canvas width="240" height="150"></canvas><span>${L.n}</span></button>`).join("");
+  async function paintLooks() {
+    for (const b of $$("#lookgrid .look")) { const st = lookStyle(LOOKS.find(L => L.id === b.dataset.id)); await ensureFont(st); paintThumb($("canvas", b), thumbStyle(st), THUMB_CAP); }
+  }
+  $$("#lookgrid .look").forEach(b => b.onclick = async () => { Object.assign(p.style, lookStyle(LOOKS.find(L => L.id === b.dataset.id))); await ensureFont(p.style); syncStyle(); draw(); scheduleSave(); });
+
+  /* my styles */
+  const mine = () => settings.myStyles || (settings.myStyles = []);
+  async function renderMine() {
+    const list = mine();
+    $("#mygrid").innerHTML = list.length ? list.map(m => `<div class="mycard"><button type="button" class="look" data-my="${m.id}"><canvas width="240" height="150"></canvas><span>${esc(m.name)}</span></button><button class="mini del" data-mydel="${m.id}">ลบ</button></div>`).join("")
+      : `<p class="hint" style="grid-column:1/-1;margin:0">ยังไม่มีสไตล์ที่บันทึกไว้ ปรับสไตล์ให้ถูกใจ แล้วตั้งชื่อและกดบันทึก ใช้ซ้ำได้ทุกโปรเจกต์</p>`;
+    for (const m of list) { await ensureFont(m.style); const cv = $(`[data-my="${m.id}"] canvas`); if (cv) paintThumb(cv, thumbStyle(m.style), THUMB_CAP); }
+  }
+  $("#mygrid").addEventListener("click", async e => {
+    const a = e.target.closest("[data-my]"), d = e.target.closest("[data-mydel]");
+    if (a) { const m = mine().find(x => x.id === a.dataset.my); Object.assign(p.style, m.style, Object.fromEntries(KEEP.filter(k => k !== "anim").map(k => [k, p.style[k]]))); await ensureFont(p.style); syncStyle(); draw(); scheduleSave(); }
+    if (d) {
+      if (!d.dataset.sure) { d.dataset.sure = "1"; d.textContent = "ยืนยันลบ"; return; }
+      settings.myStyles = mine().filter(x => x.id !== d.dataset.mydel); saveSettings(); renderMine();
+    }
+  });
+  $("#mySave").onclick = () => {
+    const name = $("#myName").value.trim() || "สไตล์ของฉัน " + (mine().length + 1);
+    mine().unshift({ id: uid(), name, style: { ...p.style } }); saveSettings(); $("#myName").value = ""; renderMine(); toast(`บันทึก “${name}” แล้ว`);
+  };
+
+  /* fonts */
+  $("#fontgrid").innerHTML = FONTS.map(([f, w]) => `<button type="button" class="fontbtn" data-f="${f}" style="font-family:'${f}',${FALLBACK};font-weight:${w[1]}"><b>ตัวอย่าง</b><span>${f}</span></button>`).join("");
+  $$("#fontgrid .fontbtn").forEach(b => b.onclick = async () => {
+    const w = fontW(b.dataset.f); p.style.font = b.dataset.f; p.style.weight = p.style.weight >= 600 ? w[1] : w[0]; p.style.look = "";
+    await ensureFont(p.style); syncStyle(); draw(); scheduleSave();
+  });
+
+  /* animation picker with looping previews */
+  const FX_SAMPLE = { id: "s", start: 0.25, end: 2.5, text: "วันนี้มีของดี", tr: "" };
+  $("#fxgrid").innerHTML = Object.entries(ANIMS).map(([k, a]) => `<button type="button" class="fx" data-k="${k}"><canvas width="240" height="135"></canvas>${a.n}</button>`).join("");
+  $$("#fxgrid .fx").forEach(b => b.onclick = () => { p.style.anim = b.dataset.k; syncStyle(); draw(); scheduleSave(); });
+  let fxRaf = 0;
+  function fxTick(now) {
+    const t = (now % 3000) / 1000;
+    $$("#fxgrid .fx").forEach(b => paintThumb($("canvas", b), { ...p.style, anim: b.dataset.k, size: 200, pos: 52 }, FX_SAMPLE, t));
+    fxRaf = requestAnimationFrame(fxTick);
+  }
+  const stopFx = () => cancelAnimationFrame(fxRaf);
+  const startFx = () => { stopFx(); if (!$('[data-sp="anim"]').hidden && !$('.pane[data-p="style"]').hidden) fxRaf = requestAnimationFrame(fxTick); };
+  $$("#stTabs button").forEach(b => b.onclick = () => {
+    $$("#stTabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+    $$("[data-sp]").forEach(x => x.hidden = x.dataset.sp !== b.dataset.s);
+    if (b.dataset.s === "mine") renderMine();
+    startFx();
+  });
+  if (p.thumb) { bgImg = new Image(); bgImg.onload = () => { paintLooks(); }; bgImg.src = p.thumb; }
+  paintLooks();
+
+  function syncStyle() {
+    const s = p.style;
+    $("#sSize").value = s.size; $("#oSize").textContent = s.size; $("#sPos").value = s.pos; $("#oPos").textContent = s.pos + "%";
+    $("#sColor").value = s.color; $("#sBold").checked = s.weight >= 600; $("#sStroke").value = s.stroke; $("#sStrokeC").value = s.strokeColor;
+    $("#sBox").checked = s.box; $("#sBoxO").value = s.boxOpacity; $("#sBoxC").value = s.boxColor; $("#sShadow").checked = s.shadow;
+    $("#sGlow").checked = !!s.glow; if (s.glow) $("#sGlowC").value = s.glow; $("#sDsh").checked = !!s.dshadow; if (s.dshadow) $("#sDshC").value = s.dshadow;
+    $("#sSize2").value = s.size2; $("#oSize2").textContent = s.size2 + "%"; $("#sColor2").value = s.color2;
+    $$("#sOrder button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === s.order));
+    $("#sHl").value = s.hl;
+    $$("#fxgrid .fx").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === s.anim));
+    $$("#lookgrid .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === s.look));
+    $$("#fontgrid .fontbtn").forEach(b => b.setAttribute("aria-pressed", b.dataset.f === s.font));
+  }
+  const bindS = (sel, key, conv = v => v, ev = "input") => $(sel).addEventListener(ev, async e => {
+    const el = e.target; p.style[key] = conv(el.type === "checkbox" ? el.checked : el.value);
+    if (!KEEP.includes(key) && key !== "hl" && key !== "color2") p.style.look = "";
+    if (key === "weight") await ensureFont(p.style);
+    syncStyle(); draw(); scheduleSave();
+  });
+  bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number);
+  bindS("#sColor", "color"); bindS("#sBold", "weight", v => fontW(p.style.font)[v ? 1 : 0]); bindS("#sStroke", "stroke", Number); bindS("#sStrokeC", "strokeColor");
+  bindS("#sBox", "box"); bindS("#sBoxO", "boxOpacity", Number); bindS("#sBoxC", "boxColor"); bindS("#sShadow", "shadow");
+  bindS("#sSize2", "size2", Number); bindS("#sColor2", "color2"); bindS("#sHl", "hl");
+  const fxToggle = (chk, col, key) => { const f = () => { p.style[key] = $(chk).checked ? $(col).value : ""; p.style.look = ""; syncStyle(); draw(); scheduleSave(); }; $(chk).onchange = f; $(col).oninput = () => { $(chk).checked = true; f(); }; };
+  fxToggle("#sGlow", "#sGlowC", "glow"); fxToggle("#sDsh", "#sDshC", "dshadow");
+  $$("#sOrder button").forEach(b => b.onclick = () => { p.style.order = b.dataset.v; syncStyle(); draw(); scheduleSave(); });
+  $("#sDef").onclick = () => { settings.style = { ...p.style }; saveSettings(); toast("ตั้งเป็นค่าเริ่มต้นแล้ว"); };
+
+  /* ---- export ---- */
+  $("#srt").onclick = () => {
+    const mode = $("#srtMode").value;
+    const ts = t => { const ms = Math.round(t * 1000), h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60; return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms % 1000, 3)}`; };
+    const body = c => mode === "tr" ? (c.tr || "").trim() : mode === "both" ? [c.text.trim(), (c.tr || "").trim()].filter(Boolean).join("\n") : c.text.trim();
+    const txt = p.captions.filter(c => body(c)).map((c, i) => `${i + 1}\n${ts(c.start)} --> ${ts(c.end)}\n${body(c)}\n`).join("\n");
+    const suffix = mode === "tr" ? "_" + p.tr.lang : mode === "both" ? "_" + p.lang + "-" + p.tr.lang : "";
+    downloadBlob(new Blob(["﻿" + txt], { type: "application/x-subrip" }), safeName(p.name) + suffix + ".srt");
+  };
+  const mime = pickMime();
+  if (mime === null || !HTMLCanvasElement.prototype.captureStream) { $("#burn").disabled = true; $("#exHint").textContent = "เบราว์เซอร์นี้สร้างวิดีโอไม่ได้ ลองเปิดใน Chrome หรือ Safari รุ่นใหม่"; }
+  $("#burn").onclick = () => {
+    if (!blob) { toast("ต้องเลือกไฟล์วิดีโอก่อน"); return; }
+    if (video) video.pause();
+    const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC();
+    const v = document.createElement("video"); v.playsInline = true; v.preload = "auto";
+    v.style.cssText = "position:fixed;left:-10px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+    document.body.appendChild(v);
+    const vurl = URL.createObjectURL(blob); v.src = vurl;
+    const unlock = v.play().then(() => v.pause()).catch(() => {});
+    ac.resume().catch(() => {});
+    runExport(ac, v, vurl, unlock);
+  };
+  async function runExport(ac, v, vurl, unlock) {
+    const job = { cancel: false }; exporting = job;
+    $("#burn").disabled = true; $("#exProg").hidden = false; $("#exRes").hidden = true; $("#exBar").style.width = "0%"; $("#exTxt").textContent = "กำลังเตรียม…";
+    let wake = null; try { wake = await navigator.wakeLock.request("screen"); } catch {}
+    const srcs = [];
+    const finish = () => { srcs.forEach(s => { try { s.stop(); } catch {} }); try { v.pause(); } catch {} try { ac.close(); } catch {} v.remove(); URL.revokeObjectURL(vurl); try { wake && wake.release(); } catch {} exporting = null; $("#burn").disabled = false; $("#exProg").hidden = true; };
+    try {
+      await unlock;
+      if (v.readyState < 1) await once(v, "loadedmetadata");
+      await ensureFont(p.style);
+      const bufs = {};
+      for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
+      let W = v.videoWidth, H = v.videoHeight; const k = Math.min(1, 1920 / Math.max(W, H));
+      W = Math.round(W * k / 2) * 2; H = Math.round(H * k / 2) * 2;
+      const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
+      const dest = ac.createMediaStreamDestination();
+      const src = ac.createMediaElementSource(v), og = ac.createGain(); og.gain.value = p.audio.orig; src.connect(og).connect(dest);
+      const sfxBus = ac.createGain(); sfxBus.gain.value = p.audio.sfx; sfxBus.connect(dest);
+      const stream = c.captureStream(30); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+      const opts = { videoBitsPerSecond: Math.min(12e6, Math.max(4e6, W * H * 4)), audioBitsPerSecond: 160000 }; if (mime) opts.mimeType = mime;
+      const rec = new MediaRecorder(stream, opts); const parts = [];
+      rec.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
+      const stopped = new Promise(r => rec.onstop = r);
+      v.currentTime = 0; if (v.seeking) await once(v, "seeked");
+      const frame = () => { ctx.drawImage(v, 0, 0, W, H); const cc = captionAt(p.captions, v.currentTime); if (cc) drawCaption(ctx, W, H, cc, p, v.currentTime); };
+      const done = new Set();
+      const schedule = () => {
+        const now = v.currentTime;
+        for (const s of p.sfx) {
+          if (done.has(s.id) || !bufs[s.key]) continue;
+          if (s.t < now - 0.05) { done.add(s.id); continue; }
+          if (s.t < now + 0.3) {
+            done.add(s.id);
+            const bs = ac.createBufferSource(); bs.buffer = bufs[s.key]; const g = ac.createGain(); g.gain.value = s.vol;
+            bs.connect(g).connect(sfxBus); bs.start(ac.currentTime + Math.max(0, s.t - now)); srcs.push(bs);
+          }
+        }
+      };
+      frame();
+      rec.start(1000);
+      await ac.resume();
+      await v.play();
+      let rafE = 0;
+      const tick = () => { frame(); schedule(); const pct = Math.min(100, v.currentTime / v.duration * 100); $("#exBar").style.width = pct + "%"; $("#exTxt").textContent = `${pct.toFixed(0)}% · ${fmtDur(v.currentTime)} / ${fmtDur(v.duration)}`; if (!v.ended && !job.cancel) rafE = requestAnimationFrame(tick); };
+      tick();
+      const onHide = () => { if (document.hidden) toast("อย่าสลับแอประหว่างสร้างวิดีโอ วิดีโออาจกระตุก", 4000); };
+      document.addEventListener("visibilitychange", onHide);
+      await new Promise(r => { v.onended = r; job.done = r; });
+      document.removeEventListener("visibilitychange", onHide);
+      cancelAnimationFrame(rafE); frame();
+      // let a sound effect near the end finish ringing
+      const tail = p.sfx.filter(s => bufs[s.key]).reduce((m, s) => Math.max(m, s.t + bufs[s.key].duration - v.duration), 0);
+      await sleep(200 + Math.min(2500, Math.max(0, tail) * 1000));
+      rec.stop(); await stopped;
+      if (job.cancel) { finish(); toast("ยกเลิกแล้ว"); return; }
+      const type = (rec.mimeType || mime || "video/webm").split(";")[0];
+      const out = new Blob(parts, { type }); const ext = type.includes("mp4") ? "mp4" : "webm";
+      const name = safeName(p.name) + "_ซับ." + ext;
+      finish();
+      const res = $("#exRes"); res.hidden = false;
+      const ourl = URL.createObjectURL(out);
+      res.innerHTML = `<video controls playsinline src="${ourl}"></video><span class="hint">${esc(name)} · ${fmtSize(out.size)}${ext === "webm" ? " · ไฟล์ .webm ถ้าแอปไหนไม่รองรับ ลองสร้างจาก Safari จะได้ .mp4" : ""}</span><div class="row"><button class="btn primary" id="oShare">บันทึก / แชร์</button><button class="btn" id="oDl">ดาวน์โหลดไฟล์</button></div>`;
+      $("#oShare").onclick = () => shareOrSave(out, name);
+      $("#oDl").onclick = () => downloadBlob(out, name);
+    } catch (e) {
+      finish();
+      const res = $("#exRes"); res.hidden = false; res.innerHTML = `<div class="err">สร้างวิดีโอไม่สำเร็จ: ${esc(e.message || e)}</div>`;
+    }
+  }
+  $("#exCancel").onclick = () => { if (exporting) { exporting.cancel = true; exporting.done && exporting.done(); } };
+  $("#delP").onclick = async e => {
+    const b = e.currentTarget;
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อยืนยันลบ (กู้คืนไม่ได้)"; return; }
+    await DB.del(id); delete tempVideos[id]; toast("ลบโปรเจกต์แล้ว"); setView(viewHome);
+  };
+
+  await ensureFont(p.style);
+  syncStyle(); syncAudio(); syncLang();
+  buildStage(); renderCaps(); renderLib(); renderSfx();
+  cleanup = () => { cancelAnimationFrame(raf); stopFx(); stopLive(); clearTimeout(saveT); DB.put(p); window.removeEventListener("resize", onResize); if (url) URL.revokeObjectURL(url); };
+}
+
+/* ---------- Settings ---------- */
+const HELP = {
+  groq: `<ol>
+      <li>เข้า <b>console.groq.com</b> แล้วกด Sign in ด้วยบัญชี Google (ไม่ต้องใช้บัตร)</li>
+      <li>กดเมนู <b>API Keys</b> แล้วกด <b>Create API Key</b> ตั้งชื่อว่า ซับไว</li>
+      <li>คัดลอก key ที่ขึ้นต้นด้วย gsk_ (แสดงครั้งเดียว)</li>
+      <li>วาง key ในช่องด้านบน แล้วกด ทดสอบ key และ บันทึก</li></ol>
+      <span class="hint">โควตาฟรีถอดเสียงได้ประมาณวันละ 8 ชั่วโมงของคลิป เกินพอสำหรับใช้งานทั่วไป</span>`,
+  openai: `<ol>
+      <li>เข้า <b>platform.openai.com</b> แล้วเข้าสู่ระบบ</li>
+      <li>Settings → Billing เติมเครดิตขั้นต่ำ $5 (ต้องใช้บัตรที่เปิดใช้จ่ายออนไลน์ต่างประเทศ)</li>
+      <li>API keys → Create new secret key แล้วคัดลอก</li>
+      <li>วาง key ในช่องด้านบน แล้วกด บันทึก</li></ol>
+      <span class="hint">ค่าถอดเสียงประมาณ $0.006 ต่อนาที</span>`
+};
+function openSettings() {
+  const root = $("#modalRoot");
+  let pv = settings.provider;
+  const draft = { groqKey: settings.groqKey, apiKey: settings.apiKey };
+  root.innerHTML = `<div class="modal" id="mdl"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="stt">
+    <h2 id="stt">ตั้งค่า AI</h2>
+    <div class="field"><span class="lab">ผู้ให้บริการ AI</span>
+      <div class="seg" id="pvSeg">${Object.entries(PROVIDERS).map(([k, v]) => `<button type="button" data-v="${k}">${v.n} · ${v.tag}</button>`).join("")}</div></div>
+    <div class="field"><label for="kIn" id="kLab"></label>
+      <div class="row"><input class="input" id="kIn" type="password" autocomplete="off"><button class="btn small" id="kShow">แสดง</button></div>
+      <span class="hint" id="kNote"></span>
+      <span class="hint" id="kStat"></span></div>
+    <details class="box" id="helpBox"><summary>ยังไม่มี key? วิธีสมัคร</summary><div class="in" id="help"></div></details>
+    <div class="row"><button class="btn" id="kTest">ทดสอบ key</button><button class="btn primary" id="kSave" style="margin-left:auto">บันทึก</button><button class="btn" id="kClose">ปิด</button></div>
+  </div></div>`;
+  const paint = () => {
+    const P = PROVIDERS[pv];
+    $$("#pvSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === pv));
+    $("#kLab").textContent = `${P.n} API key`; $("#kIn").placeholder = P.ph; $("#kIn").value = draft[P.keyField] || "";
+    $("#kNote").textContent = `key เก็บไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น และส่งตรงไปที่ ${P.n} ตอนถอดเสียงและแปลภาษา`;
+    $("#help").innerHTML = HELP[pv]; $("#helpBox").open = !draft[P.keyField];
+    $("#kStat").textContent = "";
+  };
+  $("#kIn").oninput = e => { draft[PROVIDERS[pv].keyField] = e.target.value.trim(); };
+  $$("#pvSeg button").forEach(b => b.onclick = () => { pv = b.dataset.v; paint(); });
+  paint();
+  const close = () => { root.innerHTML = ""; };
+  $("#mdl").onclick = e => { if (e.target.id === "mdl") close(); };
+  $("#kClose").onclick = close;
+  $("#kShow").onclick = () => { const i = $("#kIn"); i.type = i.type === "password" ? "text" : "password"; $("#kShow").textContent = i.type === "password" ? "แสดง" : "ซ่อน"; };
+  $("#kSave").onclick = () => {
+    settings.provider = pv; settings.groqKey = draft.groqKey || ""; settings.apiKey = draft.apiKey || ""; saveSettings(); close();
+    toast(hasKey() ? `บันทึกแล้ว ใช้ ${prov().n}` : "บันทึกแล้ว แต่ยังไม่ได้ใส่ key");
+    if ($(".home-head")) viewHome(); else { const g = $("#go"); if (g && !g.disabled) g.textContent = hasKey() ? "เริ่มสร้างซับ" : "ใส่ API key แล้วเริ่มสร้างซับ"; }
+  };
+  $("#kTest").onclick = async () => {
+    const P = PROVIDERS[pv], k = $("#kIn").value.trim(), s = $("#kStat");
+    if (!k) { s.textContent = "ยังไม่ได้ใส่ key"; s.style.color = "var(--danger)"; return; }
+    s.textContent = "กำลังทดสอบ…"; s.style.color = "";
+    try {
+      const r = await fetch(P.base + "/models", { headers: { Authorization: "Bearer " + k } });
+      s.textContent = r.ok ? "✓ key ใช้งานได้" : r.status === 401 ? "✗ key ไม่ถูกต้อง ลองคัดลอกใหม่อีกครั้ง" : `✗ ${P.n} ตอบกลับ ${r.status}`;
+      s.style.color = r.ok ? "var(--ok)" : "var(--danger)";
+    } catch { s.textContent = `✗ เชื่อมต่อ ${P.n} ไม่ได้ ตรวจอินเทอร์เน็ต`; s.style.color = "var(--danger)"; }
+  };
+}
+
+/* ================= boot ================= */
+$("#goHome").onclick = () => setView(viewHome);
+$("#openSettings").onclick = openSettings;
+DB.open().then(() => setView(viewHome)).catch(() => { app.innerHTML = `<div class="empty"><b>เบราว์เซอร์นี้เปิดที่เก็บข้อมูลไม่ได้</b><span class="muted">ถ้าเปิดในโหมดไม่ระบุตัวตน ให้เปิดหน้าต่างปกติแทน</span></div>`; });
+</script>
+</body>
+</html>
