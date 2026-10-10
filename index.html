@@ -409,27 +409,84 @@ function encodeWav(samples, rate) {
   for (let i = 0; i < samples.length; i++, o += 2) { const s = Math.max(-1, Math.min(1, samples[i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
   return new Blob([b], { type: "audio/wav" });
 }
-async function extractAudio(file) {
-  let buf;
-  try { buf = await file.arrayBuffer(); } catch { throw new Error("อ่านไฟล์ไม่ได้ ไฟล์อาจใหญ่เกินหน่วยความจำของเครื่อง ลองส่งออกคลิปที่ความละเอียด 1080p แล้วลองใหม่"); }
+/* Fast path: decode the whole file at once (works on desktop browsers). */
+async function decodeFast(file) {
+  const buf = await file.arrayBuffer();
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC();
   let decoded;
+  try { decoded = await new Promise((res, rej) => { const p = ac.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); }); }
+  finally { try { ac.close(); } catch {} }
+  return { data: await resample16k(decoded), duration: decoded.duration };
+}
+async function resample16k(src, rate) {
+  // src: AudioBuffer, or Float32Array with its sample rate
+  const rate0 = src.sampleRate || rate, len0 = src.length;
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(len0 * 16000 / rate0)), 16000);
+  let b = src;
+  if (!(src instanceof AudioBuffer)) { b = off.createBuffer(1, len0, rate0); b.getChannelData(0).set(src); }
+  const s = off.createBufferSource(); s.buffer = b; s.connect(off.destination); s.start();
+  return (await off.startRendering()).getChannelData(0);
+}
+/* Backup path for iPhone/iPad: play the video silently and record its sound in real time.
+   prepareCapture must run inside the button tap so iOS allows playback with sound. */
+function prepareCapture(file) {
   try {
-    decoded = await new Promise((res, rej) => { const p = ac.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); });
-  } catch {
-    throw new Error("แยกเสียงจากวิดีโอนี้ไม่ได้ อาจไม่มีเสียงในคลิป หรือเบราว์เซอร์ไม่รองรับรูปแบบเสียงนี้ ลองไฟล์ MP4 หรือเปิดใน Chrome/Safari รุ่นใหม่");
-  } finally { try { ac.close(); } catch {} }
-  buf = null;
-  const rate = 16000, len = Math.ceil(decoded.duration * rate);
-  const off = new OfflineAudioContext(1, len, rate);
-  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
-  const data = (await off.startRendering()).getChannelData(0);
+    const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC();
+    const v = document.createElement("video"); v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
+    v.style.cssText = "position:fixed;left:-10px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+    document.body.appendChild(v);
+    const url = URL.createObjectURL(file); v.src = url;
+    const src = ac.createMediaElementSource(v), mute = ac.createGain(); mute.gain.value = 0; mute.connect(ac.destination); src.connect(mute);
+    const unlock = v.play().then(() => v.pause()).catch(() => {});
+    ac.resume().catch(() => {});
+    let wake = null; try { navigator.wakeLock.request("screen").then(w => wake = w).catch(() => {}); } catch {}
+    return { ac, v, src, mute, unlock, dispose() { try { v.pause(); } catch {} v.remove(); URL.revokeObjectURL(url); try { ac.close(); } catch {} try { wake && wake.release(); } catch {} } };
+  } catch { return null; }
+}
+async function captureRealtime(cap, onProg) {
+  const { ac, v, src, mute } = cap;
+  await cap.unlock;
+  if (v.readyState < 1) await Promise.race([once(v, "loadedmetadata"), sleep(15000)]);
+  const dur = v.duration;
+  if (!isFinite(dur) || !dur) throw new Error("เปิดวิดีโอนี้ไม่ได้ ลองเลือกไฟล์ใหม่อีกครั้ง");
+  const proc = ac.createScriptProcessor(4096, 2, 1), parts = []; let total = 0;
+  proc.onaudioprocess = e => {
+    if (v.paused || v.seeking || v.ended) return;
+    const ib = e.inputBuffer, n = ib.length, ch = ib.numberOfChannels, out = new Float32Array(n);
+    for (let c = 0; c < ch; c++) { const d = ib.getChannelData(c); for (let i = 0; i < n; i++) out[i] += d[i] / ch; }
+    parts.push(out); total += n;
+  };
+  src.connect(proc); proc.connect(mute);
+  v.currentTime = 0; if (v.seeking) await Promise.race([once(v, "seeked"), sleep(3000)]);
+  await ac.resume().catch(() => {});
+  const onVis = () => { if (!document.hidden && v.paused && !v.ended) v.play().catch(() => {}); };
+  document.addEventListener("visibilitychange", onVis);
+  const timer = setInterval(() => onProg && onProg(Math.min(1, v.currentTime / dur)), 300);
+  try {
+    try { await v.play(); } catch { throw new Error("เบราว์เซอร์ไม่ยอมเล่นเสียงวิดีโอ กดปุ่มลองใหม่อีกครั้ง"); }
+    await Promise.race([once(v, "ended"), sleep((dur * 2 + 30) * 1000).then(() => { throw new Error("แยกเสียงนานผิดปกติ เปิดหน้านี้ค้างไว้ อย่าสลับแอป แล้วลองใหม่"); })]);
+  } finally {
+    clearInterval(timer); document.removeEventListener("visibilitychange", onVis);
+    try { src.disconnect(proc); proc.disconnect(); } catch {}
+  }
+  const data = new Float32Array(total); let o = 0; for (const p of parts) { data.set(p, o); o += p.length; }
+  return { data: await resample16k(data, ac.sampleRate), duration: dur };
+}
+async function extractAudio(file, cap, onBackup) {
+  let r;
+  try { r = await decodeFast(file); }
+  catch (e) {
+    if (!cap) throw new Error("แยกเสียงจากวิดีโอนี้ไม่ได้ ลองไฟล์ MP4 หรือเปิดใน Safari/Chrome รุ่นใหม่");
+    if (onBackup) onBackup(0);
+    r = await captureRealtime(cap, onBackup);
+  }
+  const data = r.data, rate = 16000;
   let peak = 0; for (let i = 0; i < data.length; i += 50) peak = Math.max(peak, Math.abs(data[i]));
   if (peak < 0.002) throw new Error("คลิปนี้แทบไม่มีเสียง จึงถอดเสียงไม่ได้");
   const CH = 600 * rate, chunks = [];
   for (let i = 0; i < data.length; i += CH) chunks.push({ offset: i / rate, blob: encodeWav(data.subarray(i, Math.min(i + CH, data.length)), rate) });
-  return { chunks, duration: decoded.duration };
+  return { chunks, duration: r.duration };
 }
 async function whisper(blob, { lang, prompt }) {
   const fd = new FormData();
@@ -787,7 +844,7 @@ function viewNew() {
         <span class="hint">AI จะสะกดคำเหล่านี้ถูกขึ้น และคงชื่อไว้ตามเดิมตอนแปล</span></div>
       <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
       <ol class="steps" id="steps" hidden>
-        <li data-s="audio"><span class="dot"></span>แยกเสียงจากวิดีโอ</li>
+        <li data-s="audio"><span class="dot"></span><span id="audLab">แยกเสียงจากวิดีโอ</span></li>
         <li data-s="ai"><span class="dot"></span><span id="aiLab">ส่งให้ AI ถอดเสียง</span></li>
         <li data-s="cap"><span class="dot"></span>จัดบรรทัดซับ</li>
         <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
@@ -825,6 +882,7 @@ function viewNew() {
     if (!hasKey()) { openSettings(); return; }
     const lang = $("#lang").value, lang2 = $("#lang2").value;
     if (lang2 && lang2 === lang) { toast("ภาษาที่สองต้องต่างจากภาษาที่พูด"); return; }
+    const cap = prepareCapture(file);
     busy = true; refresh(); $("#go").textContent = "กำลังทำงาน… อย่าปิดหน้านี้"; $("#err").hidden = true;
     const steps = $("#steps"); steps.hidden = false;
     $$("li", steps).forEach(li => li.className = "");
@@ -835,7 +893,8 @@ function viewNew() {
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim(); saveSettings();
       mark("audio", "doing");
-      const { chunks, duration } = await extractAudio(file);
+      const { chunks, duration } = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
+      if (cap) cap.dispose();
       mark("audio", "done"); stage = "ai"; mark("ai", "doing");
       const raw = { words: [], segments: [] };
       let detected = lang;
@@ -872,6 +931,7 @@ function viewNew() {
       busy = false;
       setView(() => viewEditor(id));
     } catch (e) {
+      if (cap) cap.dispose();
       mark(stage, "fail");
       const er = $("#err"); er.hidden = false; er.textContent = e.message || String(e);
       busy = false; refresh(); $("#go").textContent = "ลองใหม่";
