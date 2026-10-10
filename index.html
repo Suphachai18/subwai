@@ -207,6 +207,88 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .sheet h2{font-size:20px}
 .sheet ol{margin:0;padding-left:20px;display:grid;gap:4px;font-size:14px}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-family:var(--ui);font-weight:600;font-size:14px;z-index:30;max-width:90vw}
+/* editor v3 */
+.ed-head{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.ed-head .name{flex:1;min-width:0;font-family:var(--ui);font-weight:700;font-size:18px;border:1px solid transparent;background:none;border-radius:8px;padding:6px 8px}
+.ed-head .name:hover,.ed-head .name:focus{border-color:var(--line);background:var(--surface)}
+.iconbtn{font-size:18px;color:var(--fg)}
+.iconbtn:disabled{opacity:.35;cursor:not-allowed}
+.player{width:100%;display:grid;gap:8px;justify-items:center}
+.screen{position:relative;background:#000;border-radius:10px;overflow:hidden;max-width:100%}
+.screen video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;pointer-events:none}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:pointer;display:block}
+.fs-close{display:none}
+.pctl{display:flex;align-items:center;gap:8px;width:100%;max-width:640px}
+.pctl input[type=range]{flex:1;min-width:40px;accent-color:var(--accent)}
+.pbtn{width:42px;height:42px;flex:none;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;font-size:16px;display:grid;place-items:center}
+.pbtn.play{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ptime{font-size:12px;color:var(--muted);white-space:nowrap}
+.player.fs{position:fixed;inset:0;z-index:60;background:#000;padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px}
+.player.fs .screen{border-radius:0}
+.player.fs .pctl{max-width:720px}
+.player.fs .pbtn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#fff}
+.player.fs .pbtn.play{background:var(--accent);color:var(--on-accent)}
+.player.fs .ptime{color:#ddd}
+.player.fs .fs-close{display:grid;position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;width:42px;height:42px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:18px;place-items:center;z-index:2;cursor:pointer}
+.toolbar{display:flex;gap:4px;overflow-x:auto;padding:8px;border-bottom:1px solid var(--line);scrollbar-width:none}
+.toolbar::-webkit-scrollbar{display:none}
+.toolbar button{flex:none;min-height:38px;padding:0 14px;border-radius:99px;border:0;background:none;font-family:var(--ui);font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+.toolbar button[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip2{min-height:36px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13.5px;cursor:pointer}
+.chip2[aria-pressed="true"]{border-color:var(--fg);background:var(--raise)}
+.chip2.del{color:var(--danger)}
+.xbox{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:10px;background:var(--bg)}
+.lines{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.ln-b{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:start;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);cursor:pointer;font:inherit}
+.ln.on .ln-b{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.ln.sel .ln-b{background:var(--raise);border-color:var(--fg)}
+.ln-t{font-size:12px;color:var(--muted);padding-top:3px}
+.ln-x{font-family:var(--ui);font-size:15.5px;line-height:1.45;overflow-wrap:anywhere}
+.ln-x mark{background:none;color:var(--accent-text);font-weight:700}
+.ln-tr{grid-column:2;font-size:13.5px;color:var(--accent-text)}
+.ln-sfx{grid-column:2;font-size:12px;color:var(--muted)}
+.lsheet{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--surface);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.35);padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));display:grid;gap:10px;max-height:56vh;overflow:auto}
+@media (min-width:900px){.lsheet{left:auto;right:24px;bottom:24px;width:460px;border-radius:16px;border:1px solid var(--line)}}
+.ls-head{display:flex;align-items:center;gap:10px;font-family:var(--ui)}
+.ls-head .x{margin-left:auto;width:36px;height:36px}
+.lsheet textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);resize:none;padding:10px 12px;font-family:var(--ui);font-size:18px;line-height:1.45}
+.lsheet textarea:focus{outline:2px solid var(--accent);outline-offset:0}
+.lsheet textarea.tr{font-size:15px;color:var(--accent-text)}
+.ls-nav{display:flex;gap:6px}.ls-nav .play{flex:1}
+.ls-time{display:grid;grid-template-columns:auto 44px 1fr 44px;gap:6px 8px;align-items:center;font-size:14px;font-family:var(--ui)}
+.ls-time .mono{text-align:center}
+.qbtn{min-height:40px}
+.words{display:flex;flex-wrap:wrap;gap:6px}
+.word{min-height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:15px;cursor:pointer}
+.word[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ls-acts{display:flex;flex-wrap:wrap;gap:6px}
+.hscroll{display:grid;grid-auto-flow:column;grid-auto-columns:104px;gap:8px;overflow-x:auto;padding:2px 2px 6px;scroll-snap-type:x proximity}
+.hscroll > *{scroll-snap-align:start}
+.look.add{place-content:center;justify-items:center;min-height:100px;border-style:dashed;color:var(--muted)}
+.look.add .plus{font-size:24px;line-height:1}
+.mycard{position:relative}
+.mydel{position:absolute;top:2px;right:2px;min-width:24px;height:24px;border-radius:12px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:13px;cursor:pointer;padding:0 6px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sw-c{width:32px;height:32px;border-radius:50%;border:2px solid var(--line);cursor:pointer;padding:0}
+.sw-c[aria-pressed="true"]{border-color:var(--fg);box-shadow:0 0 0 3px var(--bg) inset}
+.sw-custom{width:38px;height:34px;border:1px dashed var(--line);border-radius:8px;background:none;padding:2px;cursor:pointer}
+.fontgrid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+.fcard{display:grid;gap:4px;justify-items:center;padding:14px 6px 8px;border:1px solid var(--line);border-radius:12px;background:#222831;color:#fff;cursor:pointer;min-width:0}
+.fcard b{font-size:21px;line-height:1.4;font-weight:inherit;white-space:nowrap;overflow:hidden;max-width:100%}
+.fcard span{font-family:var(--mono);font-size:10.5px;color:#aab2c0}
+.fcard[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.ratios{display:flex;gap:8px;flex-wrap:wrap}
+.ratio{display:grid;gap:6px;justify-items:center;align-content:end;min-width:66px;min-height:72px;padding:10px 8px 8px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);cursor:pointer;font-family:var(--ui);font-weight:600;font-size:13px}
+.ratio i{display:block;border:2px solid currentColor;border-radius:3px}
+.ratio[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.lib2{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.sx{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg);min-width:0}
+.sx button{border:0;background:none;color:var(--fg);cursor:pointer;min-height:40px}
+.sx .pl{width:38px;color:var(--muted);border-right:1px solid var(--line)}
+.sx .nm{flex:1;align-self:center;padding:0 8px;font-family:var(--ui);font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sx .ad{width:40px;font-size:18px;color:var(--accent-text);border-left:1px solid var(--line)}
+.sx.mine .nm{color:var(--accent-text)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -272,7 +354,7 @@ const langOptions = (sel, extra = "") => extra + LANGS.map(([v, n]) => `<option 
 
 /* ================= settings ================= */
 const SKEY = "subwai.settings.v1";
-const DEFAULT_STYLE = { font: "Kanit", weight: 700, size: 64, pos: 80, color: "#FFFFFF", strokeColor: "#000000", stroke: 5, box: false, boxColor: "#000000", boxOpacity: 0.7, shadow: true, size2: 72, color2: "#FFE14D", order: "below", anim: "none", hl: "#FFD400", glow: "", dshadow: "", look: "" };
+const DEFAULT_STYLE = { font: "Kanit", weight: 700, size: 64, pos: 80, color: "#FFFFFF", strokeColor: "#000000", stroke: 5, box: false, boxColor: "#000000", boxOpacity: 0.7, shadow: true, size2: 72, color2: "#FFE14D", order: "below", anim: "none", hl: "#FFD400", glow: "", dshadow: "", look: "", kw: true, kwColor: "#FFE14D" };
 const settings = Object.assign({ provider: "", groqKey: "", apiKey: "", lang: "th", lang2: "", vocab: "", maxChars: 22, chatModel: "", style: { ...DEFAULT_STYLE } }, (() => { try { return JSON.parse(localStorage.getItem(SKEY)) || {}; } catch { return {}; } })());
 settings.style = { ...DEFAULT_STYLE, ...settings.style };
 if (!settings.provider) settings.provider = settings.apiKey && !settings.groqKey ? "openai" : "groq";
@@ -312,6 +394,8 @@ function normalize(p) {
   p.sfx = p.sfx || [];
   p.audio = p.audio || { orig: 1, sfx: 0.9 };
   p.lang = p.lang || "th";
+  p.layout = p.layout || "orig";
+  p.fit = p.fit || "blur";
   return p;
 }
 
@@ -325,7 +409,7 @@ function seg(lang) {
 const tokens = (s, lang) => { const S = seg(lang); return S ? [...S.segment(s)].map(x => x.segment) : s.split(/(\s+)/).filter(Boolean); };
 const vlen = s => s.replace(/[\sัิ-ฺ็-๎]/g, "").length;
 const isLatin = c => /[A-Za-z0-9À-ɏЀ-ӿ]/.test(c || "");
-function joinTok(a, b) { if (!a) return b; if (!b) return a; return (isLatin(a.slice(-1)) && isLatin(b[0])) ? a + " " + b : a + b; }
+function joinTok(a, b) { if (!a) return b; if (!b) return a; return (isLatin(a.slice(-1)) || isLatin(b[0])) ? a + " " + b : a + b; }
 function isBoundary(text, idx, lang) {
   const S = seg(lang);
   if (!S || idx <= 0 || idx >= text.length) return true;
@@ -710,6 +794,13 @@ function drawCaption(ctx, W, H, cap, p, t) {
       rows.push({ b, toks, w: toks.reduce((a, x) => a + x.w, 0), px: b.px, lh: b.px * 1.42 });
     }
   }
+  // emphasised words (c.hl): find where each word sits in the main text
+  if (st.kw !== false && cap.hl && cap.hl.length && mode !== "tr") {
+    const txt = main.text, ranges = [];
+    for (const ph of cap.hl) { if (!ph) continue; let i = txt.indexOf(ph); while (i >= 0) { ranges.push([i, i + ph.length]); i = txt.indexOf(ph, i + ph.length); } }
+    let cur = 0;
+    rows.forEach(rw => { if (rw.b !== main) return; rw.toks.forEach(tk => { if (tk.sp) return; const i = txt.indexOf(tk.s, cur); if (i < 0) return; tk.kw = ranges.some(([a, b]) => i < b && i + tk.s.length > a); cur = i + tk.s.length; }); });
+  }
   const total = rows.reduce((a, r) => a + r.lh, 0);
   const pad0 = main.px * 0.3;
   const cy = Math.min(H - total / 2 - pad0, Math.max(total / 2 + pad0, H * st.pos / 100));
@@ -761,7 +852,7 @@ function drawCaption(ctx, W, H, cap, p, t) {
     ctx.font = font(rw.px);
     const yy = rw.y + rw.px * 0.04;
     let x = W / 2 - rw.w / 2;
-    const items = rw.toks.map(tk => { const it = { tk, x, ...(tk.sp ? { show: "" } : state(tk)) }; x += tk.w; return it; });
+    const items = rw.toks.map(tk => { const it = { tk, x, ...(tk.sp ? { show: "" } : state(tk)) }; if (tk.kw && !it.color && !it.hbox) it.color = st.kwColor || "#FFE14D"; x += tk.w; return it; });
     const withPop = (it, fn) => {
       if (!it.pop || it.pop === 1) { fn(); return; }
       ctx.save(); const cx = it.x + it.tk.w / 2; ctx.translate(cx, yy); ctx.scale(it.pop, it.pop); ctx.translate(-cx, -yy); fn(); ctx.restore();
@@ -797,6 +888,66 @@ function pickMime() {
   const list = ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1,mp4a", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
   if (!window.MediaRecorder) return null;
   return list.find(m => MediaRecorder.isTypeSupported(m)) || "";
+}
+
+/* ================= frame rendering (preview, fullscreen and export share this) ================= */
+const LAYOUTS = { orig: { n: "ต้นฉบับ", r: 0 }, "9:16": { n: "9:16", r: 9 / 16 }, "4:5": { n: "4:5", r: 4 / 5 }, "1:1": { n: "1:1", r: 1 }, "16:9": { n: "16:9", r: 16 / 9 } };
+function frameDims(p, vw, vh, maxSide = 1920) {
+  vw = vw || p.width || 1080; vh = vh || p.height || 1920;
+  const r = (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
+  let W, H; if (r >= 1) { W = maxSide; H = maxSide / r; } else { H = maxSide; W = maxSide * r; }
+  const k = Math.min(1, Math.max(vw, vh) / maxSide);
+  return { W: Math.max(2, Math.round(W * k / 2) * 2), H: Math.max(2, Math.round(H * k / 2) * 2) };
+}
+const tinyCv = document.createElement("canvas");
+function drawVideo(ctx, W, H, v, p, fallback) {
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  let src = v && v.readyState >= 2 && v.videoWidth ? v : null, sw = src ? v.videoWidth : 0, sh = src ? v.videoHeight : 0;
+  if (!src && fallback && fallback.complete && fallback.naturalWidth) { src = fallback; sw = fallback.naturalWidth; sh = fallback.naturalHeight; }
+  if (!src) return;
+  const cover = Math.max(W / sw, H / sh), contain = Math.min(W / sw, H / sh), same = Math.abs(W / H - sw / sh) < 0.01;
+  if (same || p.fit === "fill") { const k = same ? contain : cover, w = sw * k, h = sh * k; ctx.drawImage(src, (W - w) / 2, (H - h) / 2, w, h); return; }
+  // blurred background: squeeze a cover crop into a tiny canvas, then stretch it back up
+  const tw = 32, th = Math.max(1, Math.round(32 * H / W)); tinyCv.width = tw; tinyCv.height = th;
+  const tc = tinyCv.getContext("2d"), tk = Math.max(tw / sw, th / sh);
+  tc.drawImage(src, (tw - sw * tk) / 2, (th - sh * tk) / 2, sw * tk, sh * tk);
+  ctx.imageSmoothingEnabled = true; try { ctx.imageSmoothingQuality = "high"; } catch {}
+  ctx.drawImage(tinyCv, 0, 0, W, H); ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0, 0, W, H);
+  const w = sw * contain, h = sh * contain; ctx.drawImage(src, (W - w) / 2, (H - h) / 2, w, h);
+}
+function renderFrame(ctx, W, H, v, p, t) { drawVideo(ctx, W, H, v, p, null); const c = captionAt(p.captions, t); if (c) drawCaption(ctx, W, H, c, p, t); }
+
+/* ================= AI proofreading and keyword emphasis ================= */
+async function aiProofread(p, onProg) {
+  const B = 40, L = LEN[p.lang] || "the spoken language";
+  const vocab = settings.vocab ? ` Names that may appear, spelled correctly: ${settings.vocab}.` : "";
+  let changedN = 0;
+  for (let i = 0; i < p.captions.length; i += B) {
+    const batch = p.captions.slice(i, i + B);
+    const j = await chatJSON([
+      { role: "system", content: `You proofread automatic speech-to-text subtitles in ${L}. Fix only real transcription errors: misheard or misspelled words, wrong tone marks or vowels, words wrongly split or joined, and misspelled names or brands.${vocab} Use the neighbouring lines as context. Do not rephrase, summarise, translate, censor, or change the speaker's wording or slang. If a line is already correct, return it unchanged. Keep exactly the same number of lines in the same order. Reply only with JSON: {"t": ["line 1", "line 2"]}` },
+      { role: "user", content: JSON.stringify({ previous_lines: p.captions.slice(Math.max(0, i - 3), i).map(c => c.text), lines: batch.map(c => c.text) }) }
+    ]);
+    if (Array.isArray(j.t) && j.t.length === batch.length) batch.forEach((c, k) => {
+      const n = String(j.t[k] || "").trim(), a = vlen(c.text), b = vlen(n);
+      if (n && n !== c.text && b >= a * 0.5 && b <= a * 1.8 + 4) { c.text = n; c.hl = (c.hl || []).filter(w => n.includes(w)); changedN++; }
+    });
+    if (onProg) onProg(Math.min(p.captions.length, i + B), p.captions.length);
+  }
+  return changedN;
+}
+async function aiKeywords(p) {
+  const B = 60; let n = 0;
+  for (let i = 0; i < p.captions.length; i += B) {
+    const batch = p.captions.slice(i, i + B);
+    const j = await chatJSON([
+      { role: "system", content: "You pick words to emphasise in short-video subtitles, like the coloured words in viral captions. For about half of the lines, choose the single most important word or short phrase: a number, price, product or brand name, key benefit, or strong emotion. Copy it exactly as it appears in the line, character for character. Skip lines with nothing worth emphasising. Reply only with JSON: {\"items\":[{\"i\": line_index, \"w\": \"exact text\"}]}" },
+      { role: "user", content: JSON.stringify({ lines: batch.map((c, k) => ({ i: k, text: c.text })) }) }
+    ]);
+    batch.forEach(c => c.hl = []);
+    (j.items || []).forEach(x => { const c = batch[x.i], w = String(x.w || "").trim(); if (c && w && c.text.includes(w)) { c.hl = [w]; n++; } });
+  }
+  return n;
 }
 
 /* ================= shared style + AI effect helpers ================= */
@@ -886,13 +1037,18 @@ function viewNew() {
         <div class="field"><label for="npFont">ฟอนต์</label><select class="input" id="npFont">${FONTS.map(([f]) => `<option value="${f}">${f}</option>`).join("")}</select></div>
         <div class="field"><label for="npAnim">อนิเมชัน</label><select class="input" id="npAnim">${Object.entries(ANIMS).map(([k, a]) => `<option value="${k}">${a.n}</option>`).join("")}</select></div>
       </div>
-      <label class="sw"><input type="checkbox" id="npSfx"> ให้ AI ใส่เอฟเฟกต์เสียงให้อัตโนมัติ</label>
+      <div class="field"><span class="lab">ให้ AI ช่วย</span>
+        <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
+        <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญด้วยสี</label>
+        <label class="sw"><input type="checkbox" id="npSfx"> ใส่เอฟเฟกต์เสียงให้อัตโนมัติ</label></div>
       <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
       <ol class="steps" id="steps" hidden>
         <li data-s="audio"><span class="dot"></span><span id="audLab">แยกเสียงจากวิดีโอ</span></li>
         <li data-s="ai"><span class="dot"></span><span id="aiLab">ส่งให้ AI ถอดเสียง</span></li>
         <li data-s="cap"><span class="dot"></span>จัดบรรทัดซับ</li>
+        <li data-s="fix" hidden><span class="dot"></span><span id="fixLab">AI ตรวจคำผิด</span></li>
         <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
+        <li data-s="kw" hidden><span class="dot"></span>AI เลือกคำสำคัญ</li>
         <li data-s="sfx" hidden><span class="dot"></span>AI ใส่เอฟเฟกต์เสียง</li>
       </ol>
       <div class="err" id="err" hidden></div>
@@ -903,6 +1059,8 @@ function viewNew() {
   let npStyle = { ...DEFAULT_STYLE, ...settings.style }, npBg = null, npRaf = 0;
   const NP_SAMPLE = { id: "np", start: 0.3, end: 3, text: "ตัวอย่างซับของคุณ", tr: "" };
   $("#npSfx").checked = settings.autoSfx !== false;
+  $("#npFix").checked = settings.autoFix !== false;
+  $("#npKw").checked = settings.autoKw !== false;
   const syncNp = () => {
     $("#npFont").value = npStyle.font; $("#npAnim").value = ANIMS[npStyle.anim] ? npStyle.anim : "none";
     $$("#npLooks .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === npStyle.look));
@@ -953,14 +1111,14 @@ function viewNew() {
     const steps = $("#steps"); steps.hidden = false;
     $$("li", steps).forEach(li => li.className = "");
     $('li[data-s="tr"]', steps).hidden = !lang2;
-    const autoSfx = $("#npSfx").checked;
-    $('li[data-s="sfx"]', steps).hidden = !autoSfx;
+    const autoSfx = $("#npSfx").checked, autoFix = $("#npFix").checked, autoKw = $("#npKw").checked;
+    $('li[data-s="sfx"]', steps).hidden = !autoSfx; $('li[data-s="fix"]', steps).hidden = !autoFix; $('li[data-s="kw"]', steps).hidden = !autoKw;
     if (lang2) $("#trLab").textContent = "แปลเป็นภาษา" + LNAME[lang2];
     const mark = (s, c) => { $(`li[data-s="${s}"]`, steps).className = c; };
     let stage = "audio";
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
-      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; saveSettings();
+      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; saveSettings();
       mark("audio", "doing");
       const { chunks, duration } = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
       if (cap) cap.dispose();
@@ -989,12 +1147,22 @@ function viewNew() {
       });
       try { await DB.putVideo(id, file); p.videoSaved = true; } catch { tempVideos[id] = file; }
       await DB.put(p);
+      if (autoFix) {
+        stage = "fix"; mark("fix", "doing");
+        try { const n = await aiProofread(p, (d, t) => $("#fixLab").textContent = `AI ตรวจคำผิด (${d}/${t})`); $("#fixLab").textContent = `AI ตรวจคำผิด · แก้ ${n} บรรทัด`; mark("fix", "done"); await DB.put(p); }
+        catch (e) { mark("fix", "fail"); toast("ข้ามการตรวจคำผิด: " + e.message, 4000); }
+      }
       if (p.tr.lang) {
         stage = "tr"; mark("tr", "doing");
         try {
           await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trLab").textContent = `แปลเป็นภาษา${LNAME[p.tr.lang]} (${d}/${t})`);
           mark("tr", "done"); await DB.put(p);
         } catch (e) { mark("tr", "fail"); toast("ซับพร้อมแล้ว แต่แปลไม่สำเร็จ: " + e.message + " กดแปลใหม่ได้ในหน้าแก้ไข", 6000); await sleep(1500); }
+      }
+      if (autoKw) {
+        stage = "kw"; mark("kw", "doing");
+        try { await aiKeywords(p); mark("kw", "done"); await DB.put(p); }
+        catch (e) { mark("kw", "fail"); }
       }
       if (autoSfx) {
         stage = "sfx"; mark("sfx", "doing");
@@ -1038,368 +1206,564 @@ async function viewEditor(id) {
   const p = normalize(got);
   await loadCustomLib();
   let blob = tempVideos[id] || (p.videoSaved ? await DB.getVideo(id) : null);
-  let url = null, raf = 0, activeId = null, saveT = 0, exporting = null;
-  let sched = new Set(), live = [];
+  let url = null, raf = 0, saveT = 0, histT = 0, exporting = null, sched = new Set(), live = [];
+  let video = null, cv = null, thumbImg = null, sid = null, playUntil = null, fxRaf = 0, activeId, tab = "text";
 
-  const scheduleSave = () => { clearTimeout(saveT); const s0 = $("#saved"); if (s0) s0.textContent = "กำลังบันทึก…"; saveT = setTimeout(async () => { p.updatedAt = Date.now(); await DB.put(p); const s = $("#saved"); if (s) s.textContent = "บันทึกแล้ว"; }, 500); };
+  const TOOLS = [["text", "ข้อความ"], ["style", "สไตล์"], ["font", "ฟอนต์"], ["anim", "อนิเมชัน"], ["sfx", "เสียง"], ["frame", "เฟรม"], ["export", "ส่งออก"]];
+  const COLORS = ["#FFFFFF", "#FFE14D", "#FFD400", "#FF9F1C", "#FF5A5A", "#FF8FD1", "#7CFFB2", "#4DE0FF", "#7AA7FF", "#111111", "#1B2A4A"];
+  const swatches = k => `<div class="swatches" data-sw="${k}">${COLORS.map(c => `<button type="button" class="sw-c" data-c="${c}" style="background:${c}" aria-label="สี ${c}"></button>`).join("")}<input type="color" class="sw-custom" data-cc="${k}" aria-label="เลือกสีเอง"></div>`;
   const modeBtns = [["main", "ภาษาหลัก"], ["both", "สองภาษา"], ["tr", "เฉพาะคำแปล"]];
 
   app.innerHTML = `
-    <div class="ed-top">
-      <button class="back" id="bk">←</button>
+    <div class="ed-head">
+      <button class="iconbtn" id="bk" aria-label="กลับหน้าโปรเจกต์">←</button>
       <input class="name" id="pn" aria-label="ชื่อโปรเจกต์">
-      <span class="saved" id="saved">บันทึกแล้ว</span>
+      <button class="iconbtn" id="undo" aria-label="ย้อนกลับ" title="ย้อนกลับ">↶</button>
+      <button class="iconbtn" id="redo" aria-label="ทำซ้ำ" title="ทำซ้ำ">↷</button>
     </div>
     <div class="ed-grid">
       <div class="stage-col" id="stageCol"></div>
       <div class="panel">
-        <div class="tabs" role="tablist">
-          <button role="tab" data-t="text" aria-selected="true">ข้อความ</button>
-          <button role="tab" data-t="sfx" aria-selected="false">เอฟเฟกต์</button>
-          <button role="tab" data-t="style" aria-selected="false">สไตล์</button>
-          <button role="tab" data-t="export" aria-selected="false">ส่งออก</button>
-        </div>
+        <nav class="toolbar" id="toolbar" role="tablist">${TOOLS.map(([k, n]) => `<button type="button" role="tab" data-t="${k}" aria-selected="${k === "text"}">${n}</button>`).join("")}</nav>
 
-        <div class="pane" data-p="text">
-          <div class="tools">
-            <details class="box" open><summary>ภาษาของซับ</summary><div class="in">
-              <div class="two">
-                <div class="field"><label for="mLang" class="hint">ภาษาหลัก (ที่พูดในคลิป)</label><select class="input" id="mLang">${langOptions(p.lang)}</select></div>
-                <div class="field"><label for="trLang" class="hint">ภาษาที่สอง</label><select class="input" id="trLang">${langOptions(p.tr.lang, `<option value="">ไม่ใช้</option>`)}</select></div>
-              </div>
-              <div class="seg" id="trMode">${modeBtns.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join("")}</div>
-              <div class="row"><button class="btn small" id="trGo">แปลทุกบรรทัด</button><span class="hint" id="trStat"></span></div>
-            </div></details>
-            <details class="box"><summary>ค้นหาและแทนที่คำ</summary><div class="in">
-              <div class="row"><input class="input" id="fFind" placeholder="คำที่ผิด"><input class="input" id="fRep" placeholder="แก้เป็น"></div>
-              <button class="btn small" id="fGo" disabled>แทนที่ทั้งหมด</button></div></details>
-            <details class="box"><summary>จัดบรรทัดซับใหม่</summary><div class="in">
-              <div class="seg" id="rmc">${[[14, "สั้น"], [22, "กลาง"], [34, "ยาว"]].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v == p.maxChars}">${l}</button>`).join("")}</div>
-              <span class="hint">สร้างบรรทัดซับใหม่จากผลถอดเสียงเดิม คำที่แก้ไว้และคำแปลจะหายไป</span>
-              <button class="btn small" id="rGo">จัดบรรทัดใหม่</button></div></details>
+        <section class="pane" data-p="text">
+          <div class="chips" id="xChips">
+            <button type="button" class="chip2" data-x="fix">✨ AI ตรวจคำผิด</button>
+            <button type="button" class="chip2" data-x="find">ค้นหา/แทนที่</button>
+            <button type="button" class="chip2" data-x="lang">ภาษา / แปล</button>
+            <button type="button" class="chip2" data-x="split">จัดบรรทัดใหม่</button>
           </div>
-          <ol class="caps" id="caps"></ol>
+          <div class="xbox" data-xb="fix" hidden>
+            <p class="hint" style="margin:0">AI อ่านซับทั้งคลิป แล้วแก้คำที่ถอดเสียงผิด สะกดผิด วรรณยุกต์ผิด หรือชื่อสินค้าผิด โดยไม่เปลี่ยนความหมาย ถ้าไม่ชอบผลลัพธ์ กด ↶ ด้านบนเพื่อย้อนกลับ</p>
+            <div class="field"><label for="fxVocab" class="hint">คำเฉพาะ ชื่อแบรนด์ ชื่อรุ่น (ช่วยให้แม่นขึ้น)</label><input class="input" id="fxVocab" placeholder="เช่น DENAGO, Rover XL 4, Club Car"></div>
+            <div class="row"><button class="btn primary small" id="fixGo">ตรวจและแก้คำผิดทั้งคลิป</button><span class="hint" id="fixStat"></span></div>
+          </div>
+          <div class="xbox" data-xb="find" hidden>
+            <div class="row"><input class="input" id="fFind" placeholder="คำที่ผิด"><input class="input" id="fRep" placeholder="แก้เป็น"></div>
+            <button class="btn small" id="fGo" disabled>แทนที่ทั้งหมด</button>
+          </div>
+          <div class="xbox" data-xb="lang" hidden>
+            <div class="two">
+              <div class="field"><label for="mLang" class="hint">ภาษาหลัก (ที่พูดในคลิป)</label><select class="input" id="mLang">${langOptions(p.lang)}</select></div>
+              <div class="field"><label for="trLang" class="hint">ภาษาที่สอง</label><select class="input" id="trLang">${langOptions(p.tr.lang, `<option value="">ไม่ใช้</option>`)}</select></div>
+            </div>
+            <div class="seg" id="trMode">${modeBtns.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join("")}</div>
+            <div class="row"><button class="btn small" id="trGo">แปลทุกบรรทัด</button><span class="hint" id="trStat"></span></div>
+          </div>
+          <div class="xbox" data-xb="split" hidden>
+            <div class="seg" id="rmc">${[[14, "สั้น · TikTok"], [22, "กลาง"], [34, "ยาว"]].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${v == p.maxChars}">${l}</button>`).join("")}</div>
+            <span class="hint">สร้างบรรทัดซับใหม่จากผลถอดเสียงเดิม คำที่แก้ไว้และคำแปลจะหายไป (กด ↶ ย้อนได้)</span>
+            <button class="btn small" id="rGo">จัดบรรทัดใหม่</button>
+          </div>
+          <p class="hint" style="margin:0">แตะบรรทัดเพื่อแก้ไข · หรือแตะซับบนวิดีโอได้เลย</p>
+          <ol class="lines" id="lines"></ol>
           <button class="btn small" id="addEnd">+ เพิ่มบรรทัดท้ายสุด</button>
-        </div>
+        </section>
 
-        <div class="pane" data-p="sfx" hidden>
-          <div class="field"><span class="lab">คลังเสียง</span>
-            <span class="hint">แตะ ▶ เพื่อฟัง · แตะชื่อเสียงเพื่อวางที่ตำแหน่งวิดีโอตอนนี้ <span class="nowpos" id="nowPos">00:00.0</span></span>
-            <div class="lib" id="lib"></div>
-            <div class="row"><label class="btn small" for="sfxUp">+ นำเข้าเสียงของคุณ</label><input type="file" id="sfxUp" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple hidden><span class="hint">mp3, wav, m4a เช่น เสียงปรบมือ เสียงหัวเราะ เพลงสั้น</span></div>
-          </div>
-          <div class="divider"></div>
-          <div class="row"><button class="btn small" id="aiSfx">ให้ AI แนะนำจุดใส่เอฟเฟกต์</button><span class="hint" id="aiSfxStat"></span></div>
-          <div class="field"><span class="lab" id="sfxCount">เอฟเฟกต์ในคลิป</span><ol class="sfxlist" id="sfxList"></ol></div>
-          <div class="divider"></div>
-          <div class="ctl"><label for="aOrig">เสียงคลิปเดิม</label><input type="range" id="aOrig" min="0" max="1.5" step="0.05"><output id="oOrig"></output></div>
-          <div class="ctl"><label for="aSfx">เสียงเอฟเฟกต์รวม</label><input type="range" id="aSfx" min="0" max="1.5" step="0.05"><output id="oSfx"></output></div>
-        </div>
-
-        <div class="pane" data-p="style" hidden>
-          <div class="subtabs" id="stTabs" role="tablist">
-            <button type="button" data-s="look" aria-selected="true">สไตล์คงที่</button>
-            <button type="button" data-s="anim" aria-selected="false">อนิเมชัน <span class="badge">แนะนำ</span></button>
-            <button type="button" data-s="mine" aria-selected="false">ของฉัน</button>
-          </div>
-          <div data-sp="look"><div class="lookgrid" id="lookgrid"></div></div>
-          <div data-sp="anim" hidden class="field">
-            <span class="hint">อนิเมชันใช้ร่วมกับสไตล์ที่เลือกไว้</span>
-            <div class="fxgrid" id="fxgrid"></div>
-            <div class="ctl"><label for="sHl">สีไฮไลต์</label><input type="color" id="sHl"><span class="hint">คำที่ถูกเน้น</span></div>
-          </div>
-          <div data-sp="mine" hidden class="field">
-            <div class="row"><input class="input" id="myName" placeholder="ตั้งชื่อ เช่น Golf Hub รีวิว" maxlength="24"><button class="btn small" id="mySave">บันทึกสไตล์ปัจจุบัน</button></div>
-            <div class="lookgrid" id="mygrid"></div>
-          </div>
-          <div class="divider"></div>
-          <div class="ctl"><label for="sSize">ขนาด</label><input type="range" id="sSize" min="30" max="120" step="1"><output id="oSize"></output></div>
+        <section class="pane" data-p="style" hidden>
+          <div class="field"><span class="lab">สไตล์สำเร็จรูป</span><div class="hscroll" id="lookRow">${LOOKS.map(L => `<button type="button" class="look" data-id="${L.id}"><canvas width="200" height="125"></canvas><span>${L.n}</span></button>`).join("")}</div></div>
+          <div class="field"><span class="lab">สไตล์ของฉัน</span><div class="hscroll" id="myRow"></div></div>
+          <div class="ctl"><label for="sSize">ขนาดตัวอักษร</label><input type="range" id="sSize" min="30" max="130" step="1"><output id="oSize"></output></div>
           <div class="ctl"><label for="sPos">ตำแหน่ง</label><input type="range" id="sPos" min="8" max="94" step="1"><output id="oPos"></output></div>
-          <div class="field"><span class="lab">ฟอนต์</span><div class="fontgrid" id="fontgrid"></div></div>
-          <details class="box"><summary>ปรับสีและขอบเอง</summary><div class="in">
-            <div class="ctl"><label for="sColor">สีตัวอักษร</label><input type="color" id="sColor"><label class="sw"><input type="checkbox" id="sBold"> ตัวหนา</label></div>
+          <span class="hint" style="margin-top:-8px">ลากซับบนวิดีโอขึ้นลงเพื่อย้ายตำแหน่งได้เหมือนกัน</span>
+          <div class="field"><span class="lab">สีตัวอักษร</span>${swatches("color")}</div>
+          <div class="xbox">
+            <label class="sw"><input type="checkbox" id="sKw"> เน้นคำสำคัญด้วยสี</label>
+            ${swatches("kwColor")}
+            <div class="row"><button class="btn small" id="kwGo">✨ ให้ AI เลือกคำสำคัญ</button><span class="hint" id="kwStat">หรือแตะคำในหน้าต่างแก้บรรทัด</span></div>
+          </div>
+          <details class="box"><summary>ขอบ เงา และกล่องพื้นหลัง</summary><div class="in">
             <div class="ctl"><label for="sStroke">ขอบตัวอักษร</label><input type="range" id="sStroke" min="0" max="12" step="1"><input type="color" id="sStrokeC" aria-label="สีขอบ"></div>
-            <div class="ctl"><label for="sBoxO">กล่องพื้นหลัง</label><input type="range" id="sBoxO" min="0.2" max="1" step="0.05" aria-label="ความทึบกล่อง"><input type="color" id="sBoxC" aria-label="สีกล่อง"></div>
-            <div class="row"><label class="sw"><input type="checkbox" id="sBox"> ใช้กล่องพื้นหลัง</label><label class="sw"><input type="checkbox" id="sShadow"> เงานุ่ม</label></div>
+            <div class="row"><label class="sw"><input type="checkbox" id="sBox"> กล่องพื้นหลัง</label><input type="range" id="sBoxO" min="0.2" max="1" step="0.05" aria-label="ความทึบกล่อง" style="flex:1"><input type="color" id="sBoxC" aria-label="สีกล่อง"></div>
+            <div class="row"><label class="sw"><input type="checkbox" id="sShadow"> เงานุ่ม</label></div>
             <div class="row"><label class="sw"><input type="checkbox" id="sGlow"> แสงเรือง</label><input type="color" id="sGlowC" aria-label="สีแสงเรือง"><label class="sw" style="margin-left:12px"><input type="checkbox" id="sDsh"> เงาทึบ</label><input type="color" id="sDshC" aria-label="สีเงาทึบ"></div>
           </div></details>
-          <details class="box"><summary>ภาษาที่สอง</summary><div class="in">
+          <details class="box" id="tr2Box"><summary>ภาษาที่สอง</summary><div class="in">
             <div class="ctl"><label for="sSize2">ขนาด</label><input type="range" id="sSize2" min="40" max="110" step="1"><output id="oSize2"></output></div>
-            <div class="ctl"><label for="sColor2">สีคำแปล</label><input type="color" id="sColor2"><span></span></div>
+            <div class="field"><span class="lab">สีคำแปล</span>${swatches("color2")}</div>
             <div class="seg" id="sOrder"><button type="button" data-v="below">คำแปลอยู่ใต้</button><button type="button" data-v="above">คำแปลอยู่บน</button></div>
           </div></details>
-          <button class="btn small" id="sDef">ใช้สไตล์นี้เป็นค่าเริ่มต้นของโปรเจกต์ใหม่</button>
-        </div>
+          <button class="btn small" id="sDef">ใช้สไตล์นี้กับโปรเจกต์ใหม่</button>
+        </section>
 
-        <div class="pane" data-p="export" hidden>
-          <div class="field"><span class="lab">ไฟล์ซับ (.srt)</span><span class="hint">ใช้อัปโหลดคู่กับวิดีโอใน YouTube, Facebook หรือโปรแกรมตัดต่อ</span>
-            <div class="row"><select class="input" id="srtMode"></select><button class="btn" id="srt">ดาวน์โหลด .srt</button></div></div>
-          <div class="divider"></div>
-          <div class="field"><span class="lab">วิดีโอที่ฝังซับและเอฟเฟกต์แล้ว</span>
-            <span class="hint" id="exHint">ใช้เวลาประมาณเท่าความยาวคลิป (${fmtDur(p.duration)}) เปิดหน้าจอและหน้านี้ค้างไว้จนเสร็จ ห้ามสลับแอป</span>
+        <section class="pane" data-p="font" hidden>
+          <div class="seg" id="wSeg"><button type="button" data-w="0">ตัวปกติ</button><button type="button" data-w="1">ตัวหนา</button></div>
+          <div class="fontgrid2" id="fontGrid">${FONTS.map(([f]) => `<button type="button" class="fcard" data-f="${f}" style="font-family:'${f}',sans-serif"><b>สวัสดี ซับไว</b><span>${f}</span></button>`).join("")}</div>
+        </section>
+
+        <section class="pane" data-p="anim" hidden>
+          <span class="hint">ตัวอย่างใช้สไตล์และฟอนต์ที่เลือกอยู่ แตะเพื่อใช้กับซับ</span>
+          <div class="fxgrid" id="fxgrid">${Object.entries(ANIMS).map(([k, a]) => `<button type="button" class="fx" data-k="${k}"><canvas width="240" height="135"></canvas>${a.n}</button>`).join("")}</div>
+          <div class="field"><span class="lab">สีไฮไลต์ของอนิเมชัน</span>${swatches("hl")}</div>
+        </section>
+
+        <section class="pane" data-p="sfx" hidden>
+          <button class="btn primary block" id="aiSfx">✨ ให้ AI ใส่เอฟเฟกต์เสียงให้</button>
+          <span class="hint" id="aiSfxStat" style="margin-top:-8px">AI อ่านซับแล้ววางเสียงตามจังหวะ เช่น ติ๊งตอนบอกทริก กริ๊งเงินตอนพูดถึงราคา</span>
+          <div class="field"><span class="lab">คลังเสียง</span><span class="hint">▶ ฟังเสียง · ＋ วางที่ตำแหน่งวิดีโอตอนนี้ <span class="nowpos" id="nowPos">00:00.0</span></span>
+            <div class="lib2" id="lib"></div>
+            <div class="row"><label class="btn small" for="sfxUp">นำเข้าเสียงของคุณ</label><input type="file" id="sfxUp" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple hidden><span class="hint">mp3, wav, m4a</span></div></div>
+          <div class="field"><span class="lab" id="sfxCount">เสียงในคลิปนี้</span><ol class="sfxlist" id="sfxList"></ol></div>
+          <div class="ctl"><label for="aOrig">เสียงคลิปเดิม</label><input type="range" id="aOrig" min="0" max="1.5" step="0.05"><output id="oOrig"></output></div>
+          <div class="ctl"><label for="aSfx">เสียงเอฟเฟกต์</label><input type="range" id="aSfx" min="0" max="1.5" step="0.05"><output id="oSfx"></output></div>
+        </section>
+
+        <section class="pane" data-p="frame" hidden>
+          <div class="field"><span class="lab">ขนาดเฟรม</span><div class="ratios" id="ratios"></div>
+            <span class="hint">TikTok, Reels, Shorts ใช้ 9:16 · โพสต์ Facebook/IG ใช้ 4:5 หรือ 1:1 · YouTube ใช้ 16:9</span></div>
+          <div class="field"><span class="lab">การจัดภาพ</span><div class="seg" id="fitSeg"><button type="button" data-v="blur">พอดีเฟรม + พื้นหลังเบลอ</button><button type="button" data-v="fill">เต็มเฟรม (ตัดขอบ)</button></div></div>
+        </section>
+
+        <section class="pane" data-p="export" hidden>
+          <div class="field"><span class="lab">วิดีโอพร้อมซับและเสียงเอฟเฟกต์</span>
+            <span class="hint" id="exHint"></span>
             <button class="btn primary" id="burn">สร้างวิดีโอ</button>
             <div id="exProg" hidden class="field"><div class="prog"><i id="exBar"></i></div><div class="row"><span class="hint mono" id="exTxt">0%</span><button class="btn small" id="exCancel" style="margin-left:auto">ยกเลิก</button></div></div>
             <div class="result field" id="exRes" hidden></div>
           </div>
           <div class="divider"></div>
+          <div class="field"><span class="lab">ไฟล์ซับ (.srt)</span><span class="hint">สำหรับ YouTube, Facebook หรือโปรแกรมตัดต่อ</span>
+            <div class="row"><select class="input" id="srtMode"></select><button class="btn" id="srt">ดาวน์โหลด .srt</button></div></div>
+          <div class="divider"></div>
           <button class="btn danger small" id="delP">ลบโปรเจกต์นี้</button>
-        </div>
+        </section>
       </div>
+    </div>
+    <div class="lsheet" id="lsheet" role="dialog" aria-label="แก้ไขบรรทัด" hidden>
+      <div class="ls-head"><b id="lsNo"></b><span class="mono hint" id="lsTime"></span><button class="iconbtn x" id="lsClose" aria-label="ปิด">✕</button></div>
+      <textarea id="lsText" rows="2" aria-label="ข้อความซับ"></textarea>
+      <textarea id="lsTr" rows="1" class="tr" aria-label="คำแปล" hidden></textarea>
+      <div class="ls-nav"><button class="qbtn" id="lsPrev" aria-label="บรรทัดก่อนหน้า">‹ ก่อนหน้า</button><button class="qbtn play" id="lsPlay">▶ เล่นบรรทัดนี้</button><button class="qbtn" id="lsNext" aria-label="บรรทัดถัดไป">ถัดไป ›</button></div>
+      <div class="ls-time">
+        <span>เริ่ม</span><button class="qbtn" data-tm="s-" aria-label="เริ่มเร็วขึ้น">−</button><span class="mono" id="lsS"></span><button class="qbtn" data-tm="s+" aria-label="เริ่มช้าลง">+</button>
+        <span>จบ</span><button class="qbtn" data-tm="e-" aria-label="จบเร็วขึ้น">−</button><span class="mono" id="lsE"></span><button class="qbtn" data-tm="e+" aria-label="จบช้าลง">+</button>
+      </div>
+      <div class="field"><span class="hint">แตะคำเพื่อเน้นสี</span><div class="words" id="lsWords"></div></div>
+      <div class="ls-acts"><button class="chip2" data-l="split">✂ แยกตรงเคอร์เซอร์</button><button class="chip2" data-l="merge">รวมกับบรรทัดถัดไป</button><button class="chip2" data-l="ins">+ แทรกบรรทัดใหม่</button><button class="chip2 del" data-l="del">ลบบรรทัด</button></div>
     </div>`;
 
+  /* ---------- save + undo/redo ---------- */
+  const snap = () => JSON.stringify({ captions: p.captions, sfx: p.sfx, style: p.style, tr: p.tr, layout: p.layout, fit: p.fit, lang: p.lang, audio: p.audio, maxChars: p.maxChars });
+  let hist = [snap()], hi = 0;
+  const syncUndo = () => { $("#undo").disabled = hi <= 0 && !histT; $("#redo").disabled = hi >= hist.length - 1; };
+  const pushHist = () => { clearTimeout(histT); histT = 0; const s = snap(); if (s !== hist[hi]) { hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 80) hist.shift(); hi = hist.length - 1; } syncUndo(); };
+  const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { p.updatedAt = Date.now(); DB.put(p); }, 400); };
+  function changed(opts = {}) {
+    save();
+    clearTimeout(histT); histT = 0;
+    if (opts.typing) { histT = setTimeout(pushHist, 700); syncUndo(); } else pushHist();
+    draw();
+  }
+  function restore(i) {
+    Object.assign(p, JSON.parse(hist[i])); hi = i; save(); syncUndo();
+    renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); sizeStage();
+    if (sid) { if (p.captions.some(c => c.id === sid)) fillSheet(); else closeSheet(); }
+  }
+  $("#undo").onclick = () => { if (histT) pushHist(); if (hi > 0) { restore(hi - 1); toast("ย้อนกลับแล้ว", 1000); } };
+  $("#redo").onclick = () => { if (hi < hist.length - 1) { restore(hi + 1); toast("ทำซ้ำแล้ว", 1000); } };
+  syncUndo();
+
   $("#pn").value = p.name;
-  $("#pn").oninput = e => { p.name = e.target.value; scheduleSave(); };
+  $("#pn").oninput = e => { p.name = e.target.value; save(); };
   $("#bk").onclick = () => { if (exporting) { toast("กำลังสร้างวิดีโอ กดยกเลิกก่อน"); return; } setView(viewHome); };
-  $$(".tabs button").forEach(b => b.onclick = () => {
-    $$(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
-    $$(".pane").forEach(pn => pn.hidden = pn.dataset.p !== b.dataset.t);
-    if (b.dataset.t === "style") startFx(); else stopFx();
+
+  /* ---------- tool tabs ---------- */
+  $$("#toolbar button").forEach(b => b.onclick = () => {
+    tab = b.dataset.t;
+    $$("#toolbar button").forEach(x => x.setAttribute("aria-selected", x === b));
+    $$(".pane[data-p]").forEach(pn => pn.hidden = pn.dataset.p !== tab);
+    if (tab === "anim") startFx(); else stopFx();
+    if (tab === "style") { paintLooks(); renderMine(); }
+    if (tab === "export") syncExportHint();
   });
 
-  /* ---- stage ---- */
-  let video = null, cv = null;
+  /* ---------- player ---------- */
+  if (p.thumb) { thumbImg = new Image(); thumbImg.onload = () => { draw(); paintLooks(); }; thumbImg.src = p.thumb; }
   function buildStage() {
     const col = $("#stageCol");
     if (!blob) {
       col.innerHTML = `<div class="missing"><b>ไม่พบไฟล์วิดีโอในเครื่องนี้</b><span class="hint">เลือกไฟล์ “${esc(p.fileName || "")}” อีกครั้งเพื่อดูตัวอย่างและส่งออก</span><label class="btn small" for="rpick">เลือกไฟล์วิดีโอ</label><input type="file" id="rpick" accept="video/*" hidden></div>`;
-      $("#rpick").onchange = async e => { const f = e.target.files[0]; if (!f) return; blob = f; try { await DB.putVideo(id, f); p.videoSaved = true; scheduleSave(); } catch { tempVideos[id] = f; } buildStage(); };
+      $("#rpick").onchange = async e => { const f = e.target.files[0]; if (!f) return; blob = f; try { await DB.putVideo(id, f); p.videoSaved = true; save(); } catch { tempVideos[id] = f; } buildStage(); };
       return;
     }
     url = URL.createObjectURL(blob);
-    col.innerHTML = `<div class="stage" id="stage"><video id="vid" playsinline controls preload="metadata"></video><canvas id="ov"></canvas></div>
-      <div class="qe" id="qe">
-        <div class="qe-bar"><button class="qbtn" id="qPrev" aria-label="บรรทัดก่อนหน้า">‹</button><button class="qbtn play" id="qPlay">▶ เล่น</button><span class="mono hint" id="qTime"></span><button class="qbtn" id="qNext" aria-label="บรรทัดถัดไป">›</button></div>
-        <textarea id="qText" rows="2" aria-label="แก้ซับบรรทัดนี้" placeholder="ช่วงนี้ไม่มีซับ"></textarea>
-        <textarea id="qTr" rows="1" class="tr" aria-label="แก้คำแปลบรรทัดนี้" hidden></textarea>
-        <div class="qe-acts"><button class="mini" data-q="early">⏪ ซับขึ้นช้าไป</button><button class="mini" data-q="late">⏩ ซับขึ้นเร็วไป</button><button class="mini" data-q="merge">รวมกับถัดไป</button><button class="mini del" data-q="del">ลบบรรทัด</button></div>
+    col.innerHTML = `<div class="player" id="player">
+        <div class="screen" id="screen"><video id="vid" playsinline webkit-playsinline preload="auto"></video><canvas id="cv" aria-label="วิดีโอ แตะเพื่อเล่นหรือหยุด แตะซับเพื่อแก้ ลากซับขึ้นลงเพื่อย้าย"></canvas></div>
+        <button class="fs-close" id="fsClose" aria-label="ออกจากเต็มจอ">✕</button>
+        <div class="pctl">
+          <button class="pbtn play" id="pPlay" aria-label="เล่น">▶</button>
+          <span class="mono ptime" id="pTime">0:00 / 0:00</span>
+          <input type="range" id="pSeek" min="0" max="1000" value="0" aria-label="ตำแหน่งวิดีโอ">
+          <button class="pbtn" id="pEdit" aria-label="แก้ซับตรงนี้" title="แก้ซับตรงนี้">✎</button>
+          <button class="pbtn" id="pFs" aria-label="เต็มจอ" title="เต็มจอ">⛶</button>
+        </div>
       </div>`;
-    video = $("#vid"); cv = $("#ov"); video.src = url;
-    video.volume = Math.min(1, p.audio.orig);
-    video.addEventListener("loadedmetadata", () => { if (!p.width) { p.width = video.videoWidth; p.height = video.videoHeight; } sizeStage(); draw(); });
-    ["seeked", "timeupdate", "pause"].forEach(ev => video.addEventListener(ev, draw));
-    ["seeking", "pause", "ended"].forEach(ev => video.addEventListener(ev, stopLive));
-    video.addEventListener("play", () => { getPAC(); loop(); $("#qPlay").textContent = "❚❚ หยุด"; });
-    ["pause", "ended"].forEach(ev => video.addEventListener(ev, () => { const b = $("#qPlay"); if (b) b.textContent = "▶ เล่น"; }));
-    setupQuick();
-    video.addEventListener("timeupdate", () => { const n = $("#nowPos"); if (n) n.textContent = fmtT(video.currentTime); });
+    video = $("#vid"); cv = $("#cv"); video.src = url; video.volume = Math.min(1, p.audio.orig);
+    video.addEventListener("loadedmetadata", () => { if (!p.width) { p.width = video.videoWidth; p.height = video.videoHeight; } sizeStage(); try { if (video.currentTime === 0) video.currentTime = 0.001; } catch {} });
+    ["loadeddata", "seeked", "canplay"].forEach(ev => video.addEventListener(ev, draw));
+    video.addEventListener("play", () => { getPAC(); loop(); syncPlayBtn(); });
+    ["pause", "ended"].forEach(ev => video.addEventListener(ev, () => { stopLive(); syncPlayBtn(); draw(); }));
+    video.addEventListener("seeking", stopLive);
+    $("#pPlay").onclick = togglePlay;
+    $("#pFs").onclick = () => setFs(!$("#player").classList.contains("fs"));
+    $("#fsClose").onclick = () => setFs(false);
+    $("#pSeek").oninput = e => { if (!video.duration) return; playUntil = null; video.currentTime = e.target.value / 1000 * video.duration; draw(); };
+    $("#pEdit").onclick = () => { video.pause(); const c = capNear(video.currentTime); if (c) openSheet(c); };
+    /* tap = play/pause, tap on a caption = edit it, drag a caption = move it */
+    let pd = null;
+    cv.addEventListener("pointerdown", e => {
+      const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * 100;
+      const c = captionAt(p.captions, video.currentTime);
+      pd = { y0: e.clientY, pos: p.style.pos, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 16 };
+      try { cv.setPointerCapture(e.pointerId); } catch {}
+    });
+    cv.addEventListener("pointermove", e => {
+      if (!pd || !pd.onCap) return;
+      const dy = e.clientY - pd.y0;
+      if (!pd.moved && Math.abs(dy) < 8) return;
+      pd.moved = true; p.style.pos = Math.round(Math.max(8, Math.min(94, pd.pos + dy / pd.h * 100))); draw();
+    });
+    cv.addEventListener("pointerup", () => {
+      if (!pd) return; const d = pd; pd = null;
+      if (d.moved) { syncStyleUI(); changed(); }
+      else if (d.onCap) { video.pause(); const c = captionAt(p.captions, video.currentTime); if (c) openSheet(c); }
+      else togglePlay();
+    });
+    cv.addEventListener("pointercancel", () => { pd = null; });
     sizeStage();
   }
+  const syncPlayBtn = () => { const b = $("#pPlay"); if (!b || !video) return; const on = !video.paused && !video.ended; b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "หยุด" : "เล่น"); const lp = $("#lsPlay"); if (lp) lp.textContent = on ? "❚❚ หยุด" : "▶ เล่นบรรทัดนี้"; };
+  function togglePlay() { if (!video) return; if (video.paused || video.ended) { playUntil = null; if (video.ended) video.currentTime = 0; video.play().catch(() => {}); } else video.pause(); }
   function stopLive() { live.forEach(s => { try { s.stop(); } catch {} }); live = []; sched = new Set(); }
+  function setFs(on) {
+    const pl = $("#player"); if (!pl) return;
+    pl.classList.toggle("fs", on); document.documentElement.style.overflow = on ? "hidden" : "";
+    try { if (on && pl.requestFullscreen && !document.fullscreenElement) pl.requestFullscreen().catch(() => {}); if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch {}
+    $("#pFs").setAttribute("aria-label", on ? "ออกจากเต็มจอ" : "เต็มจอ");
+    requestAnimationFrame(sizeStage);
+  }
+  const onFsChange = () => { const pl = $("#player"); if (pl && !document.fullscreenElement && pl.classList.contains("fs")) setFs(false); else sizeStage(); };
+  document.addEventListener("fullscreenchange", onFsChange);
+  const onKey = e => { if (e.key === "Escape") { if ($("#player") && $("#player").classList.contains("fs")) setFs(false); else if (sid) closeSheet(); } };
+  document.addEventListener("keydown", onKey);
   function sizeStage() {
-    const st = $("#stage"); if (!st) return;
-    const ratio = (p.width && p.height) ? p.width / p.height : 16 / 9;
-    const aw = $("#stageCol").clientWidth, maxH = window.innerHeight * (window.innerWidth >= 900 ? 0.7 : 0.36);
-    let w = Math.min(aw, maxH * ratio), h = w / ratio;
-    st.style.width = w + "px"; st.style.height = h + "px";
+    const scr = $("#screen"); if (!scr || !cv) return;
+    const { W, H } = frameDims(p, video && video.videoWidth, video && video.videoHeight), ratio = W / H;
+    const fs = $("#player").classList.contains("fs");
+    const aw = fs ? window.innerWidth - 24 : $("#stageCol").clientWidth;
+    const ah = fs ? window.innerHeight - 96 : window.innerHeight * (window.innerWidth >= 900 ? 0.66 : 0.4);
+    const w = Math.min(aw, ah * ratio), h = w / ratio;
+    scr.style.width = w + "px"; scr.style.height = h + "px";
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
     draw();
   }
   function draw() {
     if (!cv) return;
-    const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, cv.width, cv.height);
-    const t = video ? video.currentTime : 0;
+    const ctx = cv.getContext("2d"), t = video ? video.currentTime : 0;
+    drawVideo(ctx, cv.width, cv.height, video, p, thumbImg);
     const c = captionAt(p.captions, t);
     if (c) drawCaption(ctx, cv.width, cv.height, c, p, t);
+    const d = (video && video.duration) || p.duration || 0;
+    const pt = $("#pTime"); if (pt) pt.textContent = `${fmtDur(t)} / ${fmtDur(d)}`;
+    const sk = $("#pSeek"); if (sk && document.activeElement !== sk) sk.value = d ? Math.round(t / d * 1000) : 0;
+    const np = $("#nowPos"); if (np) np.textContent = fmtT(t);
     const nid = c ? c.id : null;
     if (nid !== activeId) {
       activeId = nid;
-      $$(".cap.on").forEach(x => x.classList.remove("on"));
-      if (nid) {
-        const el = $(`.cap[data-id="${nid}"]`);
-        if (el) {
-          el.classList.add("on");
-          // follow along only inside the list's own scroll box (desktop); never move the page
-          const box = $("#caps");
-          if (video && !video.paused && box && box.scrollHeight > box.clientHeight + 4 && !box.contains(document.activeElement))
-            box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 3;
-        }
-      }
+      $$(".ln.on").forEach(x => x.classList.remove("on"));
+      if (nid) { const el = $(`.ln[data-id="${nid}"]`); if (el) el.classList.add("on"); }
     }
-    syncQuick(t);
-  }
-  /* quick edit: the caption under the playhead */
-  let qId;
-  const qCap = () => p.captions.find(c => c.id === qId);
-  function syncQuick(t, force) {
-    const qt = $("#qText"); if (!qt) return;
-    if (!force && (document.activeElement === qt || document.activeElement === $("#qTr"))) return;
-    let c = captionAt(p.captions, t);
-    if (!c) { for (const x of p.captions) { if (x.start <= t) c = x; else break; } c = c || p.captions[0]; }
-    const nid = c ? c.id : null;
-    if (nid === qId && !force) return;
-    qId = nid;
-    qt.value = c ? c.text : ""; const tr = $("#qTr"); tr.hidden = !p.tr.lang; tr.value = c ? (c.tr || "") : "";
-    tr.placeholder = p.tr.lang ? "คำแปลภาษา" + LNAME[p.tr.lang] : "";
-    $("#qTime").textContent = c ? `${fmtT(c.start)}–${fmtT(c.end)}` : "";
-  }
-  function setupQuick() {
-    const go = (c, play) => { if (!c || !video) return; video.currentTime = c.start + 0.01; qId = undefined; syncQuick(c.start + 0.01, true); if (play) video.play().catch(() => {}); };
-    $("#qPlay").onclick = () => { if (!video) return; if (!video.paused) { video.pause(); return; } const c = qCap(); if (c) go(c, true); else video.play().catch(() => {}); };
-    $("#qPrev").onclick = () => { const i = p.captions.findIndex(c => c.id === qId); video.pause(); go(p.captions[Math.max(0, i - 1)]); };
-    $("#qNext").onclick = () => { const i = p.captions.findIndex(c => c.id === qId); video.pause(); go(p.captions[Math.min(p.captions.length - 1, i + 1)]); };
-    const edit = (f, ta) => { const c = qCap(); if (!c) return; c[f] = ta.value; const li = $(`.cap[data-id="${c.id}"] textarea[data-f="${f}"]`); if (li) { li.value = ta.value; autoH(li); } draw(); scheduleSave(); };
-    $("#qText").addEventListener("focus", () => video && video.pause());
-    $("#qTr").addEventListener("focus", () => video && video.pause());
-    $("#qText").oninput = e => edit("text", e.target);
-    $("#qTr").oninput = e => edit("tr", e.target);
-    $("#qe").addEventListener("click", e => {
-      const b = e.target.closest("[data-q]"); if (!b) return;
-      const i = p.captions.findIndex(c => c.id === qId), c = p.captions[i]; if (!c) return;
-      const a = b.dataset.q;
-      if (a === "early" || a === "late") {
-        const d = a === "early" ? -0.2 : 0.2, len = c.end - c.start;
-        c.start = +Math.max(0, c.start + d).toFixed(2); c.end = +(c.start + len).toFixed(2);
-        p.captions.sort((x, y) => x.start - y.start); scheduleSave(); renderCaps(); go(c, true);
-        toast(a === "early" ? "ให้ซับขึ้นเร็วขึ้น 0.2 วินาที" : "ให้ซับขึ้นช้าลง 0.2 วินาที", 1400);
-      } else if (a === "merge") {
-        const n = p.captions[i + 1]; if (!n) { toast("เป็นบรรทัดสุดท้ายแล้ว"); return; }
-        c.text = joinTok(c.text, n.text); c.tr = joinTok(c.tr || "", n.tr || ""); c.end = n.end; p.captions.splice(i + 1, 1);
-        scheduleSave(); renderCaps(); go(c);
-      } else if (a === "del") {
-        if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบบรรทัด"; } }, 3000); return; }
-        delete b.dataset.sure; b.textContent = "ลบบรรทัด";
-        p.captions.splice(i, 1); scheduleSave(); renderCaps(); go(p.captions[Math.min(i, p.captions.length - 1)]);
-      }
-    });
   }
   function scheduleSfxPreview() {
     if (!video || video.paused || !pac) return;
     const now = video.currentTime;
     for (const s of p.sfx) {
       if (sched.has(s.id)) continue;
-      if (s.t >= now - 0.05 && s.t < now + 0.3) {
-        sched.add(s.id);
-        playSfx(s.key, s.vol * p.audio.sfx, pac.currentTime + Math.max(0, s.t - now)).then(src => { if (src) live.push(src); });
-      }
+      if (s.t >= now - 0.05 && s.t < now + 0.3) { sched.add(s.id); playSfx(s.key, s.vol * p.audio.sfx, pac.currentTime + Math.max(0, s.t - now)).then(src => { if (src) live.push(src); }); }
     }
   }
-  function loop() { cancelAnimationFrame(raf); const f = () => { draw(); scheduleSfxPreview(); if (video && !video.paused && !video.ended) raf = requestAnimationFrame(f); }; f(); }
+  function loop() {
+    cancelAnimationFrame(raf);
+    const f = () => {
+      if (playUntil != null && video.currentTime >= playUntil) { video.pause(); playUntil = null; }
+      draw(); scheduleSfxPreview();
+      if (video && !video.paused && !video.ended) raf = requestAnimationFrame(f);
+    };
+    f();
+  }
   const onResize = () => sizeStage();
   window.addEventListener("resize", onResize);
+  const capNear = t => { let c = captionAt(p.captions, t); if (!c) { for (const x of p.captions) { if (x.start <= t) c = x; else break; } } return c || p.captions[0]; };
 
-  /* ---- languages ---- */
-  function syncLang() {
-    const has = !!p.tr.lang, anyTr = p.captions.some(c => c.tr && c.tr.trim());
-    if (!has) p.tr.mode = "main";
-    $$("#trMode button").forEach(b => { b.disabled = !has && b.dataset.v !== "main"; b.setAttribute("aria-pressed", b.dataset.v === p.tr.mode); });
-    $("#trGo").hidden = !has;
-    $("#trGo").textContent = anyTr ? "แปลใหม่ทุกบรรทัด" : "แปลทุกบรรทัด";
-    $("#trStat").textContent = has ? (anyTr ? `มีคำแปล${LNAME[p.tr.lang]}แล้ว แก้คำได้ในแต่ละบรรทัด` : `ยังไม่ได้แปลเป็นภาษา${LNAME[p.tr.lang]}`) : "";
-    const sm = $("#srtMode");
-    sm.innerHTML = `<option value="main">ภาษาหลัก (${LNAME[p.lang] || ""})</option>` + (has ? `<option value="tr">ภาษาที่สอง (${LNAME[p.tr.lang]})</option><option value="both">สองภาษาในไฟล์เดียว</option>` : "");
-    sm.value = has && p.tr.mode !== "main" ? p.tr.mode : "main";
-  }
-  $("#mLang").onchange = e => { p.lang = e.target.value; scheduleSave(); syncLang(); draw(); };
-  $("#trLang").onchange = async e => {
-    const v = e.target.value;
-    if (v && v === p.lang) { toast("ภาษาที่สองต้องต่างจากภาษาหลัก"); e.target.value = p.tr.lang; return; }
-    const changed = v !== p.tr.lang;
-    p.tr.lang = v;
-    if (changed) p.captions.forEach(c => c.tr = "");
-    if (v && p.tr.mode === "main") p.tr.mode = "both";
-    scheduleSave(); syncLang(); renderCaps();
-    if (v) runTranslate();
+  /* ---------- caption list ---------- */
+  const markHl = c => { let s = esc(c.text); (c.hl || []).forEach(w => { if (w) s = s.split(esc(w)).join(`<mark>${esc(w)}</mark>`); }); return s || `<span class="hint">(ว่าง แตะเพื่อพิมพ์)</span>`; };
+  const rowHTML = c => {
+    const fx = p.sfx.filter(s => s.t >= c.start && s.t < c.end).map(s => sfxName(s.key)).join(", ");
+    return `<button type="button" class="ln-b"><span class="ln-t mono">${fmtT(c.start)}</span><span class="ln-x">${markHl(c)}</span>${p.tr.lang ? `<span class="ln-tr">${esc(c.tr || "")}</span>` : ""}${fx ? `<span class="ln-sfx">♪ ${esc(fx)}</span>` : ""}</button>`;
   };
-  $$("#trMode button").forEach(b => b.onclick = () => { p.tr.mode = b.dataset.v; scheduleSave(); syncLang(); draw(); });
-  async function runTranslate() {
-    if (!hasKey()) { openSettings(); return; }
-    const b = $("#trGo"); b.disabled = true; $("#trLang").disabled = true;
-    try {
-      await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trStat").textContent = `กำลังแปล ${d}/${t} บรรทัด…`);
-      scheduleSave(); renderCaps(); toast("แปลเสร็จแล้ว");
-    } catch (e) { $("#trStat").textContent = ""; toast(e.message, 5000); }
-    b.disabled = false; $("#trLang").disabled = false; syncLang();
+  function renderList() {
+    $("#lines").innerHTML = p.captions.map(c => `<li class="ln${c.id === sid ? " sel" : ""}" data-id="${c.id}">${rowHTML(c)}</li>`).join("");
+    activeId = undefined; draw();
   }
-  $("#trGo").onclick = runTranslate;
-
-  /* ---- caption list ---- */
-  function renderCaps() {
-    const ol = $("#caps"), has = !!p.tr.lang;
-    const sfxAt = c => p.sfx.filter(s => s.t >= c.start && s.t < c.end).map(s => `<span class="sfxtag">♪ ${esc(sfxName(s.key))}</span>`).join("");
-    ol.innerHTML = p.captions.map(c => `
-      <li class="cap" data-id="${c.id}">
-        <div class="cap-h">
-          <button class="tc mono" data-a="seek">${fmtT(c.start)} – ${fmtT(c.end)}</button>${sfxAt(c)}
-          <div class="cap-acts">
-            <button class="mini" data-a="time">เวลา</button>
-            <button class="mini" data-a="merge">รวมถัดไป</button>
-            <button class="mini" data-a="ins">แทรก</button>
-            <button class="mini del" data-a="del">ลบ</button>
-          </div>
-        </div>
-        <div class="times" hidden><input data-k="start" aria-label="เวลาเริ่ม" value="${fmtT(c.start)}"><span>ถึง</span><input data-k="end" aria-label="เวลาจบ" value="${fmtT(c.end)}"><button class="mini" data-a="setnow">ใช้ตำแหน่งวิดีโอเป็นเวลาเริ่ม</button></div>
-        <textarea rows="1" data-f="text" aria-label="ข้อความซับ"></textarea>
-        ${has ? `<textarea rows="1" class="tr" data-f="tr" aria-label="คำแปล" placeholder="คำแปลภาษา${LNAME[p.tr.lang]}"></textarea>` : ""}
-      </li>`).join("");
-    $$(".cap", ol).forEach(li => { const c = p.captions.find(x => x.id === li.dataset.id); $$("textarea", li).forEach(ta => { ta.value = c[ta.dataset.f] || ""; autoH(ta); }); });
-    activeId = undefined; qId = undefined; draw();
-  }
-  const autoH = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
-  const capsEl = $("#caps");
-  capsEl.addEventListener("input", e => {
-    const li = e.target.closest(".cap"); if (!li) return; const c = p.captions.find(x => x.id === li.dataset.id);
-    if (e.target.tagName === "TEXTAREA") {
-      c[e.target.dataset.f] = e.target.value; autoH(e.target); draw(); scheduleSave();
-      if (c.id === qId) { const q = e.target.dataset.f === "tr" ? $("#qTr") : $("#qText"); if (q) q.value = e.target.value; }
-    }
-  });
-  capsEl.addEventListener("change", e => {
-    const li = e.target.closest(".cap"); if (!li || !e.target.dataset.k) return; const c = p.captions.find(x => x.id === li.dataset.id);
-    const v = parseT(e.target.value);
-    if (isNaN(v)) { e.target.value = fmtT(c[e.target.dataset.k]); toast("รูปแบบเวลา เช่น 01:23.5"); return; }
-    c[e.target.dataset.k] = Math.max(0, v);
-    if (c.end <= c.start) c.end = c.start + 0.5;
-    p.captions.sort((a, b) => a.start - b.start);
-    $(".tc", li).textContent = `${fmtT(c.start)} – ${fmtT(c.end)}`; draw(); scheduleSave();
-  });
-  capsEl.addEventListener("click", e => {
-    const b = e.target.closest("[data-a]"); if (!b) return;
-    const li = b.closest(".cap"); const i = p.captions.findIndex(x => x.id === li.dataset.id); const c = p.captions[i];
-    const a = b.dataset.a;
-    if (a === "seek") { if (video) { video.currentTime = c.start + 0.01; video.play().catch(() => {}); } }
-    else if (a === "time") { const t = $(".times", li); t.hidden = !t.hidden; }
-    else if (a === "setnow") { if (!video) return; const d = c.end - c.start; c.start = +video.currentTime.toFixed(2); c.end = +(c.start + d).toFixed(2); p.captions.sort((x, y) => x.start - y.start); scheduleSave(); renderCaps(); }
-    else if (a === "merge") {
-      const n = p.captions[i + 1]; if (!n) { toast("เป็นบรรทัดสุดท้ายแล้ว"); return; }
-      c.text = joinTok(c.text, n.text); c.tr = joinTok(c.tr || "", n.tr || ""); c.end = n.end; p.captions.splice(i + 1, 1); scheduleSave(); renderCaps();
-    }
-    else if (a === "ins") {
-      const n = p.captions[i + 1]; const s = c.end, en = n ? Math.max(s + 0.5, Math.min(n.start, s + 2)) : s + 2;
-      p.captions.splice(i + 1, 0, { id: uid(), start: +s.toFixed(2), end: +en.toFixed(2), text: "", tr: "" }); scheduleSave(); renderCaps();
-      const nt = $(`.cap[data-id="${p.captions[i + 1].id}"] textarea`); if (nt) nt.focus();
-    }
-    else if (a === "del") {
-      if (b.dataset.sure) { p.captions.splice(i, 1); scheduleSave(); renderCaps(); }
-      else { b.dataset.sure = "1"; b.textContent = "ยืนยันลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบ"; } }, 3000); }
-    }
-  });
+  const updateRow = c => { const li = $(`.ln[data-id="${c.id}"]`); if (li) li.innerHTML = rowHTML(c); };
+  $("#lines").addEventListener("click", e => { const li = e.target.closest(".ln"); if (!li) return; const c = p.captions.find(x => x.id === li.dataset.id); if (c) openSheet(c, { seek: true }); });
   $("#addEnd").onclick = () => {
-    const last = p.captions[p.captions.length - 1]; const s = last ? last.end : (video ? video.currentTime : 0);
-    p.captions.push({ id: uid(), start: +s.toFixed(2), end: +(s + 2).toFixed(2), text: "", tr: "" }); scheduleSave(); renderCaps();
-    const t = $(`.cap:last-child textarea`); if (t) { t.focus(); t.scrollIntoView({ block: "center" }); }
+    const last = p.captions[p.captions.length - 1], s = last ? last.end : (video ? video.currentTime : 0);
+    const c = { id: uid(), start: +s.toFixed(2), end: +(s + 2).toFixed(2), text: "", tr: "", hl: [] };
+    p.captions.push(c); changed(); renderList(); openSheet(c, { seek: true }); $("#lsText").focus();
+  };
+
+  /* ---------- line editor sheet ---------- */
+  const capById = cid => p.captions.find(c => c.id === cid);
+  function openSheet(c, opts = {}) {
+    sid = c.id; $("#lsheet").hidden = false;
+    if (opts.seek && video) { video.pause(); playUntil = null; video.currentTime = c.start + 0.01; }
+    $$(".ln.sel").forEach(x => x.classList.remove("sel")); const el = $(`.ln[data-id="${c.id}"]`); if (el) el.classList.add("sel");
+    fillSheet(); draw();
+  }
+  function closeSheet() { $("#lsheet").hidden = true; sid = null; $$(".ln.sel").forEach(x => x.classList.remove("sel")); if (histT) pushHist(); }
+  function fillSheet(keepText) {
+    const c = capById(sid); if (!c) { closeSheet(); return; }
+    const i = p.captions.indexOf(c);
+    $("#lsNo").textContent = `บรรทัด ${i + 1}/${p.captions.length}`;
+    $("#lsTime").textContent = `${fmtT(c.start)}–${fmtT(c.end)}`;
+    $("#lsS").textContent = fmtT(c.start); $("#lsE").textContent = fmtT(c.end);
+    if (!keepText) {
+      $("#lsText").value = c.text;
+      const tr = $("#lsTr"); tr.hidden = !p.tr.lang; tr.value = c.tr || ""; tr.placeholder = p.tr.lang ? "คำแปลภาษา" + LNAME[p.tr.lang] : "";
+    }
+    renderWords(c); syncPlayBtn();
+  }
+  function renderWords(c) {
+    c.hl = (c.hl || []).filter(w => c.text.includes(w));
+    const ws = [...new Set(tokens(c.text, p.lang).map(s => s.trim()).filter(s => s && /[\p{L}\p{N}]/u.test(s)))];
+    $("#lsWords").innerHTML = ws.map(w => `<button type="button" class="word" data-w="${esc(w)}" aria-pressed="${c.hl.includes(w)}">${esc(w)}</button>`).join("") || `<span class="hint">ยังไม่มีคำ</span>`;
+  }
+  const pauseOnFocus = () => { if (video) { video.pause(); playUntil = null; } };
+  $("#lsText").addEventListener("focus", pauseOnFocus); $("#lsTr").addEventListener("focus", pauseOnFocus);
+  $("#lsText").oninput = e => { const c = capById(sid); if (!c) return; c.text = e.target.value; updateRow(c); renderWords(c); changed({ typing: true }); };
+  $("#lsTr").oninput = e => { const c = capById(sid); if (!c) return; c.tr = e.target.value; updateRow(c); changed({ typing: true }); };
+  $("#lsWords").addEventListener("click", e => {
+    const b = e.target.closest(".word"); const c = capById(sid); if (!b || !c) return;
+    const w = b.dataset.w; c.hl = c.hl.includes(w) ? c.hl.filter(x => x !== w) : [...c.hl, w];
+    if (c.hl.length && !p.style.kw) { p.style.kw = true; syncStyleUI(); }
+    b.setAttribute("aria-pressed", c.hl.includes(w)); updateRow(c); changed();
+  });
+  $("#lsClose").onclick = closeSheet;
+  const step = d => { const i = p.captions.findIndex(c => c.id === sid); const n = p.captions[i + d]; if (n) openSheet(n, { seek: true }); else toast(d < 0 ? "เป็นบรรทัดแรกแล้ว" : "เป็นบรรทัดสุดท้ายแล้ว", 1200); };
+  $("#lsPrev").onclick = () => step(-1);
+  $("#lsNext").onclick = () => step(1);
+  $("#lsPlay").onclick = () => {
+    const c = capById(sid); if (!c || !video) return;
+    if (!video.paused) { video.pause(); return; }
+    video.currentTime = c.start + 0.01; playUntil = c.end; video.play().catch(() => {});
+  };
+  $(".ls-time").addEventListener("click", e => {
+    const b = e.target.closest("[data-tm]"); const c = capById(sid); if (!b || !c) return;
+    const i = p.captions.indexOf(c), prev = p.captions[i - 1], next = p.captions[i + 1];
+    const k = b.dataset.tm, d = k.endsWith("+") ? 0.1 : -0.1;
+    if (k[0] === "s") c.start = +Math.max(prev ? prev.end : 0, Math.min(c.end - 0.3, c.start + d)).toFixed(2);
+    else c.end = +Math.max(c.start + 0.3, Math.min(next ? next.start : Infinity, c.end + d)).toFixed(2);
+    fillSheet(true); updateRow(c);
+    if (video) { video.currentTime = k[0] === "s" ? c.start + 0.01 : Math.max(c.start, c.end - 0.6); }
+    changed({ typing: true });
+  });
+  $(".ls-acts").addEventListener("click", e => {
+    const b = e.target.closest("[data-l]"); const c = capById(sid); if (!b || !c) return;
+    const i = p.captions.indexOf(c), a = b.dataset.l;
+    if (a === "split") {
+      const ta = $("#lsText"), pos = ta.selectionStart;
+      const left = c.text.slice(0, pos).trim(), right = c.text.slice(pos).trim();
+      if (!left || !right) { toast("แตะในข้อความตรงจุดที่จะแยกก่อน แล้วกดแยก", 2600); return; }
+      const ratio = Math.max(1, vlen(left)) / (Math.max(1, vlen(left)) + Math.max(1, vlen(right)));
+      const mid = +(c.start + (c.end - c.start) * ratio).toFixed(2);
+      const n = { id: uid(), start: mid, end: c.end, text: right, tr: "", hl: (c.hl || []).filter(w => right.includes(w)) };
+      c.text = left; c.end = mid; c.hl = (c.hl || []).filter(w => left.includes(w));
+      p.captions.splice(i + 1, 0, n); changed(); renderList(); openSheet(c); toast("แยกเป็น 2 บรรทัดแล้ว", 1400);
+    } else if (a === "merge") {
+      const n = p.captions[i + 1]; if (!n) { toast("เป็นบรรทัดสุดท้ายแล้ว"); return; }
+      c.text = joinTok(c.text, n.text); c.tr = joinTok(c.tr || "", n.tr || ""); c.end = n.end; c.hl = [...(c.hl || []), ...(n.hl || [])];
+      p.captions.splice(i + 1, 1); changed(); renderList(); openSheet(c); toast("รวมบรรทัดแล้ว", 1200);
+    } else if (a === "ins") {
+      const n = p.captions[i + 1], s = c.end, en = n ? Math.max(s + 0.5, Math.min(n.start, s + 2)) : s + 2;
+      const nc = { id: uid(), start: +s.toFixed(2), end: +en.toFixed(2), text: "", tr: "", hl: [] };
+      p.captions.splice(i + 1, 0, nc); changed(); renderList(); openSheet(nc, { seek: true }); $("#lsText").focus();
+    } else if (a === "del") {
+      if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบบรรทัด"; } }, 3000); return; }
+      delete b.dataset.sure; b.textContent = "ลบบรรทัด";
+      p.captions.splice(i, 1); changed(); renderList();
+      const n = p.captions[Math.min(i, p.captions.length - 1)]; if (n) openSheet(n, { seek: true }); else closeSheet();
+      toast("ลบแล้ว กด ↶ เพื่อเอาคืน", 1800);
+    }
+  });
+
+  /* ---------- text tools ---------- */
+  $("#xChips").addEventListener("click", e => {
+    const b = e.target.closest("[data-x]"); if (!b) return;
+    const open = b.getAttribute("aria-pressed") !== "true";
+    $$("#xChips .chip2").forEach(x => x.setAttribute("aria-pressed", x === b && open));
+    $$("[data-xb]").forEach(x => x.hidden = !(open && x.dataset.xb === b.dataset.x));
+  });
+  $("#fxVocab").value = settings.vocab || "";
+  $("#fixGo").onclick = async () => {
+    if (!hasKey()) { openSettings(); return; }
+    settings.vocab = $("#fxVocab").value.trim(); saveSettings();
+    const b = $("#fixGo"), st = $("#fixStat"); b.disabled = true;
+    try {
+      const n = await aiProofread(p, (d, t) => st.textContent = `กำลังตรวจ ${d}/${t} บรรทัด…`);
+      changed(); renderList(); if (sid) fillSheet();
+      st.textContent = n ? `แก้แล้ว ${n} บรรทัด` : "ไม่พบคำที่ต้องแก้";
+    } catch (e) { st.textContent = ""; toast(e.message, 5000); }
+    b.disabled = false;
   };
   const countIn = (s, f) => s ? s.split(f).length - 1 : 0;
   const countMatches = () => { const f = $("#fFind").value; if (!f) return 0; return p.captions.reduce((n, c) => n + countIn(c.text, f) + countIn(c.tr, f), 0); };
   const updFind = () => { const n = countMatches(); $("#fGo").disabled = !n; $("#fGo").textContent = n ? `แทนที่ทั้งหมด (${n} จุด)` : ($("#fFind").value ? "ไม่พบคำนี้" : "แทนที่ทั้งหมด"); };
   $("#fFind").oninput = updFind;
-  $("#fGo").onclick = () => { const f = $("#fFind").value, r = $("#fRep").value, n = countMatches(); p.captions.forEach(c => { c.text = c.text.split(f).join(r); if (c.tr) c.tr = c.tr.split(f).join(r); }); scheduleSave(); renderCaps(); updFind(); toast(`แทนที่แล้ว ${n} จุด`); };
+  $("#fGo").onclick = () => { const f = $("#fFind").value, r = $("#fRep").value, n = countMatches(); p.captions.forEach(c => { c.text = c.text.split(f).join(r); if (c.tr) c.tr = c.tr.split(f).join(r); }); changed(); renderList(); if (sid) fillSheet(); updFind(); toast(`แทนที่แล้ว ${n} จุด`); };
   let rmc = p.maxChars || 22;
   $$("#rmc button").forEach(b => b.onclick = () => { $$("#rmc button").forEach(x => x.setAttribute("aria-pressed", x === b)); rmc = +b.dataset.v; });
-  $("#rGo").onclick = e => {
-    const b = e.currentTarget;
-    if (!p.raw) { toast("โปรเจกต์นี้ไม่มีผลถอดเสียงเดิม"); return; }
-    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "ยืนยัน: สร้างบรรทัดใหม่ทั้งหมด"; b.classList.add("primary"); return; }
-    delete b.dataset.sure; b.textContent = "จัดบรรทัดใหม่"; b.classList.remove("primary");
-    p.maxChars = rmc; p.captions = buildCaptions(p.raw, rmc, p.lang); scheduleSave(); renderCaps(); syncLang();
-    toast(p.tr.lang ? `ได้ ${p.captions.length} บรรทัด กด “แปลทุกบรรทัด” เพื่อแปลใหม่` : `ได้ ${p.captions.length} บรรทัด`, 4000);
+  $("#rGo").onclick = () => {
+    if (!p.raw || !(p.raw.words || []).length && !(p.raw.segments || []).length) { toast("โปรเจกต์นี้ไม่มีผลถอดเสียงเดิม"); return; }
+    p.maxChars = rmc; p.captions = buildCaptions(p.raw, rmc, p.lang); closeSheet(); changed(); renderList(); syncLang();
+    toast(`ได้ ${p.captions.length} บรรทัด`, 2500);
   };
 
-  /* ---- sound effects ---- */
+  /* ---------- languages ---------- */
+  function syncLang() {
+    const has = !!p.tr.lang, anyTr = p.captions.some(c => c.tr && c.tr.trim());
+    if (!has) p.tr.mode = "main";
+    $("#mLang").value = p.lang; $("#trLang").value = p.tr.lang;
+    $$("#trMode button").forEach(b => { b.disabled = !has && b.dataset.v !== "main"; b.setAttribute("aria-pressed", b.dataset.v === p.tr.mode); });
+    $("#trGo").hidden = !has; $("#trGo").textContent = anyTr ? "แปลใหม่ทุกบรรทัด" : "แปลทุกบรรทัด";
+    $("#trStat").textContent = has ? (anyTr ? `มีคำแปล${LNAME[p.tr.lang]}แล้ว แก้ได้ในแต่ละบรรทัด` : `ยังไม่ได้แปลเป็นภาษา${LNAME[p.tr.lang]}`) : "";
+    $("#tr2Box").hidden = !has;
+    const sm = $("#srtMode");
+    sm.innerHTML = `<option value="main">ภาษาหลัก (${LNAME[p.lang] || ""})</option>` + (has ? `<option value="tr">ภาษาที่สอง (${LNAME[p.tr.lang]})</option><option value="both">สองภาษาในไฟล์เดียว</option>` : "");
+    sm.value = has && p.tr.mode !== "main" ? p.tr.mode : "main";
+  }
+  $("#mLang").onchange = e => { p.lang = e.target.value; changed(); syncLang(); };
+  $("#trLang").onchange = e => {
+    const v = e.target.value;
+    if (v && v === p.lang) { toast("ภาษาที่สองต้องต่างจากภาษาหลัก"); e.target.value = p.tr.lang; return; }
+    if (v !== p.tr.lang) p.captions.forEach(c => c.tr = "");
+    p.tr.lang = v; if (v && p.tr.mode === "main") p.tr.mode = "both";
+    changed(); syncLang(); renderList(); if (sid) fillSheet();
+    if (v) runTranslate();
+  };
+  $$("#trMode button").forEach(b => b.onclick = () => { p.tr.mode = b.dataset.v; changed(); syncLang(); });
+  async function runTranslate() {
+    if (!hasKey()) { openSettings(); return; }
+    const b = $("#trGo"); b.disabled = true; $("#trLang").disabled = true;
+    try { await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trStat").textContent = `กำลังแปล ${d}/${t} บรรทัด…`); changed(); renderList(); if (sid) fillSheet(); toast("แปลเสร็จแล้ว"); }
+    catch (e) { toast(e.message, 5000); }
+    b.disabled = false; $("#trLang").disabled = false; syncLang();
+  }
+  $("#trGo").onclick = runTranslate;
+
+  /* ---------- style ---------- */
+  const thumbStyle = st => ({ ...st, size: 290, pos: 52, anim: "none" });
+  let looksPainted = false;
+  async function paintLooks(force) {
+    if (looksPainted && !force) return; looksPainted = true;
+    for (const b of $$("#lookRow .look")) { const st = lookStyleFrom(p.style, LOOKS.find(L => L.id === b.dataset.id)); await ensureFont(st); paintThumbG($("canvas", b), thumbStyle(st), THUMB_CAP, null, thumbImg); }
+  }
+  $("#lookRow").addEventListener("click", async e => {
+    const b = e.target.closest(".look"); if (!b) return;
+    Object.assign(p.style, lookStyleFrom(p.style, LOOKS.find(L => L.id === b.dataset.id)));
+    await ensureFont(p.style); syncStyleUI(); changed();
+  });
+  const mine = () => settings.myStyles || (settings.myStyles = []);
+  async function renderMine() {
+    $("#myRow").innerHTML = `<button type="button" class="look add" id="mySave"><span class="plus">＋</span><span>บันทึกสไตล์นี้</span></button>` +
+      mine().map(m => `<div class="mycard"><button type="button" class="look" data-my="${m.id}"><canvas width="200" height="125"></canvas><span>${esc(m.name)}</span></button><button type="button" class="mydel" data-mydel="${m.id}" aria-label="ลบสไตล์ ${esc(m.name)}">×</button></div>`).join("");
+    for (const m of mine()) { await ensureFont(m.style); const c = $(`[data-my="${m.id}"] canvas`); if (c) paintThumbG(c, thumbStyle(m.style), THUMB_CAP, null, thumbImg); }
+  }
+  $("#myRow").addEventListener("click", async e => {
+    if (e.target.closest("#mySave")) {
+      const name = "สไตล์ของฉัน " + (mine().length + 1);
+      mine().unshift({ id: uid(), name, style: { ...p.style } }); saveSettings(); renderMine(); toast(`บันทึก “${name}” แล้ว ใช้ได้ทุกโปรเจกต์`); return;
+    }
+    const d = e.target.closest("[data-mydel]");
+    if (d) {
+      if (!d.dataset.sure) { d.dataset.sure = "1"; d.textContent = "ลบ?"; setTimeout(() => { if (d.isConnected) { delete d.dataset.sure; d.textContent = "×"; } }, 2500); return; }
+      settings.myStyles = mine().filter(x => x.id !== d.dataset.mydel); saveSettings(); renderMine(); return;
+    }
+    const a = e.target.closest("[data-my]");
+    if (a) { const m = mine().find(x => x.id === a.dataset.my); const keep = { pos: p.style.pos, size2: p.style.size2, order: p.style.order }; Object.assign(p.style, m.style, keep); await ensureFont(p.style); syncStyleUI(); changed(); }
+  });
+  function syncStyleUI() {
+    const s = p.style, low = v => String(v || "").toLowerCase();
+    $("#sSize").value = s.size; $("#oSize").textContent = s.size; $("#sPos").value = s.pos; $("#oPos").textContent = s.pos + "%";
+    $$("[data-sw]").forEach(box => { const k = box.dataset.sw; $$(".sw-c", box).forEach(b => b.setAttribute("aria-pressed", low(b.dataset.c) === low(s[k]))); const cc = $(".sw-custom", box); if (s[k]) cc.value = s[k]; });
+    $("#sKw").checked = s.kw !== false;
+    $("#sStroke").value = s.stroke; $("#sStrokeC").value = s.strokeColor;
+    $("#sBox").checked = s.box; $("#sBoxO").value = s.boxOpacity; $("#sBoxC").value = s.boxColor; $("#sShadow").checked = s.shadow;
+    $("#sGlow").checked = !!s.glow; if (s.glow) $("#sGlowC").value = s.glow; $("#sDsh").checked = !!s.dshadow; if (s.dshadow) $("#sDshC").value = s.dshadow;
+    $("#sSize2").value = s.size2; $("#oSize2").textContent = s.size2 + "%";
+    $$("#sOrder button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === s.order));
+    $$("#lookRow .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === s.look));
+    const w = fontW(s.font), bold = s.weight >= 600;
+    $$("#wSeg button").forEach(b => b.setAttribute("aria-pressed", (b.dataset.w === "1") === bold));
+    $$("#fontGrid .fcard").forEach(b => { const fw = fontW(b.dataset.f); b.style.fontWeight = bold ? fw[1] : fw[0]; b.setAttribute("aria-pressed", b.dataset.f === s.font); });
+    $$("#fxgrid .fx").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === s.anim));
+  }
+  document.querySelector(".panel").addEventListener("click", e => {
+    const b = e.target.closest(".sw-c"); if (!b) return;
+    const k = b.closest("[data-sw]").dataset.sw; p.style[k] = b.dataset.c;
+    if (k === "color") p.style.look = ""; if (k === "kwColor") p.style.kw = true;
+    syncStyleUI(); changed();
+  });
+  document.querySelector(".panel").addEventListener("input", e => {
+    if (!e.target.classList.contains("sw-custom")) return;
+    const k = e.target.dataset.cc; p.style[k] = e.target.value; if (k === "color") p.style.look = "";
+    syncStyleUI(); changed({ typing: true });
+  });
+  const bindS = (sel, key, conv = v => v, ev = "input") => $(sel).addEventListener(ev, e => {
+    const el = e.target; p.style[key] = conv(el.type === "checkbox" ? el.checked : el.value);
+    if (!["size", "pos", "size2", "order", "kw"].includes(key)) p.style.look = "";
+    syncStyleUI(); changed({ typing: el.type === "range" });
+  });
+  bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number); bindS("#sKw", "kw");
+  bindS("#sStroke", "stroke", Number); bindS("#sStrokeC", "strokeColor");
+  bindS("#sBox", "box"); bindS("#sBoxO", "boxOpacity", Number); bindS("#sBoxC", "boxColor"); bindS("#sShadow", "shadow");
+  bindS("#sSize2", "size2", Number);
+  const fxToggle = (chk, col, key) => { const f = () => { p.style[key] = $(chk).checked ? $(col).value : ""; p.style.look = ""; syncStyleUI(); changed(); }; $(chk).onchange = f; $(col).oninput = () => { $(chk).checked = true; f(); }; };
+  fxToggle("#sGlow", "#sGlowC", "glow"); fxToggle("#sDsh", "#sDshC", "dshadow");
+  $$("#sOrder button").forEach(b => b.onclick = () => { p.style.order = b.dataset.v; syncStyleUI(); changed(); });
+  $("#sDef").onclick = () => { settings.style = { ...p.style }; saveSettings(); toast("โปรเจกต์ใหม่จะใช้สไตล์นี้"); };
+  $("#kwGo").onclick = async () => {
+    if (!hasKey()) { openSettings(); return; }
+    const b = $("#kwGo"), st = $("#kwStat"); b.disabled = true; st.textContent = "AI กำลังเลือกคำ…";
+    try { const n = await aiKeywords(p); p.style.kw = true; syncStyleUI(); changed(); renderList(); if (sid) fillSheet(); st.textContent = `เน้นแล้ว ${n} บรรทัด`; }
+    catch (e) { st.textContent = ""; toast(e.message, 5000); }
+    b.disabled = false;
+  };
+
+  /* ---------- fonts ---------- */
+  $("#fontGrid").addEventListener("click", async e => {
+    const b = e.target.closest(".fcard"); if (!b) return;
+    const w = fontW(b.dataset.f); p.style.font = b.dataset.f; p.style.weight = p.style.weight >= 600 ? w[1] : w[0]; p.style.look = "";
+    syncStyleUI(); await ensureFont(p.style); changed();
+  });
+  $$("#wSeg button").forEach(b => b.onclick = async () => { const w = fontW(p.style.font); p.style.weight = w[b.dataset.w === "1" ? 1 : 0]; p.style.look = ""; syncStyleUI(); await ensureFont(p.style); changed(); });
+
+  /* ---------- animations ---------- */
+  const FX_SAMPLE = { id: "s", start: 0.25, end: 2.6, text: "วันนี้มีของดี", tr: "" };
+  $("#fxgrid").addEventListener("click", e => { const b = e.target.closest(".fx"); if (!b) return; p.style.anim = b.dataset.k; syncStyleUI(); changed(); });
+  function fxTick(now) {
+    const t = (now % 3000) / 1000;
+    $$("#fxgrid .fx").forEach(b => paintThumbG($("canvas", b), { ...p.style, anim: b.dataset.k, size: 200, pos: 52 }, FX_SAMPLE, t, thumbImg));
+    fxRaf = requestAnimationFrame(fxTick);
+  }
+  const stopFx = () => cancelAnimationFrame(fxRaf);
+  const startFx = () => { stopFx(); fxRaf = requestAnimationFrame(fxTick); };
+
+  /* ---------- sound effects ---------- */
   function renderLib() {
-    $("#lib").innerHTML =
-      Object.entries(BUILTIN).map(([k, d]) => `<div class="chip"><button class="pl" data-play="b:${k}" aria-label="ฟังเสียง ${d.n}">▶</button><button class="ad" data-add="b:${k}">${d.n}</button></div>`).join("") +
-      customLib.map(c => `<div class="chip mine"><button class="pl" data-play="c:${c.id}" aria-label="ฟังเสียง ${esc(c.name)}">▶</button><button class="ad" data-add="c:${c.id}" title="${esc(c.name)}">${esc(c.name)}</button></div>`).join("");
+    const item = (key, name, mine) => `<div class="sx${mine ? " mine" : ""}"><button class="pl" data-play="${key}" aria-label="ฟังเสียง ${esc(name)}">▶</button><span class="nm" title="${esc(name)}">${esc(name)}</span><button class="ad" data-add="${key}" aria-label="วางเสียง ${esc(name)}">＋</button></div>`;
+    $("#lib").innerHTML = Object.entries(BUILTIN).map(([k, d]) => item("b:" + k, d.n)).join("") + customLib.map(c => item("c:" + c.id, c.name, true)).join("");
   }
   $("#lib").addEventListener("click", async e => {
     const pl = e.target.closest("[data-play]"), ad = e.target.closest("[data-add]");
@@ -1407,7 +1771,7 @@ async function viewEditor(id) {
     if (ad) {
       const t = video ? +video.currentTime.toFixed(2) : 0;
       p.sfx.push({ id: uid(), key: ad.dataset.add, t, vol: 1 }); p.sfx.sort((a, b) => a.t - b.t);
-      scheduleSave(); renderSfx(); renderCaps(); toast(`วาง “${sfxName(ad.dataset.add)}” ที่ ${fmtT(t)}`);
+      changed(); renderSfx(); renderList(); toast(`วาง “${sfxName(ad.dataset.add)}” ที่ ${fmtT(t)}`, 1600);
       try { await playSfx(ad.dataset.add, p.audio.sfx); } catch {}
     }
   });
@@ -1424,138 +1788,57 @@ async function viewEditor(id) {
     e.target.value = ""; renderLib(); toast("เพิ่มเสียงลงคลังแล้ว ใช้ได้ทุกโปรเจกต์");
   };
   function renderSfx() {
-    $("#sfxCount").textContent = `เอฟเฟกต์ในคลิป (${p.sfx.length})`;
+    $("#sfxCount").textContent = `เสียงในคลิปนี้ (${p.sfx.length})`;
     $("#sfxList").innerHTML = p.sfx.length ? p.sfx.map(s => `
       <li class="sfxrow" data-id="${s.id}">
         <input class="t" value="${fmtT(s.t)}" aria-label="เวลา">
         <span class="nm">♪ ${esc(sfxName(s.key))}</span>
-        <span class="row" style="gap:2px"><button class="mini" data-a="go">ไปที่จุดนี้</button><button class="mini" data-a="here">ย้ายมาตอนนี้</button><button class="mini del" data-a="del">ลบ</button></span>
+        <span class="row" style="gap:2px"><button class="mini" data-a="go">ฟังจุดนี้</button><button class="mini" data-a="here">ย้ายมาตอนนี้</button><button class="mini del" data-a="del">ลบ</button></span>
         <label class="vol">ดัง<input type="range" min="0" max="1.5" step="0.05" value="${s.vol}" aria-label="ความดัง"><span class="mono">${Math.round(s.vol * 100)}%</span></label>
-      </li>`).join("") : `<li class="hint">ยังไม่มีเอฟเฟกต์ เลื่อนวิดีโอไปจุดที่ต้องการ แล้วแตะชื่อเสียงด้านบน</li>`;
+      </li>`).join("") : `<li class="hint">ยังไม่มีเสียง กดให้ AI ใส่ให้ หรือเลื่อนวิดีโอไปจุดที่ต้องการแล้วกด ＋</li>`;
   }
   const sfxList = $("#sfxList");
   sfxList.addEventListener("click", e => {
     const b = e.target.closest("[data-a]"); if (!b) return;
-    const li = b.closest(".sfxrow"); const i = p.sfx.findIndex(x => x.id === li.dataset.id); const s = p.sfx[i];
-    if (b.dataset.a === "go") { if (video) { video.currentTime = Math.max(0, s.t - 1); video.play().catch(() => {}); } }
-    else if (b.dataset.a === "here") { if (!video) return; s.t = +video.currentTime.toFixed(2); p.sfx.sort((a, c) => a.t - c.t); scheduleSave(); renderSfx(); renderCaps(); }
-    else if (b.dataset.a === "del") { p.sfx.splice(i, 1); scheduleSave(); renderSfx(); renderCaps(); }
+    const li = b.closest(".sfxrow"), i = p.sfx.findIndex(x => x.id === li.dataset.id), s = p.sfx[i];
+    if (b.dataset.a === "go") { if (video) { playUntil = s.t + 2; video.currentTime = Math.max(0, s.t - 1); video.play().catch(() => {}); } }
+    else if (b.dataset.a === "here") { if (!video) return; s.t = +video.currentTime.toFixed(2); p.sfx.sort((a, c) => a.t - c.t); changed(); renderSfx(); renderList(); }
+    else if (b.dataset.a === "del") { p.sfx.splice(i, 1); changed(); renderSfx(); renderList(); }
   });
   sfxList.addEventListener("input", e => {
     if (e.target.type !== "range") return;
     const s = p.sfx.find(x => x.id === e.target.closest(".sfxrow").dataset.id);
-    s.vol = +e.target.value; e.target.nextElementSibling.textContent = Math.round(s.vol * 100) + "%"; scheduleSave();
+    s.vol = +e.target.value; e.target.nextElementSibling.textContent = Math.round(s.vol * 100) + "%"; changed({ typing: true });
   });
   sfxList.addEventListener("change", e => {
     if (!e.target.classList.contains("t")) return;
     const s = p.sfx.find(x => x.id === e.target.closest(".sfxrow").dataset.id);
     const v = parseT(e.target.value); if (isNaN(v)) { e.target.value = fmtT(s.t); toast("รูปแบบเวลา เช่น 01:23.5"); return; }
-    s.t = Math.max(0, v); p.sfx.sort((a, c) => a.t - c.t); scheduleSave(); renderSfx(); renderCaps();
+    s.t = Math.max(0, v); p.sfx.sort((a, c) => a.t - c.t); changed(); renderSfx(); renderList();
   });
   const syncAudio = () => { $("#aOrig").value = p.audio.orig; $("#oOrig").textContent = Math.round(p.audio.orig * 100) + "%"; $("#aSfx").value = p.audio.sfx; $("#oSfx").textContent = Math.round(p.audio.sfx * 100) + "%"; };
-  $("#aOrig").oninput = e => { p.audio.orig = +e.target.value; if (video) video.volume = Math.min(1, p.audio.orig); syncAudio(); scheduleSave(); };
-  $("#aSfx").oninput = e => { p.audio.sfx = +e.target.value; syncAudio(); scheduleSave(); };
+  $("#aOrig").oninput = e => { p.audio.orig = +e.target.value; if (video) video.volume = Math.min(1, p.audio.orig); syncAudio(); changed({ typing: true }); };
+  $("#aSfx").oninput = e => { p.audio.sfx = +e.target.value; syncAudio(); changed({ typing: true }); };
   $("#aiSfx").onclick = async () => {
     if (!hasKey()) { openSettings(); return; }
-    const b = $("#aiSfx"), st = $("#aiSfxStat"); b.disabled = true; st.textContent = "AI กำลังฟังเนื้อหา…";
-    try {
-      const added = await aiSuggestSfx(p);
-      scheduleSave(); renderSfx(); renderCaps();
-      st.textContent = `เพิ่ม ${added.length} จุด ลองเล่นวิดีโอฟัง แล้วลบจุดที่ไม่ชอบได้`;
-    } catch (e) { st.textContent = ""; toast(e.message, 5000); }
+    const b = $("#aiSfx"), st = $("#aiSfxStat"); b.disabled = true; st.textContent = "AI กำลังอ่านเนื้อหา…";
+    try { const added = await aiSuggestSfx(p); changed(); renderSfx(); renderList(); st.textContent = `เพิ่ม ${added.length} จุด กดเล่นวิดีโอเพื่อฟัง ลบจุดที่ไม่ชอบได้ด้านล่าง`; }
+    catch (e) { st.textContent = ""; toast(e.message, 5000); }
     b.disabled = false;
   };
 
-  /* ---- style ---- */
-  const KEEP = ["size", "pos", "anim", "size2", "order"];
-  const lookStyle = L => lookStyleFrom(p.style, L);
-  let bgImg = null;
-  const paintThumb = (cv, style, cap, t) => paintThumbG(cv, style, cap, t, bgImg);
-  const thumbStyle = st => ({ ...st, size: 290, pos: 52, anim: "none" });
-  $("#lookgrid").innerHTML = LOOKS.map(L => `<button type="button" class="look" data-id="${L.id}"><canvas width="240" height="150"></canvas><span>${L.n}</span></button>`).join("");
-  async function paintLooks() {
-    for (const b of $$("#lookgrid .look")) { const st = lookStyle(LOOKS.find(L => L.id === b.dataset.id)); await ensureFont(st); paintThumb($("canvas", b), thumbStyle(st), THUMB_CAP); }
+  /* ---------- frame ---------- */
+  function syncFrame() {
+    const vr = p.width && p.height ? p.width / p.height : 9 / 16;
+    $("#ratios").innerHTML = Object.entries(LAYOUTS).map(([k, L]) => { const r = L.r || vr, w = r >= 1 ? 30 : Math.round(30 * r), h = r >= 1 ? Math.round(30 / r) : 30; return `<button type="button" class="ratio" data-v="${k}" aria-pressed="${p.layout === k}"><i style="width:${w}px;height:${h}px"></i>${L.n}</button>`; }).join("");
+    $$("#fitSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === p.fit));
+    $("#fitSeg").hidden = p.layout === "orig";
   }
-  $$("#lookgrid .look").forEach(b => b.onclick = async () => { Object.assign(p.style, lookStyle(LOOKS.find(L => L.id === b.dataset.id))); await ensureFont(p.style); syncStyle(); draw(); scheduleSave(); });
+  $("#ratios").addEventListener("click", e => { const b = e.target.closest(".ratio"); if (!b) return; p.layout = b.dataset.v; syncFrame(); changed(); sizeStage(); });
+  $$("#fitSeg button").forEach(b => b.onclick = () => { p.fit = b.dataset.v; syncFrame(); changed(); });
 
-  /* my styles */
-  const mine = () => settings.myStyles || (settings.myStyles = []);
-  async function renderMine() {
-    const list = mine();
-    $("#mygrid").innerHTML = list.length ? list.map(m => `<div class="mycard"><button type="button" class="look" data-my="${m.id}"><canvas width="240" height="150"></canvas><span>${esc(m.name)}</span></button><button class="mini del" data-mydel="${m.id}">ลบ</button></div>`).join("")
-      : `<p class="hint" style="grid-column:1/-1;margin:0">ยังไม่มีสไตล์ที่บันทึกไว้ ปรับสไตล์ให้ถูกใจ แล้วตั้งชื่อและกดบันทึก ใช้ซ้ำได้ทุกโปรเจกต์</p>`;
-    for (const m of list) { await ensureFont(m.style); const cv = $(`[data-my="${m.id}"] canvas`); if (cv) paintThumb(cv, thumbStyle(m.style), THUMB_CAP); }
-  }
-  $("#mygrid").addEventListener("click", async e => {
-    const a = e.target.closest("[data-my]"), d = e.target.closest("[data-mydel]");
-    if (a) { const m = mine().find(x => x.id === a.dataset.my); Object.assign(p.style, m.style, Object.fromEntries(KEEP.filter(k => k !== "anim").map(k => [k, p.style[k]]))); await ensureFont(p.style); syncStyle(); draw(); scheduleSave(); }
-    if (d) {
-      if (!d.dataset.sure) { d.dataset.sure = "1"; d.textContent = "ยืนยันลบ"; return; }
-      settings.myStyles = mine().filter(x => x.id !== d.dataset.mydel); saveSettings(); renderMine();
-    }
-  });
-  $("#mySave").onclick = () => {
-    const name = $("#myName").value.trim() || "สไตล์ของฉัน " + (mine().length + 1);
-    mine().unshift({ id: uid(), name, style: { ...p.style } }); saveSettings(); $("#myName").value = ""; renderMine(); toast(`บันทึก “${name}” แล้ว`);
-  };
-
-  /* fonts */
-  $("#fontgrid").innerHTML = FONTS.map(([f, w]) => `<button type="button" class="fontbtn" data-f="${f}" style="font-family:'${f}',${FALLBACK};font-weight:${w[1]}"><b>ตัวอย่าง</b><span>${f}</span></button>`).join("");
-  $$("#fontgrid .fontbtn").forEach(b => b.onclick = async () => {
-    const w = fontW(b.dataset.f); p.style.font = b.dataset.f; p.style.weight = p.style.weight >= 600 ? w[1] : w[0]; p.style.look = "";
-    await ensureFont(p.style); syncStyle(); draw(); scheduleSave();
-  });
-
-  /* animation picker with looping previews */
-  const FX_SAMPLE = { id: "s", start: 0.25, end: 2.5, text: "วันนี้มีของดี", tr: "" };
-  $("#fxgrid").innerHTML = Object.entries(ANIMS).map(([k, a]) => `<button type="button" class="fx" data-k="${k}"><canvas width="240" height="135"></canvas>${a.n}</button>`).join("");
-  $$("#fxgrid .fx").forEach(b => b.onclick = () => { p.style.anim = b.dataset.k; syncStyle(); draw(); scheduleSave(); });
-  let fxRaf = 0;
-  function fxTick(now) {
-    const t = (now % 3000) / 1000;
-    $$("#fxgrid .fx").forEach(b => paintThumb($("canvas", b), { ...p.style, anim: b.dataset.k, size: 200, pos: 52 }, FX_SAMPLE, t));
-    fxRaf = requestAnimationFrame(fxTick);
-  }
-  const stopFx = () => cancelAnimationFrame(fxRaf);
-  const startFx = () => { stopFx(); if (!$('[data-sp="anim"]').hidden && !$('.pane[data-p="style"]').hidden) fxRaf = requestAnimationFrame(fxTick); };
-  $$("#stTabs button").forEach(b => b.onclick = () => {
-    $$("#stTabs button").forEach(x => x.setAttribute("aria-selected", x === b));
-    $$("[data-sp]").forEach(x => x.hidden = x.dataset.sp !== b.dataset.s);
-    if (b.dataset.s === "mine") renderMine();
-    startFx();
-  });
-  if (p.thumb) { bgImg = new Image(); bgImg.onload = () => { paintLooks(); }; bgImg.src = p.thumb; }
-  paintLooks();
-
-  function syncStyle() {
-    const s = p.style;
-    $("#sSize").value = s.size; $("#oSize").textContent = s.size; $("#sPos").value = s.pos; $("#oPos").textContent = s.pos + "%";
-    $("#sColor").value = s.color; $("#sBold").checked = s.weight >= 600; $("#sStroke").value = s.stroke; $("#sStrokeC").value = s.strokeColor;
-    $("#sBox").checked = s.box; $("#sBoxO").value = s.boxOpacity; $("#sBoxC").value = s.boxColor; $("#sShadow").checked = s.shadow;
-    $("#sGlow").checked = !!s.glow; if (s.glow) $("#sGlowC").value = s.glow; $("#sDsh").checked = !!s.dshadow; if (s.dshadow) $("#sDshC").value = s.dshadow;
-    $("#sSize2").value = s.size2; $("#oSize2").textContent = s.size2 + "%"; $("#sColor2").value = s.color2;
-    $$("#sOrder button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === s.order));
-    $("#sHl").value = s.hl;
-    $$("#fxgrid .fx").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === s.anim));
-    $$("#lookgrid .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === s.look));
-    $$("#fontgrid .fontbtn").forEach(b => b.setAttribute("aria-pressed", b.dataset.f === s.font));
-  }
-  const bindS = (sel, key, conv = v => v, ev = "input") => $(sel).addEventListener(ev, async e => {
-    const el = e.target; p.style[key] = conv(el.type === "checkbox" ? el.checked : el.value);
-    if (!KEEP.includes(key) && key !== "hl" && key !== "color2") p.style.look = "";
-    if (key === "weight") await ensureFont(p.style);
-    syncStyle(); draw(); scheduleSave();
-  });
-  bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number);
-  bindS("#sColor", "color"); bindS("#sBold", "weight", v => fontW(p.style.font)[v ? 1 : 0]); bindS("#sStroke", "stroke", Number); bindS("#sStrokeC", "strokeColor");
-  bindS("#sBox", "box"); bindS("#sBoxO", "boxOpacity", Number); bindS("#sBoxC", "boxColor"); bindS("#sShadow", "shadow");
-  bindS("#sSize2", "size2", Number); bindS("#sColor2", "color2"); bindS("#sHl", "hl");
-  const fxToggle = (chk, col, key) => { const f = () => { p.style[key] = $(chk).checked ? $(col).value : ""; p.style.look = ""; syncStyle(); draw(); scheduleSave(); }; $(chk).onchange = f; $(col).oninput = () => { $(chk).checked = true; f(); }; };
-  fxToggle("#sGlow", "#sGlowC", "glow"); fxToggle("#sDsh", "#sDshC", "dshadow");
-  $$("#sOrder button").forEach(b => b.onclick = () => { p.style.order = b.dataset.v; syncStyle(); draw(); scheduleSave(); });
-  $("#sDef").onclick = () => { settings.style = { ...p.style }; saveSettings(); toast("ตั้งเป็นค่าเริ่มต้นแล้ว"); };
-
-  /* ---- export ---- */
+  /* ---------- export ---------- */
+  function syncExportHint() { const { W, H } = frameDims(p, video && video.videoWidth, video && video.videoHeight); $("#exHint").textContent = `ขนาด ${W}×${H} · ใช้เวลาประมาณเท่าความยาวคลิป (${fmtDur(p.duration)}) เปิดหน้าจอค้างไว้จนเสร็จ ห้ามสลับแอป`; }
   $("#srt").onclick = () => {
     const mode = $("#srtMode").value;
     const ts = t => { const ms = Math.round(t * 1000), h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60; return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms % 1000, 3)}`; };
@@ -1570,7 +1853,7 @@ async function viewEditor(id) {
     if (!blob) { toast("ต้องเลือกไฟล์วิดีโอก่อน"); return; }
     if (video) video.pause();
     const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC();
-    const v = document.createElement("video"); v.playsInline = true; v.preload = "auto";
+    const v = document.createElement("video"); v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
     v.style.cssText = "position:fixed;left:-10px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
     document.body.appendChild(v);
     const vurl = URL.createObjectURL(blob); v.src = vurl;
@@ -1590,8 +1873,7 @@ async function viewEditor(id) {
       await ensureFont(p.style);
       const bufs = {};
       for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
-      let W = v.videoWidth, H = v.videoHeight; const k = Math.min(1, 1920 / Math.max(W, H));
-      W = Math.round(W * k / 2) * 2; H = Math.round(H * k / 2) * 2;
+      const { W, H } = frameDims(p, v.videoWidth, v.videoHeight);
       const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
       const dest = ac.createMediaStreamDestination();
       const src = ac.createMediaElementSource(v), og = ac.createGain(); og.gain.value = p.audio.orig; src.connect(og).connect(dest);
@@ -1602,24 +1884,17 @@ async function viewEditor(id) {
       rec.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
       const stopped = new Promise(r => rec.onstop = r);
       v.currentTime = 0; if (v.seeking) await once(v, "seeked");
-      const frame = () => { ctx.drawImage(v, 0, 0, W, H); const cc = captionAt(p.captions, v.currentTime); if (cc) drawCaption(ctx, W, H, cc, p, v.currentTime); };
+      const frame = () => renderFrame(ctx, W, H, v, p, v.currentTime);
       const done = new Set();
       const schedule = () => {
         const now = v.currentTime;
         for (const s of p.sfx) {
           if (done.has(s.id) || !bufs[s.key]) continue;
           if (s.t < now - 0.05) { done.add(s.id); continue; }
-          if (s.t < now + 0.3) {
-            done.add(s.id);
-            const bs = ac.createBufferSource(); bs.buffer = bufs[s.key]; const g = ac.createGain(); g.gain.value = s.vol;
-            bs.connect(g).connect(sfxBus); bs.start(ac.currentTime + Math.max(0, s.t - now)); srcs.push(bs);
-          }
+          if (s.t < now + 0.3) { done.add(s.id); const bs = ac.createBufferSource(); bs.buffer = bufs[s.key]; const g = ac.createGain(); g.gain.value = s.vol; bs.connect(g).connect(sfxBus); bs.start(ac.currentTime + Math.max(0, s.t - now)); srcs.push(bs); }
         }
       };
-      frame();
-      rec.start(1000);
-      await ac.resume();
-      await v.play();
+      frame(); rec.start(1000); await ac.resume(); await v.play();
       let rafE = 0;
       const tick = () => { frame(); schedule(); const pct = Math.min(100, v.currentTime / v.duration * 100); $("#exBar").style.width = pct + "%"; $("#exTxt").textContent = `${pct.toFixed(0)}% · ${fmtDur(v.currentTime)} / ${fmtDur(v.duration)}`; if (!v.ended && !job.cancel) rafE = requestAnimationFrame(tick); };
       tick();
@@ -1628,18 +1903,15 @@ async function viewEditor(id) {
       await new Promise(r => { v.onended = r; job.done = r; });
       document.removeEventListener("visibilitychange", onHide);
       cancelAnimationFrame(rafE); frame();
-      // let a sound effect near the end finish ringing
       const tail = p.sfx.filter(s => bufs[s.key]).reduce((m, s) => Math.max(m, s.t + bufs[s.key].duration - v.duration), 0);
       await sleep(200 + Math.min(2500, Math.max(0, tail) * 1000));
       rec.stop(); await stopped;
       if (job.cancel) { finish(); toast("ยกเลิกแล้ว"); return; }
       const type = (rec.mimeType || mime || "video/webm").split(";")[0];
-      const out = new Blob(parts, { type }); const ext = type.includes("mp4") ? "mp4" : "webm";
-      const name = safeName(p.name) + "_ซับ." + ext;
+      const out = new Blob(parts, { type }), ext = type.includes("mp4") ? "mp4" : "webm", name = safeName(p.name) + "_ซับ." + ext;
       finish();
       const res = $("#exRes"); res.hidden = false;
-      const ourl = URL.createObjectURL(out);
-      res.innerHTML = `<video controls playsinline src="${ourl}"></video><span class="hint">${esc(name)} · ${fmtSize(out.size)}${ext === "webm" ? " · ไฟล์ .webm ถ้าแอปไหนไม่รองรับ ลองสร้างจาก Safari จะได้ .mp4" : ""}</span><div class="row"><button class="btn primary" id="oShare">บันทึก / แชร์</button><button class="btn" id="oDl">ดาวน์โหลดไฟล์</button></div>`;
+      res.innerHTML = `<video controls playsinline src="${URL.createObjectURL(out)}"></video><span class="hint">${esc(name)} · ${fmtSize(out.size)}${ext === "webm" ? " · ไฟล์ .webm ถ้าแอปไหนไม่รองรับ ลองสร้างจาก Safari จะได้ .mp4" : ""}</span><div class="row"><button class="btn primary" id="oShare">บันทึกลงเครื่อง / แชร์</button><button class="btn" id="oDl">ดาวน์โหลดไฟล์</button></div>`;
       $("#oShare").onclick = () => shareOrSave(out, name);
       $("#oDl").onclick = () => downloadBlob(out, name);
     } catch (e) {
@@ -1655,9 +1927,13 @@ async function viewEditor(id) {
   };
 
   await ensureFont(p.style);
-  syncStyle(); syncAudio(); syncLang();
-  buildStage(); renderCaps(); renderLib(); renderSfx();
-  cleanup = () => { cancelAnimationFrame(raf); stopFx(); stopLive(); clearTimeout(saveT); DB.put(p); window.removeEventListener("resize", onResize); if (url) URL.revokeObjectURL(url); };
+  syncStyleUI(); syncAudio(); syncLang(); syncFrame();
+  buildStage(); renderList(); renderLib(); renderSfx(); syncExportHint();
+  cleanup = () => {
+    cancelAnimationFrame(raf); stopFx(); stopLive(); clearTimeout(saveT); if (histT) clearTimeout(histT); DB.put(p);
+    window.removeEventListener("resize", onResize); document.removeEventListener("fullscreenchange", onFsChange); document.removeEventListener("keydown", onKey);
+    document.documentElement.style.overflow = ""; if (url) URL.revokeObjectURL(url);
+  };
 }
 
 /* ---------- Settings ---------- */
