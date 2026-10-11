@@ -314,6 +314,8 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .scn-ed{grid-column:1/-1;display:grid;gap:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .sw.big{font-family:var(--ui);font-weight:700;font-size:16px}
 .sw.big input{width:22px;height:22px}
+.chip2.thm{display:inline-flex;align-items:center;gap:6px}
+.chip2.thm i{width:14px;height:14px;border-radius:50%;display:block}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -421,11 +423,12 @@ function normalize(p) {
   p.style = { ...DEFAULT_STYLE, ...(p.style || {}) };
   p.tr = p.tr || { lang: "", mode: "main" };
   p.sfx = p.sfx || [];
-  p.audio = p.audio || { orig: 1, sfx: 0.9 };
+  p.audio = p.audio || { orig: 1, sfx: 0.75 };
   p.lang = p.lang || "th";
   p.layout = p.layout || "orig";
   p.fit = p.fit || "blur";
   p.split = p.split || { on: false, ratio: 0.5, top: "visual", scenes: [] };
+  p.split.theme = p.split.theme || "navy";
   return p;
 }
 
@@ -665,57 +668,85 @@ async function translateCaptions(caps, src, tgt, onProg) {
 }
 
 /* ================= sound effects ================= */
-// Built-in sounds are synthesized in the browser, so they need no download and are free to use.
-function nz(c, dur) { const len = Math.ceil(dur * c.sampleRate), b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; const s = c.createBufferSource(); s.buffer = b; return s; }
-function env(c, pts) { const g = c.createGain(); g.gain.setValueAtTime(pts[0][1], pts[0][0]); for (const [t, v] of pts.slice(1)) g.gain.linearRampToValueAtTime(v, t); return g; }
-function tone(c, out, type, f0, f1, start, dur, peak) {
-  const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, start); if (f1) o.frequency.exponentialRampToValueAtTime(f1, start + dur);
-  const g = c.createGain(); g.gain.setValueAtTime(0.0001, start); g.gain.exponentialRampToValueAtTime(peak, start + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  o.connect(g).connect(out); o.start(start); o.stop(start + dur + 0.02); return o;
+// Built-in sounds are designed and rendered in the browser (no downloads, no licence issues).
+// Every sound goes through the same chain: soft attack, low-pass to remove harshness, room reverb, gentle compression, quiet peak level.
+function nzb(c, dur, pink) {
+  const len = Math.ceil(dur * c.sampleRate), b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0);
+  let b0 = 0, b1 = 0, b2 = 0;
+  for (let i = 0; i < len; i++) {
+    const w = Math.random() * 2 - 1;
+    if (pink) { b0 = 0.99765 * b0 + w * 0.099; b1 = 0.963 * b1 + w * 0.2965; b2 = 0.57 * b2 + w * 1.0527; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.2; } else d[i] = w;
+  }
+  const s = c.createBufferSource(); s.buffer = b; return s;
 }
-function filt(c, type, f, q = 1) { const b = c.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
-function burst(c, out, start, dur, f, type = "bandpass", peak = 1) { const n = nz(c, dur + 0.02), b = filt(c, type, f, 1.5), g = env(c, [[start, 0], [start + 0.002, peak], [start + dur, 0]]); n.connect(b).connect(g).connect(out); n.start(start); }
-function sweep(c, out, dur, f0, fMid, f1, peakAt) {
-  const n = nz(c, dur), b = filt(c, "bandpass", f0, 1.2);
-  b.frequency.setValueAtTime(f0, 0); b.frequency.exponentialRampToValueAtTime(fMid, peakAt); b.frequency.exponentialRampToValueAtTime(f1, dur);
-  const g = env(c, [[0, 0], [peakAt, 1], [dur, 0]]); n.connect(b).connect(g).connect(out); n.start(0);
+const bq = (c, type, f, q = 0.7) => { const b = c.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; };
+function envG(c, pts) { const g = c.createGain(); g.gain.setValueAtTime(pts[0][1], pts[0][0]); for (const [t, v, k] of pts.slice(1)) { if (k === "e") g.gain.exponentialRampToValueAtTime(Math.max(1e-4, v), t); else g.gain.linearRampToValueAtTime(v, t); } return g; }
+function osc(c, out, type, f0, f1, t0, dur, peak, att = 0.005) {
+  const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.9);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + att); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(out); o.start(t0); o.stop(t0 + dur + 0.05); return o;
+}
+function bellTone(c, out, f, t0, dur, peak) { [[1, 1], [2.76, 0.4], [5.4, 0.16], [8.93, 0.06]].forEach(([r, a], i) => osc(c, out, "sine", f * r, 0, t0, dur / (1 + i * 0.9), peak * a, 0.003)); }
+function panTo(c, out, from, to, t0, dur) {
+  if (!c.createStereoPanner) return out;
+  const p = c.createStereoPanner(); p.pan.setValueAtTime(from, t0); p.pan.linearRampToValueAtTime(to, t0 + dur); p.connect(out); return p;
+}
+function air(c, out, dur, f0, fPeak, f1, peakAt, q = 0.9, lvl = 1, pan = null) {
+  const n = nzb(c, dur, true), bp = bq(c, "bandpass", f0, q);
+  bp.frequency.setValueAtTime(f0, 0); bp.frequency.exponentialRampToValueAtTime(fPeak, peakAt); bp.frequency.exponentialRampToValueAtTime(f1, dur);
+  const g = envG(c, [[0, 0], [peakAt, lvl], [dur, 0]]);
+  const dest = pan ? panTo(c, out, pan[0], pan[1], 0, dur) : out;
+  n.connect(bp).connect(g).connect(dest); n.start(0);
 }
 const BUILTIN = {
-  whoosh: { n: "วูช", d: 0.65, en: "whoosh, fast transition or movement", f: (c, o) => sweep(c, o, 0.65, 300, 3500, 700, 0.3) },
-  whooshdown: { n: "วูชลง", d: 0.65, en: "downward whoosh, closing or dropping", f: (c, o) => sweep(c, o, 0.65, 4000, 1200, 250, 0.2) },
-  swipe: { n: "ปัด", d: 0.28, en: "quick swipe, switching item", f: (c, o) => sweep(c, o, 0.28, 800, 5000, 2000, 0.12) },
-  pop: { n: "ป๊อป", d: 0.16, en: "pop, a new point or list item appears", f: (c, o) => tone(c, o, "sine", 900, 160, 0, 0.13, 1) },
-  click: { n: "คลิก", d: 0.06, en: "mouse click, pressing a button", f: (c, o) => burst(c, o, 0, 0.03, 2500, "highpass") },
-  ding: { n: "ติ๊ง", d: 1.6, en: "ding bell, tip or important idea", f: (c, o) => { tone(c, o, "sine", 1568, 0, 0, 1.5, 0.6); tone(c, o, "sine", 4327, 0, 0, 0.45, 0.18); tone(c, o, "sine", 3136, 0, 0, 0.8, 0.15); } },
-  notify: { n: "แจ้งเตือน", d: 0.6, en: "notification chime, new message or update", f: (c, o) => { tone(c, o, "sine", 1046.5, 0, 0, 0.22, 0.55); tone(c, o, "sine", 1568, 0, 0.1, 0.45, 0.55); } },
-  correct: { n: "ถูกต้อง", d: 0.9, en: "correct answer chime, yes, agreement, success", f: (c, o) => { tone(c, o, "triangle", 880, 0, 0, 0.25, 0.5); tone(c, o, "triangle", 1318.5, 0, 0.12, 0.7, 0.6); } },
-  wrong: { n: "ผิด", d: 0.7, en: "wrong buzzer, mistake, no", f: (c, o) => { const lp = filt(c, "lowpass", 1400); lp.connect(o); tone(c, lp, "square", 150, 0, 0, 0.6, 0.35); tone(c, lp, "square", 157, 0, 0, 0.6, 0.35); } },
-  kaching: { n: "กริ๊งเงิน", d: 1.2, en: "cash register ka-ching, price, money, deal, sale", f: (c, o) => { burst(c, o, 0, 0.04, 3000); tone(c, o, "sine", 2093, 0, 0.05, 0.9, 0.45); tone(c, o, "sine", 2637, 0, 0.15, 0.9, 0.45); tone(c, o, "sine", 5274, 0, 0.15, 0.4, 0.12); } },
-  boom: { n: "ตูม", d: 1.4, en: "deep boom impact, big reveal or dramatic moment", f: (c, o) => { tone(c, o, "sine", 110, 32, 0, 1.3, 1); const n = nz(c, 0.7), lp = filt(c, "lowpass", 380), g = env(c, [[0, 0], [0.01, 0.9], [0.6, 0]]); n.connect(lp).connect(g).connect(o); n.start(0); } },
-  riser: { n: "ไต่ระดับ", d: 2.2, en: "rising tension build-up before a reveal", f: (c, o) => { sweep(c, o, 2.2, 200, 6000, 6000, 2.05); const s = c.createOscillator(); s.type = "sawtooth"; s.frequency.setValueAtTime(110, 0); s.frequency.exponentialRampToValueAtTime(880, 2.1); const g = env(c, [[0, 0], [2.05, 0.12], [2.2, 0]]); s.connect(g).connect(o); s.start(0); s.stop(2.2); } },
-  boing: { n: "ดึ๋ง", d: 0.75, en: "cartoon boing, funny or silly moment", f: (c, o) => { const s = c.createOscillator(); s.type = "sine"; s.frequency.setValueAtTime(180, 0); s.frequency.exponentialRampToValueAtTime(420, 0.5); const l = c.createOscillator(); l.frequency.value = 14; const lg = c.createGain(); lg.gain.setValueAtTime(90, 0); lg.gain.linearRampToValueAtTime(5, 0.7); l.connect(lg).connect(s.frequency); const g = env(c, [[0, 0], [0.01, 0.8], [0.72, 0]]); s.connect(g).connect(o); s.start(0); l.start(0); s.stop(0.75); l.stop(0.75); } },
-  shutter: { n: "ชัตเตอร์", d: 0.25, en: "camera shutter, photo or screenshot moment", f: (c, o) => { burst(c, o, 0, 0.035, 2500); burst(c, o, 0.09, 0.05, 1800); } },
-  typing: { n: "พิมพ์ดีด", d: 1.0, en: "keyboard typing, text or search appearing", f: (c, o) => { let t = 0.02; while (t < 0.9) { burst(c, o, t, 0.018, 2500 + Math.random() * 2500, "bandpass", 0.5 + Math.random() * 0.5); t += 0.06 + Math.random() * 0.07; } } },
-  glitch: { n: "กลิตช์", d: 0.5, en: "digital glitch, error or techy transition", f: (c, o) => { for (let i = 0; i < 10; i++) tone(c, o, "square", 200 + Math.random() * 1800, 0, i * 0.045, 0.04, 0.25); } }
+  whoosh: { n: "วูช", d: 0.75, rv: 0.12, lp: 6500, en: "soft air whoosh, transition or movement", f: (c, o) => air(c, o, 0.75, 260, 1700, 420, 0.33, 0.8, 1, [-0.6, 0.6]) },
+  swish: { n: "สวิช", d: 0.32, rv: 0.08, lp: 8000, en: "quick light swish, switching item or quick cut", f: (c, o) => air(c, o, 0.32, 1100, 3800, 2200, 0.12, 1.1, 1, [0.4, -0.4]) },
+  whooshdown: { n: "วูชลง", d: 0.7, rv: 0.12, lp: 6000, en: "downward whoosh, closing or wrapping up", f: (c, o) => air(c, o, 0.7, 2600, 1200, 280, 0.2, 0.8, 1, [0.5, -0.5]) },
+  pop: { n: "ป๊อป", d: 0.18, rv: 0.06, lp: 3500, en: "soft bubble pop, a new point appears", f: (c, o) => { osc(c, o, "sine", 560, 170, 0, 0.13, 1, 0.003); osc(c, o, "sine", 1120, 340, 0, 0.06, 0.18, 0.002); } },
+  click: { n: "คลิก", d: 0.08, rv: 0.04, lp: 6000, en: "soft UI tap, pressing a button", f: (c, o) => { const n = nzb(c, 0.03), b = bq(c, "bandpass", 3200, 2.2), g = envG(c, [[0, 0], [0.002, 0.5], [0.025, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(0); osc(c, o, "sine", 1800, 1200, 0, 0.035, 0.25, 0.002); } },
+  hit: { n: "เน้นหนัก", d: 0.35, rv: 0.1, lp: 4000, en: "short punchy hit to emphasise a key word", f: (c, o) => { osc(c, o, "sine", 165, 52, 0, 0.3, 1, 0.003); const n = nzb(c, 0.04), b = bq(c, "bandpass", 2400, 1.4), g = envG(c, [[0, 0], [0.002, 0.35], [0.035, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(0); } },
+  sparkle: { n: "วิบวับ", d: 0.9, rv: 0.4, lp: 9000, en: "gentle shimmer, a benefit or wow moment", f: (c, o) => { [1318.5, 1568, 1760, 2093, 2349, 2637, 3136].forEach((f, i) => osc(c, panTo(c, o, (i % 2 ? 0.4 : -0.4), (i % 2 ? 0.4 : -0.4), 0, 1), "sine", f, 0, i * 0.055 + Math.random() * 0.02, 0.45, 0.13, 0.004)); } },
+  ding: { n: "ติ๊ง", d: 1.4, rv: 0.28, lp: 8000, en: "clean bell ding, a tip or idea", f: (c, o) => bellTone(c, o, 1318.5, 0, 1.4, 0.5) },
+  chime: { n: "ถูกต้อง", d: 0.9, rv: 0.25, lp: 7000, en: "two-note positive chime, success, yes, agreement", f: (c, o) => { bellTone(c, o, 1046.5, 0, 0.55, 0.45); bellTone(c, o, 1568, 0.11, 0.8, 0.5); } },
+  notify: { n: "แจ้งเตือน", d: 0.7, rv: 0.22, lp: 6000, en: "soft notification, new message or update", f: (c, o) => { osc(c, o, "triangle", 880, 0, 0, 0.32, 0.4, 0.006); osc(c, o, "triangle", 1318.5, 0, 0.09, 0.45, 0.4, 0.006); } },
+  kaching: { n: "เงิน", d: 1.1, rv: 0.2, lp: 8500, en: "coins and register bell, price, money, saving, deal", f: (c, o) => { const hp = bq(c, "highpass", 2400, 0.7); hp.connect(o); for (let i = 0; i < 6; i++) osc(c, hp, "sine", 3200 + Math.random() * 2000, 0, i * 0.04 + Math.random() * 0.02, 0.18, 0.16, 0.002); bellTone(c, o, 2093, 0.06, 0.9, 0.28); } },
+  boom: { n: "ตูม", d: 1.6, rv: 0.35, lp: 2200, en: "deep cinematic impact, big reveal or shocking fact", f: (c, o) => { osc(c, o, "sine", 92, 36, 0, 1.4, 1, 0.004); const n = nzb(c, 0.6, true), lp = bq(c, "lowpass", 380, 0.7), g = envG(c, [[0, 0], [0.006, 0.7], [0.5, 0.0001, "e"]]); n.connect(lp).connect(g).connect(o); n.start(0); } },
+  riser: { n: "ไต่ระดับ", d: 2.2, rv: 0.2, lp: 7000, en: "tension riser before a reveal", f: (c, o) => { air(c, o, 2.2, 220, 3800, 4200, 2.05, 0.7, 0.9); osc(c, o, "sine", 220, 660, 0, 2.15, 0.07, 1.6); } },
+  shutter: { n: "ชัตเตอร์", d: 0.22, rv: 0.05, lp: 7000, en: "camera shutter, photo or screenshot", f: (c, o) => { [0, 0.075].forEach((t, i) => { const n = nzb(c, 0.05), b = bq(c, "bandpass", i ? 1700 : 2400, 1.6), g = envG(c, [[t, 0], [t + 0.002, 0.6], [t + 0.045, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(t); }); } },
+  typing: { n: "พิมพ์", d: 1.0, rv: 0.05, lp: 4500, en: "soft keyboard typing, text or search appears", f: (c, o) => { let t = 0.02; while (t < 0.9) { const n = nzb(c, 0.03), b = bq(c, "bandpass", 2000 + Math.random() * 1500, 2), g = envG(c, [[t, 0], [t + 0.002, 0.3 + Math.random() * 0.2], [t + 0.025, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(t); t += 0.07 + Math.random() * 0.07; } } },
+  boing: { n: "ดึ๋ง", d: 0.6, rv: 0.08, lp: 2500, en: "light playful boing, funny moment", f: (c, o) => { const s = c.createOscillator(); s.type = "sine"; s.frequency.setValueAtTime(200, 0); s.frequency.exponentialRampToValueAtTime(420, 0.45); const l = c.createOscillator(); l.frequency.value = 11; const lg = c.createGain(); lg.gain.setValueAtTime(40, 0); lg.gain.linearRampToValueAtTime(4, 0.55); l.connect(lg).connect(s.frequency); const g = envG(c, [[0, 0], [0.01, 0.6], [0.55, 0.0001, "e"]]); s.connect(g).connect(o); s.start(0); l.start(0); s.stop(0.6); l.stop(0.6); } },
+  wrong: { n: "ผิด", d: 0.55, rv: 0.12, lp: 1800, en: "soft two-note wrong answer, mistake, no", f: (c, o) => { osc(c, o, "triangle", 392, 0, 0, 0.22, 0.5, 0.008); osc(c, o, "triangle", 311, 0, 0.17, 0.35, 0.5, 0.008); } }
 };
+const SFX_ALIAS = { correct: "chime", glitch: "swish" };
 const bufCache = new Map();
+function makeIR(c, sec) {
+  const len = Math.floor(sec * c.sampleRate), b = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+  return b;
+}
 async function renderBuiltin(key) {
-  const d = BUILTIN[key]; const rate = 44100;
-  const c = new OfflineAudioContext(1, Math.ceil(d.d * rate), rate);
-  const master = c.createGain(); master.connect(c.destination);
-  d.f(c, master);
+  const d = BUILTIN[key], rate = 44100, tail = 0.15 + (d.rv || 0) * 2.4;
+  const c = new OfflineAudioContext(2, Math.ceil((d.d + tail) * rate), rate);
+  const comp = c.createDynamicsCompressor();
+  comp.threshold.value = -18; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.15;
+  const hp = bq(c, "highpass", 45, 0.5), lp = bq(c, "lowpass", d.lp || 8000, 0.5);
+  hp.connect(lp).connect(comp).connect(c.destination);
+  const dry = c.createGain(); dry.connect(hp);
+  if (d.rv) { const cv = c.createConvolver(); cv.buffer = makeIR(c, 0.5 + d.rv * 2); const wet = c.createGain(); wet.gain.value = d.rv * 0.9; dry.connect(cv); cv.connect(wet).connect(hp); }
+  d.f(c, dry);
   const b = await c.startRendering();
-  const ch = b.getChannelData(0); let pk = 0; for (let i = 0; i < ch.length; i++) pk = Math.max(pk, Math.abs(ch[i]));
-  if (pk > 0) { const k = 0.9 / pk; for (let i = 0; i < ch.length; i++) ch[i] *= k; }
+  let pk = 0; for (let ch = 0; ch < b.numberOfChannels; ch++) { const x = b.getChannelData(ch); for (let i = 0; i < x.length; i += 2) pk = Math.max(pk, Math.abs(x[i])); }
+  if (pk > 0) { const k = 0.6 / pk; for (let ch = 0; ch < b.numberOfChannels; ch++) { const x = b.getChannelData(ch); for (let i = 0; i < x.length; i++) x[i] *= k; } }
   return b;
 }
 let customLib = []; // [{id,name,blob}]
 async function loadCustomLib() { try { customLib = await DB.sfxAll(); } catch { customLib = []; } }
-function sfxName(key) { if (key.startsWith("b:")) return (BUILTIN[key.slice(2)] || {}).n || key; const c = customLib.find(x => "c:" + x.id === key); return c ? c.name : "เสียงที่ถูกลบ"; }
+const bkey = k => BUILTIN[k] ? k : SFX_ALIAS[k];
+function sfxName(key) { if (key.startsWith("b:")) return (BUILTIN[bkey(key.slice(2))] || {}).n || "เสียง"; const c = customLib.find(x => "c:" + x.id === key); return c ? c.name : "เสียงที่ถูกลบ"; }
 async function getSfxBuffer(key) {
   if (bufCache.has(key)) return bufCache.get(key);
   let b = null;
-  if (key.startsWith("b:") && BUILTIN[key.slice(2)]) b = await renderBuiltin(key.slice(2));
+  if (key.startsWith("b:") && bkey(key.slice(2))) b = await renderBuiltin(bkey(key.slice(2)));
   else {
     const c = customLib.find(x => "c:" + x.id === key);
     if (c) { const ab = await c.blob.arrayBuffer(); const tmp = new OfflineAudioContext(1, 1, 44100); b = await new Promise((res, rej) => { const pr = tmp.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); }); }
@@ -829,7 +860,8 @@ function drawCaption(ctx, W, H, cap, p, t) {
     const txt = main.text, ranges = [];
     for (const ph of cap.hl) { if (!ph) continue; let i = txt.indexOf(ph); while (i >= 0) { ranges.push([i, i + ph.length]); i = txt.indexOf(ph, i + ph.length); } }
     let cur = 0;
-    rows.forEach(rw => { if (rw.b !== main) return; rw.toks.forEach(tk => { if (tk.sp) return; const i = txt.indexOf(tk.s, cur); if (i < 0) return; tk.kw = ranges.some(([a, b]) => i < b && i + tk.s.length > a); cur = i + tk.s.length; }); });
+    const tot = Math.max(1, vlen(txt));
+    rows.forEach(rw => { if (rw.b !== main) return; rw.toks.forEach(tk => { if (tk.sp) return; const i = txt.indexOf(tk.s, cur); if (i < 0) return; tk.kw = ranges.some(([a, b]) => i < b && i + tk.s.length > a); if (tk.kw) tk.kwT = cap.start + (cap.end - cap.start) * vlen(txt.slice(0, i)) / tot; cur = i + tk.s.length; }); });
   }
   const total = rows.reduce((a, r) => a + r.lh, 0);
   const pad0 = main.px * 0.3;
@@ -885,7 +917,9 @@ function drawCaption(ctx, W, H, cap, p, t) {
     ctx.font = font(rw.px);
     const yy = rw.y + rw.px * 0.04;
     let x = cx - rw.w / 2;
-    const items = rw.toks.map(tk => { const it = { tk, x, ...(tk.sp ? { show: "" } : state(tk)) }; if (tk.kw && !it.color && !it.hbox) it.color = st.kwColor || "#FFE14D"; x += tk.w; return it; });
+    const items = rw.toks.map(tk => { const it = { tk, x, ...(tk.sp ? { show: "" } : state(tk)) }; if (tk.kw && !it.color && !it.hbox) it.color = st.kwColor || "#FFE14D";
+      if (tk.kw && st.kwPop !== false && tk.kwT != null && t >= tk.kwT) { const k = (t - tk.kwT) / 0.32; if (k < 1) it.pop = (it.pop || 1) * (1 + 0.26 * Math.sin(Math.PI * k)); }
+      x += tk.w; return it; });
     const withPop = (it, fn) => {
       if (!it.pop || it.pop === 1) { fn(); return; }
       ctx.save(); const cx = it.x + it.tk.w / 2; ctx.translate(cx, yy); ctx.scale(it.pop, it.pop); ctx.translate(-cx, -yy); fn(); ctx.restore();
@@ -954,14 +988,20 @@ function renderFrame(ctx, W, H, v, p, t, media) {
     const { vis, vid } = splitRects(p, W, H);
     try { if (v && v.videoWidth) drawCover(ctx, v, vid); } catch {}
     const sc = sceneAt(p, t);
-    if (sc) { try { drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, t - sc.start, media ? media(sc, t) : null); } catch (e) { console.error(e); } }
+    if (sc) { try { drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, t - sc.start, media ? media(sc, t) : null, p.split.theme); } catch (e) { console.error(e); } }
   } else { try { drawVideo(ctx, W, H, v, p, null); } catch {} }
   const c = captionAt(p.captions, t); if (c) { try { drawCaption(ctx, W, H, c, p, t); } catch (e) { console.error(e); } }
 }
 
 /* ================= Split screen: animated explainer scenes ================= */
 const SCENE_TYPES = { big: "หัวข้อ", number: "ตัวเลข", list: "ลิสต์", vs: "เปรียบเทียบ", bars: "กราฟ", quote: "คำพูด" };
-const THEMES = [["#14213D", "#3A5BD9"], ["#0B3D3A", "#11A37F"], ["#2E0F5C", "#C2185B"], ["#1A1A2E", "#E94560"], ["#22223B", "#E09F3E"], ["#0D1B2A", "#0582CA"]];
+const SCENE_THEMES = {
+  navy: { n: "กรมท่า", bg: ["#0B1730", "#1A2E56"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#F5C542", ink: "#1B1503", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", dot: "rgba(255,255,255,.06)" },
+  night: { n: "ดำเทค", bg: ["#090C12", "#171F2D"], fg: "#FFFFFF", sub: "rgba(255,255,255,.68)", accent: "#4DD8FF", ink: "#04202A", card: "rgba(255,255,255,.07)", line: "rgba(255,255,255,.14)", dot: "rgba(255,255,255,.05)" },
+  light: { n: "ขาวสะอาด", bg: ["#F8F9FB", "#E8ECF2"], fg: "#0F172A", sub: "rgba(15,23,42,.62)", accent: "#2457F5", ink: "#FFFFFF", card: "rgba(15,23,42,.05)", line: "rgba(15,23,42,.12)", dot: "rgba(15,23,42,.06)" },
+  green: { n: "เขียวสนาม", bg: ["#082820", "#114536"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#A6E35A", ink: "#10220A", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", dot: "rgba(255,255,255,.06)" },
+  warm: { n: "ส้มอุ่น", bg: ["#22101C", "#46192A"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#FFB347", ink: "#2A1500", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", dot: "rgba(255,255,255,.06)" }
+};
 const EMOJI_FONT = `"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
 const SFONT = (w, px) => `${w} ${px}px "Kanit", "Noto Sans Thai", sans-serif`;
 const hashStr = s => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); };
@@ -989,102 +1029,113 @@ function drawCover(ctx, src, r, zoom = 1) {
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
   ctx.drawImage(src, r.x + (r.w - sw * k) / 2, r.y + (r.h - sh * k) / 2, sw * k, sh * k); ctx.restore();
 }
-/* t = seconds since the scene started */
-function drawScene(ctx, X, Y, W, H, sc, t, media) {
+/* t = seconds since the scene started; theme = key of SCENE_THEMES (one look for the whole video) */
+function drawScene(ctx, X, Y, W, H, sc, t, media, theme) {
   ctx.save(); ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip(); ctx.translate(X, Y);
   const dur = Math.max(0.5, sc.end - sc.start), e = Math.max(0, t), u = Math.min(W, H) / 100;
+  const T = SCENE_THEMES[theme] || SCENE_THEMES.navy;
   if (media && (media.naturalWidth || media.videoWidth)) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
-    try { drawCover(ctx, media, { x: 0, y: 0, w: W, h: H }, media.videoWidth ? 1 : 1 + 0.08 * clamp01(e / dur)); } catch {}
+    try { drawCover(ctx, media, { x: 0, y: 0, w: W, h: H }, media.videoWidth ? 1 : 1.02 + 0.06 * clamp01(e / dur)); } catch {}
     ctx.restore(); return;
   }
-  const th = THEMES[(sc.theme != null ? sc.theme : hashStr(sc.id)) % THEMES.length];
-  const ang = e * 0.25, g = ctx.createLinearGradient(W / 2 - Math.cos(ang) * W, 0, W / 2 + Math.cos(ang) * W, H);
-  g.addColorStop(0, th[0]); g.addColorStop(1, th[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const seed = hashStr(sc.id);
-  for (let i = 0; i < 6; i++) {
-    const r = (8 + ((seed >> (i * 3)) % 14)) * u;
-    const x = ((seed * (i + 3) * 37) % 100) / 100 * W + Math.sin(e * 0.6 + i) * 6 * u;
-    const y = ((seed * (i + 7) * 53) % 100) / 100 * H + Math.cos(e * 0.5 + i * 2) * 6 * u;
-    ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  }
-  const inK = eOut(e / 0.35), outK = clamp01((dur - e) / 0.25);
-  ctx.globalAlpha = Math.min(inK, outK); ctx.translate(0, (1 - inK) * 6 * u);
+  /* backdrop: calm gradient, drifting dot grid, soft accent glow */
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, T.bg[0]); g.addColorStop(1, T.bg[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const gx = W * (0.3 + 0.4 * Math.sin(e * 0.35 + hashStr(sc.id) % 7)), gy = H * 0.35;
+  const rg = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.7); rg.addColorStop(0, T.accent + "26"); rg.addColorStop(1, T.accent + "00"); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+  const step = 6 * u, off = (e * u * 1.2) % step; ctx.fillStyle = T.dot;
+  for (let y = -step + off; y < H + step; y += step) for (let x = step / 2; x < W; x += step) { ctx.beginPath(); ctx.arc(x, y, 0.35 * u, 0, Math.PI * 2); ctx.fill(); }
+  /* scene progress line */
+  ctx.fillStyle = T.line; ctx.fillRect(0, H - 0.8 * u, W, 0.8 * u);
+  ctx.fillStyle = T.accent; ctx.fillRect(0, H - 0.8 * u, W * clamp01(e / dur), 0.8 * u);
+  /* content enters from the right, leaves with a short fade */
+  const inK = eOut(e / 0.45), outK = clamp01((dur - e) / 0.22);
+  ctx.globalAlpha = Math.min(inK, outK); ctx.translate((1 - inK) * 10 * u, 0);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const accent = "#FFD400", white = "#FFFFFF";
-  const shadowOn = () => { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 2 * u; ctx.shadowOffsetY = 0.6 * u; };
-  const shadowOff = () => { ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; };
-  const emoji = (ch, x, y, px, k = 1) => { if (!ch || k <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.font = `${px}px ${EMOJI_FONT}`; ctx.fillText(ch, 0, 0); ctx.restore(); };
-  const block = (text, x, y, maxW, px, weight, color, maxLines, shown) => {
-    if (!text) return; const f = fitText(ctx, text, maxW, px, weight, maxLines);
-    ctx.font = SFONT(weight, f.size); ctx.fillStyle = color; shadowOn();
-    const lines = shown == null ? f.lines : wrapLines(ctx, shown, maxW, "th");
-    const lh = f.size * 1.3, y0 = y - (f.lines.length - 1) * lh / 2;
-    lines.forEach((l, i) => ctx.fillText(l, x, y0 + i * lh)); shadowOff();
+  const shadow = on => { if (on && theme !== "light") { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 1.6 * u; ctx.shadowOffsetY = 0.4 * u; } else { ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; } };
+  const badge = (ch, x, y, r, k) => {
+    if (!ch || k <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(k, k);
+    ctx.fillStyle = T.card; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = T.accent; ctx.globalAlpha *= 0.7; ctx.lineWidth = 0.45 * u; ctx.stroke(); ctx.globalAlpha /= 0.7;
+    ctx.font = `${r * 1.05}px ${EMOJI_FONT}`; ctx.fillText(ch, 0, r * 0.06); ctx.restore();
   };
+  /* lines rise into place one after another */
+  const reveal = (text, x, y, maxW, px, weight, color, maxLines, delay, shown) => {
+    if (!text) return 0; const f = fitText(ctx, text, maxW, px, weight, maxLines);
+    const lines = shown == null ? f.lines : wrapLines(ctx, shown, maxW, "th"), lh = f.size * 1.28, y0 = y - (f.lines.length - 1) * lh / 2;
+    ctx.font = SFONT(weight, f.size); ctx.fillStyle = color; shadow(true);
+    lines.forEach((l, i) => { const k = eOut((e - delay - i * 0.1) / 0.4); if (k <= 0) return; ctx.save(); ctx.globalAlpha *= k; ctx.fillText(l, x, y0 + i * lh + (1 - k) * 3 * u); ctx.restore(); });
+    shadow(false); return f.lines.length * lh;
+  };
+  const underline = (y, delay, w) => { const k = eOut((e - delay) / 0.5); if (k <= 0) return; ctx.fillStyle = T.accent; rrect(ctx, W / 2 - w * k / 2, y, w * k, 0.9 * u, 0.45 * u); ctx.fill(); };
+  const at = (tt, fb) => tt != null && isFinite(tt) ? Math.max(0, tt - sc.start) : fb;
   const type = SCENE_TYPES[sc.type] ? sc.type : "big";
   if (type === "big") {
-    emoji(sc.emoji, W / 2, H * 0.3, 20 * u, bOut(e / 0.5) * (1 + 0.04 * Math.sin(e * 3)));
-    block(sc.title, W / 2, H * (sc.emoji ? 0.62 : 0.5), W * 0.86, 11 * u, 800, white, 2);
-    if (sc.label) { ctx.save(); ctx.globalAlpha *= clamp01((e - 0.3) / 0.3); block(sc.label, W / 2, H * 0.83, W * 0.8, 5.5 * u, 500, "rgba(255,255,255,.88)", 2); ctx.restore(); }
+    const hasE = !!sc.emoji;
+    badge(sc.emoji, W / 2, H * 0.28, 10 * u, bOut(e / 0.55));
+    const hh = reveal(sc.title, W / 2, H * (hasE ? 0.58 : 0.45), W * 0.84, 10.5 * u, 800, T.fg, 2, 0.12);
+    underline(H * (hasE ? 0.58 : 0.45) + hh / 2 + 2 * u, 0.35, 16 * u);
+    reveal(sc.label, W / 2, H * (hasE ? 0.8 : 0.72), W * 0.8, 5.2 * u, 500, T.sub, 2, 0.45);
   } else if (type === "number") {
-    const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/);
+    const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/), t0 = at(sc.valueT, 0.2);
     let shown = raw;
-    if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * eOut(e / 0.9)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
-    emoji(sc.emoji, W / 2, H * 0.2, 12 * u, bOut(e / 0.4));
-    ctx.save(); const f = fitText(ctx, raw, W * 0.9, 19 * u, 800, 1); ctx.font = SFONT(800, f.size); ctx.fillStyle = accent; shadowOn(); ctx.fillText(shown, W / 2, H * 0.47); ctx.restore();
-    block(sc.label || sc.title, W / 2, H * 0.74, W * 0.84, 6.5 * u, 600, white, 2);
+    if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * eOut((e - t0) / 0.9)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
+    badge(sc.emoji, W / 2, H * 0.18, 6.5 * u, bOut(e / 0.5));
+    reveal(sc.title, W / 2, H * (sc.emoji ? 0.32 : 0.24), W * 0.84, 5.4 * u, 600, T.sub, 1, 0.1);
+    const f = fitText(ctx, raw, W * 0.9, 18 * u, 800, 1), k = eOut((e - t0 + 0.15) / 0.35);
+    if (k > 0) { ctx.save(); ctx.globalAlpha *= k; ctx.font = SFONT(800, f.size); ctx.fillStyle = T.accent; shadow(true); ctx.translate(W / 2, H * 0.52); const s = 0.85 + 0.15 * bOut((e - t0 + 0.15) / 0.45); ctx.scale(s, s); ctx.fillText(shown, 0, 0); ctx.restore(); }
+    underline(H * 0.52 + f.size * 0.62, t0 + 0.4, 22 * u);
+    reveal(sc.label, W / 2, H * 0.76, W * 0.84, 6 * u, 600, T.fg, 2, t0 + 0.3);
   } else if (type === "list") {
-    const items = (sc.items || []).filter(Boolean).slice(0, 4), top = sc.title ? H * 0.24 : H * 0.1;
-    if (sc.title) block((sc.emoji ? sc.emoji + " " : "") + sc.title, W / 2, H * 0.13, W * 0.88, 7.5 * u, 800, white, 1);
-    const n = items.length || 1, rowH = Math.min(17 * u, (H - top - 5 * u) / n);
+    const items = (sc.items || []).filter(Boolean).slice(0, 4), tt = sc.itemsT || [];
+    if (sc.title) reveal((sc.emoji ? sc.emoji + "  " : "") + sc.title, W / 2, H * 0.14, W * 0.88, 7 * u, 800, T.fg, 1, 0.05);
+    const top = sc.title ? H * 0.25 : H * 0.1, n = items.length || 1, rowH = Math.min(16 * u, (H - top - 6 * u) / n);
+    const shownAt = items.map((_, i) => at(tt[i], 0.35 + i * 0.45));
+    let current = -1; shownAt.forEach((s, i) => { if (e >= s) current = i; });
     items.forEach((it, i) => {
-      const k = eOut((e - 0.3 - i * 0.4) / 0.35); if (k <= 0) return;
-      const y = top + rowH * (i + 0.5) + (1 - k) * 4 * u, x0 = W * 0.08, bw = W * 0.84, bh = rowH * 0.8;
-      ctx.save(); ctx.globalAlpha *= k;
-      ctx.fillStyle = "rgba(255,255,255,.15)"; rrect(ctx, x0, y - bh / 2, bw, bh, bh * 0.25); ctx.fill();
-      ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(x0 + bh * 0.55, y, bh * 0.28, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "#1B1503"; ctx.lineWidth = bh * 0.07; ctx.lineCap = "round"; ctx.lineJoin = "round";
-      ctx.beginPath(); ctx.moveTo(x0 + bh * 0.42, y); ctx.lineTo(x0 + bh * 0.52, y + bh * 0.1); ctx.lineTo(x0 + bh * 0.7, y - bh * 0.12); ctx.stroke();
-      ctx.textAlign = "left"; const f = fitText(ctx, it, bw - bh * 1.3, Math.min(6.5 * u, bh * 0.42), 600, 1);
-      ctx.font = SFONT(600, f.size); ctx.fillStyle = white; ctx.fillText(f.lines[0] || "", x0 + bh * 1.05, y); ctx.restore();
+      const k = eOut((e - shownAt[i]) / 0.35); if (k <= 0) return;
+      const y = top + rowH * (i + 0.5), x0 = W * 0.08 + (1 - k) * 6 * u, bw = W * 0.84, bh = rowH * 0.82, on = i === current;
+      ctx.save(); ctx.globalAlpha *= k * (on ? 1 : 0.78);
+      ctx.fillStyle = T.card; rrect(ctx, x0, y - bh / 2, bw, bh, bh * 0.22); ctx.fill();
+      if (on) { ctx.strokeStyle = T.accent; ctx.lineWidth = 0.4 * u; ctx.stroke(); }
+      ctx.fillStyle = T.accent; ctx.beginPath(); ctx.arc(x0 + bh * 0.55, y, bh * 0.27, 0, Math.PI * 2); ctx.fill();
+      ctx.font = SFONT(800, bh * 0.3); ctx.fillStyle = T.ink; ctx.fillText(String(i + 1), x0 + bh * 0.55, y + bh * 0.02);
+      ctx.textAlign = "left"; const f = fitText(ctx, it, bw - bh * 1.35, Math.min(6.2 * u, bh * 0.4), 600, 1);
+      ctx.font = SFONT(600, f.size); ctx.fillStyle = T.fg; ctx.fillText(f.lines[0] || "", x0 + bh * 1.05, y); ctx.restore();
     });
   } else if (type === "vs") {
-    const kA = eOut(e / 0.45), kB = eOut((e - 0.2) / 0.45), cw = W * 0.4, ch = H * 0.62, y = H * 0.54;
-    const ems = sc.items || [];
-    const card = (x, txt, col, k, em) => { if (k <= 0) return; ctx.save(); ctx.globalAlpha *= k; ctx.fillStyle = col; rrect(ctx, x - cw / 2, y - ch / 2, cw, ch, 3 * u); ctx.fill(); emoji(em, x, y - ch * 0.2, 11 * u); block(txt, x, y + ch * 0.18, cw * 0.86, 6.5 * u, 700, white, 3); ctx.restore(); };
-    card(W * 0.26 - (1 - kA) * 20 * u, sc.a, "rgba(255,255,255,.17)", kA, ems[0] || "");
-    card(W * 0.74 + (1 - kB) * 20 * u, sc.b, "rgba(0,0,0,.28)", kB, ems[1] || "");
-    const pk = bOut((e - 0.4) / 0.4);
-    if (pk > 0) { ctx.save(); ctx.translate(W / 2, y); ctx.scale(pk * (1 + 0.05 * Math.sin(e * 5)), pk); ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(0, 0, 7 * u, 0, Math.PI * 2); ctx.fill(); ctx.font = SFONT(800, 6 * u); ctx.fillStyle = "#1B1503"; ctx.fillText("VS", 0, 0.3 * u); ctx.restore(); }
-    if (sc.title) block(sc.title, W / 2, H * 0.11, W * 0.9, 6.5 * u, 800, white, 1);
+    const tb = at(sc.bT, 0.35), kA = eOut((e - 0.1) / 0.45), kB = eOut((e - tb) / 0.45), cw = W * 0.4, ch = H * (sc.title ? 0.58 : 0.66), y = H * (sc.title ? 0.58 : 0.52), ems = sc.items || [];
+    if (sc.title) reveal(sc.title, W / 2, H * 0.13, W * 0.9, 6.4 * u, 800, T.fg, 1, 0);
+    const card = (x, txt, k, em, strong) => { if (k <= 0) return; ctx.save(); ctx.globalAlpha *= k; ctx.translate(0, (1 - k) * 4 * u); ctx.fillStyle = T.card; rrect(ctx, x - cw / 2, y - ch / 2, cw, ch, 3 * u); ctx.fill(); if (strong) { ctx.strokeStyle = T.accent; ctx.lineWidth = 0.45 * u; ctx.stroke(); } badge(em, x, y - ch * 0.2, 7 * u, 1); reveal(txt, x, y + ch * 0.18, cw * 0.84, 6 * u, 700, T.fg, 3, -9); ctx.restore(); };
+    card(W * 0.26, sc.a, kA, ems[0] || "", false);
+    card(W * 0.74, sc.b, kB, ems[1] || "", true);
+    const pk = bOut((e - Math.min(tb, 0.6)) / 0.45);
+    if (pk > 0) { ctx.save(); ctx.translate(W / 2, y); ctx.scale(pk, pk); ctx.fillStyle = T.accent; ctx.beginPath(); ctx.arc(0, 0, 6.5 * u, 0, Math.PI * 2); ctx.fill(); ctx.font = SFONT(800, 5.2 * u); ctx.fillStyle = T.ink; ctx.fillText("VS", 0, 0.3 * u); ctx.restore(); }
   } else if (type === "bars") {
-    const rows = (sc.items || []).map(s => { const m = String(s).match(/^(.*?)[\s:：=\-]+(-?\d+(?:\.\d+)?)\s*%?\s*$/); return m ? { l: m[1].trim(), v: +m[2] } : null; }).filter(Boolean).slice(0, 5);
-    if (sc.title) block(sc.title, W / 2, H * 0.12, W * 0.9, 7 * u, 800, white, 1);
-    const max = Math.max(1, ...rows.map(r => r.v)), top = H * 0.24, n = rows.length || 1, rh = (H * 0.7) / n;
+    const rows = (sc.items || []).map(s => { const m = String(s).match(/^(.*?)[\s:：=\-]+(-?\d+(?:\.\d+)?)\s*(%?)\s*$/); return m ? { l: m[1].trim(), v: +m[2], pct: m[3] } : null; }).filter(Boolean).slice(0, 5), tt = sc.itemsT || [];
+    if (sc.title) reveal(sc.title, W / 2, H * 0.12, W * 0.9, 6.8 * u, 800, T.fg, 1, 0);
+    const max = Math.max(1, ...rows.map(r => r.v)), top = H * 0.24, n = rows.length || 1, rh = (H * 0.68) / n;
     rows.forEach((r, i) => {
-      const k = eOut((e - 0.2 - i * 0.2) / 0.7), y = top + rh * (i + 0.5), x0 = W * 0.08, bw = W * 0.84, bhh = Math.min(rh * 0.32, 7 * u);
-      ctx.font = SFONT(600, Math.min(5.5 * u, rh * 0.3)); ctx.fillStyle = white;
-      ctx.textAlign = "left"; ctx.fillText(r.l, x0, y - bhh * 0.9);
-      ctx.textAlign = "right"; ctx.fillText(String(Math.round(r.v * k * 10) / 10), x0 + bw, y - bhh * 0.9); ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(255,255,255,.16)"; rrect(ctx, x0, y, bw, bhh, bhh / 2); ctx.fill();
-      ctx.fillStyle = accent; rrect(ctx, x0, y, Math.max(bhh, bw * r.v / max * k), bhh, bhh / 2); ctx.fill();
+      const k = eOut((e - at(tt[i], 0.25 + i * 0.3)) / 0.8), y = top + rh * (i + 0.5), x0 = W * 0.08, bw = W * 0.84, bh = Math.min(rh * 0.3, 6 * u);
+      ctx.font = SFONT(600, Math.min(5.2 * u, rh * 0.28)); ctx.fillStyle = T.fg;
+      ctx.textAlign = "left"; ctx.fillText(r.l, x0, y - bh);
+      ctx.textAlign = "right"; ctx.fillStyle = T.accent; ctx.fillText((Math.round(r.v * k * 10) / 10).toLocaleString("en-US") + r.pct, x0 + bw, y - bh); ctx.textAlign = "center";
+      ctx.fillStyle = T.card; rrect(ctx, x0, y, bw, bh, bh / 2); ctx.fill();
+      if (k > 0) { ctx.fillStyle = T.accent; rrect(ctx, x0, y, Math.max(bh, bw * r.v / max * k), bh, bh / 2); ctx.fill(); }
     });
-    if (!rows.length && !sc.title) block("—", W / 2, H / 2, W * 0.8, 10 * u, 800, white, 1);
   } else if (type === "quote") {
-    ctx.font = SFONT(800, 30 * u); ctx.fillStyle = "rgba(255,255,255,.22)"; ctx.fillText("“", W * 0.14, H * 0.24);
-    const txt = String(sc.title || ""), gs = graphemes(txt);
-    const n = Math.floor(gs.length * clamp01(e / Math.min(dur * 0.6, gs.length * 0.05 + 0.2)));
-    block(txt, W / 2, H * 0.5, W * 0.8, 8 * u, 700, white, 3, gs.slice(0, n).join(""));
-    if (sc.label) block("— " + sc.label, W / 2, H * 0.84, W * 0.8, 5 * u, 500, accent, 1);
+    ctx.font = SFONT(800, 26 * u); ctx.fillStyle = T.accent; ctx.globalAlpha *= 0.85; ctx.fillText("“", W * 0.16, H * 0.26); ctx.globalAlpha /= 0.85;
+    const txt = String(sc.title || ""), gs = graphemes(txt), n = Math.floor(gs.length * clamp01((e - 0.15) / Math.min(dur * 0.65, gs.length * 0.045 + 0.2)));
+    reveal(txt, W / 2, H * 0.5, W * 0.8, 7.5 * u, 700, T.fg, 3, -9, gs.slice(0, n).join(""));
+    reveal(sc.label ? "— " + sc.label : "", W / 2, H * 0.82, W * 0.8, 4.8 * u, 500, T.sub, 1, 0.6);
   }
   ctx.restore();
 }
 function normalizeScenes(list, dur) {
   list.sort((a, b) => a.start - b.start);
   const out = [];
-  for (const s of list) { const last = out[out.length - 1]; if (last && s.start < last.end - 0.05) { if (s.end <= last.end) continue; s.start = last.end; } out.push(s); }
-  out.forEach((s, i) => { if (i === 0) s.start = 0; if (i < out.length - 1) s.end = out[i + 1].start; else s.end = Math.max(s.end, dur || s.end); s.theme = i % THEMES.length; });
+  for (const s of list) { const last = out[out.length - 1]; if (last && s.start < last.start + 0.4) continue; out.push(s); }
+  out.forEach((s, i) => { if (i === 0) s.start = 0; s.end = i < out.length - 1 ? out[i + 1].start : Math.max(s.end || 0, dur || 0, s.start + 1); });
   return out;
 }
 function plainScenes(p) {
@@ -1098,26 +1149,41 @@ function plainScenes(p) {
   return normalizeScenes(out, p.duration);
 }
 async function aiScenes(p) {
-  const caps = p.captions, raw = [], B = 70;
+  const caps = p.captions, raw = [], B = 60;
   for (let s = 0; s < caps.length; s += B) {
     const j = await chatJSON([
-      { role: "system", content: `You are a motion designer making animated explainer visuals for the top half of a split-screen short video. Split the script into scenes. Each scene covers consecutive lines ("from" and "to" are line indexes) and lasts roughly 3 to 7 seconds; together the scenes must cover every line in order with no gaps. For each scene choose the visual that best explains what is said:
-- "big": a keyword headline with one emoji (the default)
-- "number": a key number, price, percentage or count in "value" (like "189,000 บาท", "3 ข้อ", "50%") with a short "label"
-- "list": 2 to 4 short bullet "items" with a short "title"
-- "vs": a comparison of two things in "a" and "b", with "items" holding one emoji for each side
-- "bars": comparing amounts, "items" like "ความเร็ว: 40"
-- "quote": a strong statement or customer quote in "title", "label" = who said it
-Write all on-screen text in the same language as the script and keep it very short (headline under 20 characters, items under 18). Pick one fitting emoji per scene. Reply only with JSON: {"scenes":[{"from":0,"to":2,"type":"big","emoji":"🚗","title":"","label":"","value":"","items":[],"a":"","b":""}]}` },
-      { role: "user", content: JSON.stringify({ lines: caps.slice(s, s + B).map((c, k) => ({ i: s + k, t: +c.start.toFixed(1), text: c.text })) }) }
+      { role: "system", content: `You are a senior motion designer making animated explainer visuals for the top half of a split-screen short video. The visuals must stay in sync with what the speaker is saying.
+Rules:
+1. Start a new scene exactly at the line where the speaker moves to a new idea, topic, number or example. A scene usually spans 1 to 3 lines. "start" is the index of the line where the scene begins; it lasts until the next scene begins. The first scene must start at first_line. Scenes must be in order.
+2. Show only what is actually said in those lines. Use the exact numbers, prices, names, models and terms the speaker says. Never invent facts.
+3. Pick the type that explains it best:
+ - "big": "title" headline under 18 characters, optional short "label", one fitting emoji
+ - "number": "value" exactly as said with its unit (for example "189,000 บาท", "50%", "3 ปี"), "title" a 2-4 word lead-in, "label" what the number is, "value_line" the index of the line where the number is said
+ - "list": "title" plus 2 to 4 "items", each {"text": under 16 characters, "line": index of the line where that item is said}
+ - "vs": "a" versus "b" (under 14 characters each), "items": [emoji for a, emoji for b], optional "title", "b_line" the line where b is said
+ - "bars": only when the speaker compares amounts: "title" plus items {"text": "label: number", "line": index}
+ - "quote": "title" a short striking sentence from the speaker (under 40 characters), "label" who said it if mentioned
+4. Use "number" only when a number is actually said. Vary the types when it fits the content.
+5. All on-screen text in the same language as the script, short phrases rather than sentences.
+Reply only with JSON: {"scenes":[{"start":0,"type":"big","emoji":"🚗","title":"","label":"","value":"","value_line":0,"items":[{"text":"","line":0}],"a":"","b":"","b_line":0}]}` },
+      { role: "user", content: JSON.stringify({ first_line: s, lines: caps.slice(s, s + B).map((c, k) => ({ i: s + k, t: +c.start.toFixed(1), text: c.text })) }) }
     ]);
     (j.scenes || []).forEach(x => raw.push(x));
   }
-  const str = (v, n) => String(v == null ? "" : v).slice(0, n);
+  const str = (v, n) => String(v == null ? "" : v).trim().slice(0, n);
+  const lineT = i => { const c = caps[+i]; return c ? c.start : undefined; };
   const scenes = raw.map(x => {
-    const f = caps[+x.from], to = caps[Math.max(+x.from, +x.to)] || f; if (!f) return null;
-    return { id: uid(), start: f.start, end: to.end, type: SCENE_TYPES[x.type] ? x.type : "big", emoji: str(x.emoji, 8), title: str(x.title, 60), label: str(x.label, 60), value: str(x.value, 30),
-      items: Array.isArray(x.items) ? x.items.map(v => str(v, 40)).filter(Boolean).slice(0, 5) : [], a: str(x.a, 40), b: str(x.b, 40), media: null };
+    const first = caps[+x.start]; if (!first) return null;
+    let type = SCENE_TYPES[x.type] ? x.type : "big";
+    const itemsRaw = Array.isArray(x.items) ? x.items : [];
+    const items = itemsRaw.map(v => typeof v === "object" && v ? str(v.text, 40) : str(v, 40)).filter(Boolean).slice(0, 5);
+    const itemsT = itemsRaw.map(v => typeof v === "object" && v ? lineT(v.line) : undefined).slice(0, items.length);
+    const sc = { id: uid(), start: Math.max(0, first.start - 0.12), end: first.end, type, emoji: str(x.emoji, 8), title: str(x.title, 60), label: str(x.label, 60), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
+    if (type === "number" && !/\d/.test(sc.value)) { sc.type = "big"; sc.title = sc.title || sc.label; }
+    if ((type === "list" || type === "bars") && items.length < 2) { sc.type = "big"; sc.title = sc.title || items[0] || ""; }
+    if (type === "vs" && (!sc.a || !sc.b)) sc.type = "big";
+    if (!sc.title && sc.type === "big") sc.title = str(first.text, 40);
+    return sc;
   }).filter(Boolean);
   if (!scenes.length) throw new Error("AI ไม่ได้สร้างฉากใดเลย ลองใหม่อีกครั้ง");
   return normalizeScenes(scenes, p.duration);
@@ -1167,19 +1233,38 @@ async function aiProofread(p, onProg) {
   }
   return changedN;
 }
-async function aiKeywords(p) {
-  const B = 60; let n = 0;
+function wordTime(p, c, w) {
+  const at = c.text.indexOf(w); if (at < 0) return c.start;
+  const pre = vlen(c.text.slice(0, at)), tot = Math.max(1, vlen(c.text));
+  const ws = ((p.raw && p.raw.words) || []).filter(x => x.start >= c.start - 0.05 && x.start < c.end + 0.05);
+  if (ws.length) { let acc = 0; for (const x of ws) { const L = vlen(String(x.word || "")); if (acc + L > pre) return +x.start.toFixed(2); acc += L; } }
+  return +(c.start + (c.end - c.start) * pre / tot).toFixed(2);
+}
+const EMPH_SFX = { hit: "punchy default for an important word", pop: "light or fun word", sparkle: "benefit, beauty or wow", ding: "tip or idea", kaching: "price, money or saving", whoosh: "speed, change or movement", boom: "big reveal or shocking fact (use rarely)" };
+async function aiEmphasis(p, withSfx) {
+  const B = 60; let n = 0; const picks = [];
   for (let i = 0; i < p.captions.length; i += B) {
     const batch = p.captions.slice(i, i + B);
     const j = await chatJSON([
-      { role: "system", content: "You pick words to emphasise in short-video subtitles, like the coloured words in viral captions. For about half of the lines, choose the single most important word or short phrase: a number, price, product or brand name, key benefit, or strong emotion. Copy it exactly as it appears in the line, character for character. Skip lines with nothing worth emphasising. Reply only with JSON: {\"items\":[{\"i\": line_index, \"w\": \"exact text\"}]}" },
+      { role: "system", content: `You pick words to emphasise in short-video subtitles, like the coloured, popping words in viral captions. For roughly 1 line in 3, choose the single most important word or short phrase: a number, price, product or brand name, key benefit, or strong emotion. Copy it exactly as it appears in the line, character for character. Skip lines with nothing worth emphasising, and never pick two neighbouring lines. For each pick also choose a sound "s" from: ${Object.entries(EMPH_SFX).map(([k, v]) => k + " (" + v + ")").join(", ")}. Reply only with JSON: {"items":[{"i": line_index, "w": "exact text", "s": "hit"}]}` },
       { role: "user", content: JSON.stringify({ lines: batch.map((c, k) => ({ i: k, text: c.text })) }) }
     ]);
     batch.forEach(c => c.hl = []);
-    (j.items || []).forEach(x => { const c = batch[x.i], w = String(x.w || "").trim(); if (c && w && c.text.includes(w)) { c.hl = [w]; n++; } });
+    (j.items || []).forEach(x => { const c = batch[x.i], w = String(x.w || "").trim(); if (c && w && c.text.includes(w)) { c.hl = [w]; n++; picks.push({ c, w, s: EMPH_SFX[x.s] ? x.s : "hit" }); } });
+  }
+  if (withSfx) {
+    p.sfx = p.sfx.filter(x => x.src !== "kw");
+    let last = -9;
+    picks.sort((a, b) => a.c.start - b.c.start).forEach(({ c, w, s }) => {
+      const t = wordTime(p, c, w);
+      if (t - last < 2.2 || p.sfx.some(x => Math.abs(x.t - t) < 1)) return;
+      p.sfx.push({ id: uid(), key: "b:" + s, t, vol: s === "boom" ? 0.6 : 0.8, src: "kw" }); last = t;
+    });
+    p.sfx.sort((a, b) => a.t - b.t);
   }
   return n;
 }
+const aiKeywords = p => aiEmphasis(p, false);
 
 /* ================= shared style + AI effect helpers ================= */
 const KEEP_KEYS = ["size", "pos", "anim", "size2", "order"];
@@ -1201,7 +1286,7 @@ async function aiSuggestSfx(p) {
   ]);
   const items = (j.items || []).filter(x => p.captions[x.i] && BUILTIN[x.s]);
   if (!items.length) throw new Error("AI ไม่ได้แนะนำจุดใดเลย");
-  const added = items.filter(x => !p.sfx.some(s => Math.abs(s.t - p.captions[x.i].start) < 0.5)).map(x => ({ id: uid(), key: "b:" + x.s, t: +p.captions[x.i].start.toFixed(2), vol: 1 }));
+  const added = items.filter(x => !p.sfx.some(s => Math.abs(s.t - p.captions[x.i].start) < 1.2)).map(x => ({ id: uid(), key: "b:" + x.s, t: +p.captions[x.i].start.toFixed(2), vol: 1 }));
   p.sfx.push(...added); p.sfx.sort((a, c) => a.t - c.t);
   return added;
 }
@@ -1270,8 +1355,8 @@ function viewNew() {
       </div>
       <div class="field"><span class="lab">ให้ AI ช่วย</span>
         <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
-        <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญด้วยสี</label>
-        <label class="sw"><input type="checkbox" id="npSfx"> ใส่เอฟเฟกต์เสียงให้อัตโนมัติ</label>
+        <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญ (สี + เด้ง) พร้อมเสียงตรงจังหวะคำนั้น</label>
+        <label class="sw"><input type="checkbox" id="npSfx"> ใส่เสียงช่วงเปิดคลิปและเปลี่ยนเรื่องเพิ่ม</label>
         <label class="sw"><input type="checkbox" id="npSplit"> ทำ Split Screen: AI สร้างแอนิเมชันประกอบสคริปต์ (เหมาะกับคลิปเล่าเรื่อง)</label></div>
       <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
       <ol class="steps" id="steps" hidden>
@@ -1280,7 +1365,7 @@ function viewNew() {
         <li data-s="cap"><span class="dot"></span>จัดบรรทัดซับ</li>
         <li data-s="fix" hidden><span class="dot"></span><span id="fixLab">AI ตรวจคำผิด</span></li>
         <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
-        <li data-s="kw" hidden><span class="dot"></span>AI เลือกคำสำคัญ</li>
+        <li data-s="kw" hidden><span class="dot"></span>AI เน้นคำสำคัญ + ใส่เสียง</li>
         <li data-s="sfx" hidden><span class="dot"></span>AI ใส่เอฟเฟกต์เสียง</li>
         <li data-s="split" hidden><span class="dot"></span>AI สร้างแอนิเมชันประกอบ</li>
       </ol>
@@ -1397,7 +1482,7 @@ function viewNew() {
       }
       if (autoKw) {
         stage = "kw"; mark("kw", "doing");
-        try { await aiKeywords(p); mark("kw", "done"); await DB.put(p); }
+        try { await aiEmphasis(p, true); mark("kw", "done"); await DB.put(p); }
         catch (e) { mark("kw", "fail"); }
       }
       if (autoSfx) {
@@ -1509,6 +1594,7 @@ async function viewEditor(id) {
           <span class="hint" style="margin-top:-8px">ครึ่งหนึ่งเป็นแอนิเมชันหรือรูป/คลิปประกอบ อีกครึ่งเป็นคลิปของคุณ ส่งออกเป็นเฟรม 9:16 เหมาะกับคลิปเล่าเรื่อง</span>
           <button class="btn primary block" id="spAi">✨ ให้ AI สร้างแอนิเมชันประกอบสคริปต์</button>
           <span class="hint" id="spStat" style="margin-top:-8px"></span>
+          <div class="field"><span class="lab">โทนสีภาพประกอบ</span><div class="chips" id="spTheme">${Object.entries(SCENE_THEMES).map(([k, T]) => `<button type="button" class="chip2 thm" data-v="${k}"><i style="background:linear-gradient(135deg,${T.bg[1]} 55%,${T.accent} 55%)"></i>${T.n}</button>`).join("")}</div></div>
           <div class="field"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual">ด้านบน</button><button type="button" data-v="video">ด้านล่าง</button></div></div>
           <div class="ctl"><label for="spRatio">ขนาดภาพประกอบ</label><input type="range" id="spRatio" min="30" max="70" step="1"><output id="oRatio"></output></div>
           <div class="row"><label class="btn small" for="spAdd">＋ ใส่รูป/คลิปของคุณ ณ ตำแหน่งนี้</label><input type="file" id="spAdd" accept="image/*,video/*" hidden><button class="btn small" id="spPlain">สร้างฉากจากซับ (ไม่ใช้ AI)</button></div>
@@ -1525,7 +1611,8 @@ async function viewEditor(id) {
           <div class="xbox">
             <label class="sw"><input type="checkbox" id="sKw"> เน้นคำสำคัญด้วยสี</label>
             ${swatches("kwColor")}
-            <div class="row"><button class="btn small" id="kwGo">✨ ให้ AI เลือกคำสำคัญ</button><span class="hint" id="kwStat">หรือแตะคำในหน้าต่างแก้บรรทัด</span></div>
+            <div class="row"><label class="sw"><input type="checkbox" id="sKwPop"> คำเด้งตอนพูดถึง</label><label class="sw"><input type="checkbox" id="kwSfx" checked> ใส่เสียงตรงคำที่เน้น</label></div>
+            <div class="row"><button class="btn primary small" id="kwGo">✨ ให้ AI เน้นคำสำคัญ + ใส่เสียง</button><span class="hint" id="kwStat">หรือแตะคำเองในหน้าต่างตั้งค่าบรรทัด</span></div>
           </div>
           <details class="box"><summary>ขอบ เงา และกล่องพื้นหลัง</summary><div class="in">
             <div class="ctl"><label for="sStroke">ขอบตัวอักษร</label><input type="range" id="sStroke" min="0" max="12" step="1"><input type="color" id="sStrokeC" aria-label="สีขอบ"></div>
@@ -1553,8 +1640,9 @@ async function viewEditor(id) {
         </section>
 
         <section class="pane" data-p="sfx" hidden>
-          <button class="btn primary block" id="aiSfx">✨ ให้ AI ใส่เอฟเฟกต์เสียงให้</button>
-          <span class="hint" id="aiSfxStat" style="margin-top:-8px">AI อ่านซับแล้ววางเสียงตามจังหวะ เช่น ติ๊งตอนบอกทริก กริ๊งเงินตอนพูดถึงราคา</span>
+          <button class="btn primary block" id="kwGo2">✨ ให้ AI เน้นคำสำคัญ + ใส่เสียงตรงจังหวะ</button>
+          <button class="btn block" id="aiSfx">ให้ AI ใส่เสียงช่วงเปิดคลิป/เปลี่ยนเรื่องเพิ่ม</button>
+          <span class="hint" id="aiSfxStat" style="margin-top:-8px">เสียงวางตรงจังหวะคำที่พูด เช่น เสียงเงินตอนพูดราคา ฟังทีละเสียงได้ด้านล่าง</span>
           <div class="field"><span class="lab">คลังเสียง</span><span class="hint">▶ ฟังเสียง · ＋ วางที่ตำแหน่งวิดีโอตอนนี้ <span class="nowpos" id="nowPos">00:00.0</span></span>
             <div class="lib2" id="lib"></div>
             <div class="row"><label class="btn small" for="sfxUp">นำเข้าเสียงของคุณ</label><input type="file" id="sfxUp" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple hidden><span class="hint">mp3, wav, m4a</span></div></div>
@@ -1787,7 +1875,7 @@ async function viewEditor(id) {
     const sv = $("#scv"); if (!sv || sv.hidden) return;
     const g = sv.getContext("2d"), sc = sceneAt(p, t);
     if (!sc) { g.fillStyle = "#14161c"; g.fillRect(0, 0, sv.width, sv.height); return; }
-    try { drawScene(g, 0, 0, sv.width, sv.height, sc, t - sc.start, mediaFor(pvMedia, sc, t, !!video && !video.paused)); } catch (e) { console.error(e); }
+    try { drawScene(g, 0, 0, sv.width, sv.height, sc, t - sc.start, mediaFor(pvMedia, sc, t, !!video && !video.paused), p.split.theme); } catch (e) { console.error(e); }
   }
   function hookMedia() { for (const k in pvMedia) { const m = pvMedia[k]; if (m.kind === "video" && !m.hooked) { m.hooked = true; m.el.addEventListener("loadeddata", () => { draw(); paintSceneThumbs(); }); m.el.addEventListener("seeked", () => { if (video && video.paused) draw(); }); } } draw(); }
   const seekTo = t => { if (video) { playUntil = null; video.currentTime = t + 0.01; } };
@@ -2077,7 +2165,7 @@ async function viewEditor(id) {
     const s = p.style, low = v => String(v || "").toLowerCase();
     $("#sSize").value = s.size; $("#oSize").textContent = s.size; $("#sPos").value = s.pos; $("#oPos").textContent = s.pos + "%";
     $$("[data-sw]").forEach(box => { const k = box.dataset.sw; $$(".sw-c", box).forEach(b => b.setAttribute("aria-pressed", low(b.dataset.c) === low(s[k]))); const cc = $(".sw-custom", box); if (s[k]) cc.value = s[k]; });
-    $("#sKw").checked = s.kw !== false;
+    $("#sKw").checked = s.kw !== false; $("#sKwPop").checked = s.kwPop !== false;
     $("#sStroke").value = s.stroke; $("#sStrokeC").value = s.strokeColor;
     $("#sBox").checked = s.box; $("#sBoxO").value = s.boxOpacity; $("#sBoxC").value = s.boxColor; $("#sShadow").checked = s.shadow;
     $("#sGlow").checked = !!s.glow; if (s.glow) $("#sGlowC").value = s.glow; $("#sDsh").checked = !!s.dshadow; if (s.dshadow) $("#sDshC").value = s.dshadow;
@@ -2102,10 +2190,10 @@ async function viewEditor(id) {
   });
   const bindS = (sel, key, conv = v => v, ev = "input") => $(sel).addEventListener(ev, e => {
     const el = e.target; p.style[key] = conv(el.type === "checkbox" ? el.checked : el.value);
-    if (!["size", "pos", "size2", "order", "kw"].includes(key)) p.style.look = "";
+    if (!["size", "pos", "size2", "order", "kw", "kwPop"].includes(key)) p.style.look = "";
     syncStyleUI(); changed({ typing: el.type === "range" });
   });
-  bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number); bindS("#sKw", "kw");
+  bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number); bindS("#sKw", "kw"); bindS("#sKwPop", "kwPop");
   bindS("#sStroke", "stroke", Number); bindS("#sStrokeC", "strokeColor");
   bindS("#sBox", "box"); bindS("#sBoxO", "boxOpacity", Number); bindS("#sBoxC", "boxColor"); bindS("#sShadow", "shadow");
   bindS("#sSize2", "size2", Number);
@@ -2113,13 +2201,18 @@ async function viewEditor(id) {
   fxToggle("#sGlow", "#sGlowC", "glow"); fxToggle("#sDsh", "#sDshC", "dshadow");
   $$("#sOrder button").forEach(b => b.onclick = () => { p.style.order = b.dataset.v; syncStyleUI(); changed(); });
   $("#sDef").onclick = () => { settings.style = { ...p.style }; saveSettings(); toast("โปรเจกต์ใหม่จะใช้สไตล์นี้"); };
-  $("#kwGo").onclick = async () => {
+  async function runEmphasis(btn, stat) {
     if (!hasKey()) { openSettings(); return; }
-    const b = $("#kwGo"), st = $("#kwStat"); b.disabled = true; st.textContent = "AI กำลังเลือกคำ…";
-    try { const n = await aiKeywords(p); p.style.kw = true; syncStyleUI(); changed(); renderList(); if (sid) fillSheet(); st.textContent = `เน้นแล้ว ${n} บรรทัด`; }
-    catch (e) { st.textContent = ""; toast(e.message, 5000); }
-    b.disabled = false;
-  };
+    const withSfx = $("#kwSfx").checked; btn.disabled = true; stat.textContent = "AI กำลังเลือกคำและจังหวะ…";
+    try {
+      const n = await aiEmphasis(p, withSfx); p.style.kw = true; syncStyleUI(); changed(); renderList(); renderSfx(); if (sid) fillSheet();
+      const k = p.sfx.filter(x => x.src === "kw").length;
+      stat.textContent = `เน้น ${n} คำ${withSfx ? ` · ใส่เสียง ${k} จุด` : ""} กดเล่นวิดีโอเพื่อดู`;
+    } catch (e) { stat.textContent = ""; toast(e.message, 5000); }
+    btn.disabled = false;
+  }
+  $("#kwGo").onclick = () => runEmphasis($("#kwGo"), $("#kwStat"));
+  $("#kwGo2").onclick = () => runEmphasis($("#kwGo2"), $("#aiSfxStat"));
 
   /* ---------- fonts ---------- */
   $("#fontGrid").addEventListener("click", async e => {
@@ -2211,6 +2304,7 @@ async function viewEditor(id) {
   function syncSplitUI() {
     const sp = p.split; $("#spOn").checked = sp.on;
     $$("#spTop button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.top));
+    $$("#spTheme button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.theme));
     $("#spRatio").value = Math.round(sp.ratio * 100); $("#oRatio").textContent = Math.round(sp.ratio * 100) + "%";
   }
   function setSplit(on) {
@@ -2221,6 +2315,7 @@ async function viewEditor(id) {
     syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); changed();
   }
   $("#spOn").onchange = e => setSplit(e.target.checked);
+  $$("#spTheme button").forEach(b => b.onclick = () => { p.split.theme = b.dataset.v; syncSplitUI(); renderScenes(); changed(); });
   $$("#spTop button").forEach(b => b.onclick = () => { p.split.top = b.dataset.v; syncSplitUI(); sizeStage(); renderScenes(); changed(); });
   $("#spRatio").oninput = e => { p.split.ratio = +e.target.value / 100; syncSplitUI(); sizeStage(); changed({ typing: true }); };
   $("#spRatio").onchange = () => renderScenes();
@@ -2277,7 +2372,7 @@ async function viewEditor(id) {
     try { await document.fonts.load('800 40px "Kanit"', "ทดสอบ"); } catch {}
     for (const li of $$("#scenes .scn")) {
       const sc = p.split.scenes.find(x => x.id === li.dataset.id), c = $(".scn-th", li); if (!sc || !c) continue;
-      try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, 1.8, sc.media && pvMedia[sc.media.id] ? pvMedia[sc.media.id].el : null); } catch {}
+      try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, Math.max(0.6, sc.end - sc.start - 0.3), sc.media && pvMedia[sc.media.id] ? pvMedia[sc.media.id].el : null, p.split.theme); } catch {}
     }
   }
   const scOf = el => { const li = el.closest(".scn"); return li ? p.split.scenes.find(x => x.id === li.dataset.id) : null; };
@@ -2298,7 +2393,8 @@ async function viewEditor(id) {
   const onSceneEdit = e => {
     const el = e.target.closest("[data-k]"); if (!el) return; const sc = scOf(el); if (!sc) return;
     const k = el.dataset.k; sc[k] = k === "items" ? el.value.split("\n").map(x => x.trim()).filter(Boolean) : el.value;
-    const c = $(".scn-th", el.closest(".scn")); try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, 1.8, null); } catch {}
+    if (k === "type" && sc.type === "number" && !sc.value) toast("ใส่ตัวเลขในช่อง “ตัวเลข” ด้วย", 2000);
+    const c = $(".scn-th", el.closest(".scn")); try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, Math.max(0.6, sc.end - sc.start - 0.3), null, p.split.theme); } catch {}
     if (video && (video.currentTime < sc.start || video.currentTime >= sc.end)) seekTo(sc.start);
     changed({ typing: true });
   };
