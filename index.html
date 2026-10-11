@@ -316,6 +316,8 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .sw.big input{width:22px;height:22px}
 .chip2.thm{display:inline-flex;align-items:center;gap:6px}
 .chip2.thm i{width:14px;height:14px;border-radius:50%;display:block}
+.vbox{position:absolute;inset:0;overflow:hidden}
+.vbox video{position:absolute;inset:0;width:100%;height:100%}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -429,6 +431,10 @@ function normalize(p) {
   p.fit = p.fit || "blur";
   p.split = p.split || { on: false, ratio: 0.5, top: "visual", scenes: [] };
   p.split.theme = p.split.theme || "navy";
+  p.split.orient = p.split.orient || "v";
+  if (p.split.fx == null) p.split.fx = 50;
+  if (p.split.fy == null) p.split.fy = p.height > p.width ? 32 : 50;
+  if (p.split.zoom == null) p.split.zoom = 1;
   return p;
 }
 
@@ -961,7 +967,7 @@ function pickMime() {
 const LAYOUTS = { orig: { n: "ต้นฉบับ", r: 0 }, "9:16": { n: "9:16", r: 9 / 16 }, "4:5": { n: "4:5", r: 4 / 5 }, "1:1": { n: "1:1", r: 1 }, "16:9": { n: "16:9", r: 16 / 9 } };
 function frameDims(p, vw, vh, maxSide = 1920) {
   vw = vw || p.width || 1080; vh = vh || p.height || 1920;
-  const r = p.split && p.split.on ? 9 / 16 : (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
+  const r = p.split && p.split.on ? (p.split.orient === "h" ? 16 / 9 : 9 / 16) : (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
   let W, H; if (r >= 1) { W = maxSide; H = maxSide / r; } else { H = maxSide; W = maxSide * r; }
   const k = Math.min(1, Math.max(vw, vh) / maxSide);
   return { W: Math.max(2, Math.round(W * k / 2) * 2), H: Math.max(2, Math.round(H * k / 2) * 2) };
@@ -986,7 +992,7 @@ function renderFrame(ctx, W, H, v, p, t, media) {
   if (p.split && p.split.on) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     const { vis, vid } = splitRects(p, W, H);
-    try { if (v && v.videoWidth) drawCover(ctx, v, vid); } catch {}
+    try { if (v && v.videoWidth) drawFramed(ctx, v, vid, p.split.fx, p.split.fy, p.split.zoom); } catch {}
     const sc = sceneAt(p, t);
     if (sc) { try { drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, t - sc.start, media ? media(sc, t) : null, p.split.theme); } catch (e) { console.error(e); } }
   } else { try { drawVideo(ctx, W, H, v, p, null); } catch {} }
@@ -1018,10 +1024,22 @@ function fitText(ctx, text, maxW, px, weight, maxLines) {
 }
 function sceneAt(p, t) { const sc = (p.split && p.split.scenes) || []; for (const s of sc) { if (t >= s.start && t < s.end) return s; } return null; }
 function splitRects(p, W, H) {
-  const sp = p.split, vh = Math.round(H * sp.ratio);
-  return sp.top === "video"
-    ? { vid: { x: 0, y: 0, w: W, h: H - vh }, vis: { x: 0, y: H - vh, w: W, h: vh } }
-    : { vis: { x: 0, y: 0, w: W, h: vh }, vid: { x: 0, y: vh, w: W, h: H - vh } };
+  const sp = p.split, first = sp.top !== "video";
+  if (sp.orient === "h") {
+    const vw = Math.round(W * sp.ratio);
+    return first ? { vis: { x: 0, y: 0, w: vw, h: H }, vid: { x: vw, y: 0, w: W - vw, h: H } }
+                 : { vid: { x: 0, y: 0, w: W - vw, h: H }, vis: { x: W - vw, y: 0, w: vw, h: H } };
+  }
+  const vh = Math.round(H * sp.ratio);
+  return first ? { vis: { x: 0, y: 0, w: W, h: vh }, vid: { x: 0, y: vh, w: W, h: H - vh } }
+               : { vid: { x: 0, y: 0, w: W, h: H - vh }, vis: { x: 0, y: H - vh, w: W, h: vh } };
+}
+/* place the speaker clip inside its box: fx/fy = which part stays in view (0-100), zoom >= 1 */
+function drawFramed(ctx, src, r, fx = 50, fy = 50, zoom = 1) {
+  const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight; if (!sw) return;
+  const k = Math.max(r.w / sw, r.h / sh) * zoom, w = sw * k, h = sh * k;
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  ctx.drawImage(src, r.x + (r.w - w) * fx / 100, r.y + (r.h - h) * fy / 100, w, h); ctx.restore();
 }
 function drawCover(ctx, src, r, zoom = 1) {
   const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight; if (!sw) return;
@@ -1357,7 +1375,8 @@ function viewNew() {
         <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
         <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญ (สี + เด้ง) พร้อมเสียงตรงจังหวะคำนั้น</label>
         <label class="sw"><input type="checkbox" id="npSfx"> ใส่เสียงช่วงเปิดคลิปและเปลี่ยนเรื่องเพิ่ม</label>
-        <label class="sw"><input type="checkbox" id="npSplit"> ทำ Split Screen: AI สร้างแอนิเมชันประกอบสคริปต์ (เหมาะกับคลิปเล่าเรื่อง)</label></div>
+        <label class="sw"><input type="checkbox" id="npSplit"> ทำ Split Screen: AI สร้างแอนิเมชันประกอบสคริปต์ (เหมาะกับคลิปเล่าเรื่อง)</label>
+        <div class="seg" id="npOrient" hidden><button type="button" data-v="v">แนวตั้ง 9:16 · ภาพประกอบบน-คลิปล่าง</button><button type="button" data-v="h">แนวนอน 16:9 · ซ้าย-ขวา</button></div></div>
       <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
       <ol class="steps" id="steps" hidden>
         <li data-s="audio"><span class="dot"></span><span id="audLab">แยกเสียงจากวิดีโอ</span></li>
@@ -1380,6 +1399,9 @@ function viewNew() {
   $("#npFix").checked = settings.autoFix !== false;
   $("#npKw").checked = settings.autoKw !== false;
   $("#npSplit").checked = !!settings.autoSplit;
+  let npOrient = settings.splitOrient || "v";
+  const syncOrient = () => { $("#npOrient").hidden = !$("#npSplit").checked; $$("#npOrient button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === npOrient)); };
+  $("#npSplit").onchange = syncOrient; $$("#npOrient button").forEach(b => b.onclick = () => { npOrient = b.dataset.v; syncOrient(); }); syncOrient();
   const syncNp = () => {
     $("#npFont").value = npStyle.font; $("#npAnim").value = ANIMS[npStyle.anim] ? npStyle.anim : "none";
     $$("#npLooks .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === npStyle.look));
@@ -1439,7 +1461,7 @@ function viewNew() {
     let stage = "audio";
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
-      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoSplit = autoSplit; saveSettings();
+      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoSplit = autoSplit; settings.splitOrient = npOrient; saveSettings();
       mark("audio", "doing");
       const { chunks, duration } = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
       if (cap) cap.dispose();
@@ -1494,7 +1516,7 @@ function viewNew() {
         stage = "split"; mark("split", "doing");
         try { p.split.scenes = await aiScenes(p); }
         catch (e) { p.split.scenes = plainScenes(p); toast("AI สร้างฉากไม่สำเร็จ ใช้ฉากจากซับแทน กดสร้างใหม่ได้ในแท็บ Split", 5000); }
-        p.split.on = true; p.split.prevPos = p.style.pos; p.style.pos = 50;
+        p.split.on = true; p.split.orient = npOrient; p.split.prevPos = p.style.pos; p.style.pos = npOrient === "h" ? 86 : 50;
         mark("split", "done"); await DB.put(p);
       }
       await sleep(300);
@@ -1595,7 +1617,13 @@ async function viewEditor(id) {
           <button class="btn primary block" id="spAi">✨ ให้ AI สร้างแอนิเมชันประกอบสคริปต์</button>
           <span class="hint" id="spStat" style="margin-top:-8px"></span>
           <div class="field"><span class="lab">โทนสีภาพประกอบ</span><div class="chips" id="spTheme">${Object.entries(SCENE_THEMES).map(([k, T]) => `<button type="button" class="chip2 thm" data-v="${k}"><i style="background:linear-gradient(135deg,${T.bg[1]} 55%,${T.accent} 55%)"></i>${T.n}</button>`).join("")}</div></div>
-          <div class="field"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual">ด้านบน</button><button type="button" data-v="video">ด้านล่าง</button></div></div>
+          <div class="field"><span class="lab">รูปแบบวิดีโอ</span><div class="seg" id="spOrient"><button type="button" data-v="v">แนวตั้ง 9:16 · บน-ล่าง</button><button type="button" data-v="h">แนวนอน 16:9 · ซ้าย-ขวา</button></div></div>
+          <div class="field"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual"></button><button type="button" data-v="video"></button></div></div>
+          <div class="xbox"><span class="lab">จัดตำแหน่งคลิปของคุณ</span><span class="hint" style="margin-top:-6px">ลากบนคลิปในวิดีโอเพื่อเลื่อนให้หน้าอยู่กลาง หรือปรับด้านล่าง</span>
+            <div class="ctl"><label for="spZoom">ซูม</label><input type="range" id="spZoom" min="100" max="220" step="5"><output id="oZoom"></output></div>
+            <div class="ctl"><label for="spFx">ซ้าย-ขวา</label><input type="range" id="spFx" min="0" max="100" step="1"><output id="oFx"></output></div>
+            <div class="ctl"><label for="spFy">บน-ล่าง</label><input type="range" id="spFy" min="0" max="100" step="1"><output id="oFy"></output></div>
+            <button class="btn small" id="spCenter">จัดกึ่งกลางอัตโนมัติ</button></div>
           <div class="ctl"><label for="spRatio">ขนาดภาพประกอบ</label><input type="range" id="spRatio" min="30" max="70" step="1"><output id="oRatio"></output></div>
           <div class="row"><label class="btn small" for="spAdd">＋ ใส่รูป/คลิปของคุณ ณ ตำแหน่งนี้</label><input type="file" id="spAdd" accept="image/*,video/*" hidden><button class="btn small" id="spPlain">สร้างฉากจากซับ (ไม่ใช้ AI)</button></div>
           <ol class="scenes" id="scenes"></ol>
@@ -1733,7 +1761,7 @@ async function viewEditor(id) {
     }
     url = URL.createObjectURL(blob);
     col.innerHTML = `<div class="player" id="player">
-        <div class="screen" id="screen"><canvas id="bgcv" class="bgcv" width="48" height="85" aria-hidden="true"></canvas><canvas id="scv" class="scv" hidden></canvas><video id="vid" playsinline webkit-playsinline preload="auto"${p.thumb ? ` poster="${p.thumb}"` : ""}></video><canvas id="cv" aria-label="วิดีโอ แตะเพื่อเล่นหรือหยุด แตะซับเพื่อพิมพ์แก้ ลากซับเพื่อย้าย"></canvas><textarea id="ovEdit" class="ovedit" rows="1" enterkeyhint="enter" hidden aria-label="พิมพ์แก้ซับ"></textarea><div class="ovbar" id="ovBar" hidden><button type="button" id="ovMore">ตั้งค่าบรรทัด</button><button type="button" id="ovDone">✓ เสร็จ</button></div></div>
+        <div class="screen" id="screen"><canvas id="bgcv" class="bgcv" width="48" height="85" aria-hidden="true"></canvas><canvas id="scv" class="scv" hidden></canvas><div class="vbox" id="vbox"><video id="vid" playsinline webkit-playsinline preload="auto"${p.thumb ? ` poster="${p.thumb}"` : ""}></video></div><canvas id="cv" aria-label="วิดีโอ แตะเพื่อเล่นหรือหยุด แตะซับเพื่อพิมพ์แก้ ลากซับเพื่อย้าย"></canvas><textarea id="ovEdit" class="ovedit" rows="1" enterkeyhint="enter" hidden aria-label="พิมพ์แก้ซับ"></textarea><div class="ovbar" id="ovBar" hidden><button type="button" id="ovMore">ตั้งค่าบรรทัด</button><button type="button" id="ovDone">✓ เสร็จ</button></div></div>
         <button class="fs-close" id="fsClose" aria-label="ออกจากเต็มจอ">✕</button>
         <div class="pctl">
           <button class="pbtn play" id="pPlay" aria-label="เล่น">▶</button>
@@ -1762,20 +1790,22 @@ async function viewEditor(id) {
       const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * 100, x = (e.clientX - r.left) / r.width * 100;
       const c = captionAt(p.captions, video.currentTime), px = p.style.posX == null ? 50 : p.style.posX;
       pd = { x0: e.clientX, y0: e.clientY, pos: p.style.pos, posX: px, w: r.width, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 16 && Math.abs(x - px) < 46 };
+      if (!pd.onCap && p.split.on) { const { vid } = splitRects(p, r.width, r.height), lx = e.clientX - r.left, ly = e.clientY - r.top; if (lx >= vid.x && lx < vid.x + vid.w && ly >= vid.y && ly < vid.y + vid.h) Object.assign(pd, { pan: true, fx: p.split.fx, fy: p.split.fy, vw: vid.w, vh: vid.h }); }
       try { cv.setPointerCapture(e.pointerId); } catch {}
     });
     cv.addEventListener("pointermove", e => {
-      if (!pd || !pd.onCap) return;
+      if (!pd || (!pd.onCap && !pd.pan)) return;
       const dx = e.clientX - pd.x0, dy = e.clientY - pd.y0;
       if (!pd.moved && Math.hypot(dx, dy) < 8) return;
       pd.moved = true;
+      if (pd.pan) { p.split.fx = Math.round(Math.max(0, Math.min(100, pd.fx - dx / pd.vw * 140))); p.split.fy = Math.round(Math.max(0, Math.min(100, pd.fy - dy / pd.vh * 140))); frameVideo(); syncSplitUI(); return; }
       p.style.pos = Math.round(Math.max(6, Math.min(94, pd.pos + dy / pd.h * 100)));
       let nx = pd.posX + dx / pd.w * 100; guideOn = Math.abs(nx - 50) < 3; if (guideOn) nx = 50;
       p.style.posX = Math.round(Math.max(5, Math.min(95, nx))); draw();
     });
     cv.addEventListener("pointerup", () => {
       if (!pd) return; const d = pd; pd = null; guideOn = false;
-      if (d.moved) { syncStyleUI(); changed(); }
+      if (d.moved) { syncStyleUI(); syncSplitUI(); changed(); }
       else if (d.onCap) { const c = captionAt(p.captions, video.currentTime); if (c) startInline(c); }
       else togglePlay();
     });
@@ -1810,10 +1840,11 @@ async function viewEditor(id) {
     const sv = $("#scv");
     if (p.split.on) {
       const { vis, vid } = splitRects(p, w, h);
-      Object.assign(video.style, { left: vid.x + "px", top: vid.y + "px", width: vid.w + "px", height: vid.h + "px", objectFit: "cover" });
+      Object.assign($("#vbox").style, { left: vid.x + "px", top: vid.y + "px", width: vid.w + "px", height: vid.h + "px" });
+      frameVideo();
       sv.hidden = false; Object.assign(sv.style, { left: vis.x + "px", top: vis.y + "px", width: vis.w + "px", height: vis.h + "px" });
       sv.width = Math.round(vis.w * dpr); sv.height = Math.round(vis.h * dpr);
-    } else { Object.assign(video.style, { left: "0px", top: "0px", width: "100%", height: "100%" }); sv.hidden = true; }
+    } else { Object.assign($("#vbox").style, { left: "0px", top: "0px", width: "100%", height: "100%" }); Object.assign(video.style, { objectPosition: "50% 50%", transform: "" }); sv.hidden = true; }
     draw();
   }
   let bgAt = 0;
@@ -1870,6 +1901,10 @@ async function viewEditor(id) {
       if (video && !video.paused && !video.ended) raf = requestAnimationFrame(f);
     };
     f();
+  }
+  function frameVideo() {
+    if (!video || !p.split.on) return; const sp = p.split;
+    Object.assign(video.style, { objectFit: "cover", objectPosition: `${sp.fx}% ${sp.fy}%`, transformOrigin: `${sp.fx}% ${sp.fy}%`, transform: sp.zoom > 1 ? `scale(${sp.zoom})` : "" });
   }
   function paintScene(t) {
     const sv = $("#scv"); if (!sv || sv.hidden) return;
@@ -2303,20 +2338,33 @@ async function viewEditor(id) {
   /* ---------- split screen ---------- */
   function syncSplitUI() {
     const sp = p.split; $("#spOn").checked = sp.on;
-    $$("#spTop button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.top));
+    $$("#spTop button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.v === sp.top); b.textContent = sp.orient === "h" ? (b.dataset.v === "visual" ? "ด้านซ้าย" : "ด้านขวา") : (b.dataset.v === "visual" ? "ด้านบน" : "ด้านล่าง"); });
+    $$("#spOrient button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.orient));
+    $("#spZoom").value = Math.round(sp.zoom * 100); $("#oZoom").textContent = Math.round(sp.zoom * 100) + "%";
+    $("#spFx").value = sp.fx; $("#oFx").textContent = sp.fx; $("#spFy").value = sp.fy; $("#oFy").textContent = sp.fy;
     $$("#spTheme button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.theme));
     $("#spRatio").value = Math.round(sp.ratio * 100); $("#oRatio").textContent = Math.round(sp.ratio * 100) + "%";
   }
   function setSplit(on) {
     const sp = p.split; if (sp.on === on) return;
     sp.on = on;
-    if (on) { sp.prevPos = p.style.pos; p.style.pos = 50; if (!sp.scenes.length) { sp.scenes = plainScenes(p); $("#spStat").textContent = "สร้างฉากจากซับให้แล้ว กด ✨ เพื่อให้ AI ทำแอนิเมชันที่ตรงเนื้อหากว่านี้"; } }
+    if (on) { sp.prevPos = p.style.pos; p.style.pos = sp.orient === "h" ? 86 : 50; if (!sp.scenes.length) { sp.scenes = plainScenes(p); $("#spStat").textContent = "สร้างฉากจากซับให้แล้ว กด ✨ เพื่อให้ AI ทำแอนิเมชันที่ตรงเนื้อหากว่านี้"; } }
     else if (sp.prevPos != null) p.style.pos = sp.prevPos;
     syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); changed();
   }
   $("#spOn").onchange = e => setSplit(e.target.checked);
   $$("#spTheme button").forEach(b => b.onclick = () => { p.split.theme = b.dataset.v; syncSplitUI(); renderScenes(); changed(); });
   $$("#spTop button").forEach(b => b.onclick = () => { p.split.top = b.dataset.v; syncSplitUI(); sizeStage(); renderScenes(); changed(); });
+  $$("#spOrient button").forEach(b => b.onclick = () => {
+    const sp = p.split; if (sp.orient === b.dataset.v) return; sp.orient = b.dataset.v;
+    if (sp.on) p.style.pos = sp.orient === "h" ? 86 : 50;
+    const portrait = p.height > p.width; sp.fx = 50; sp.fy = sp.orient === "v" && portrait ? 32 : 50; sp.zoom = 1;
+    syncSplitUI(); syncStyleUI(); syncFrame(); sizeStage(); renderScenes(); changed();
+    toast(sp.orient === "h" ? "เปลี่ยนเป็นวิดีโอแนวนอน 16:9" : "เปลี่ยนเป็นวิดีโอแนวตั้ง 9:16", 1400);
+  });
+  const frameInput = (id, key, conv) => $(id).oninput = e => { p.split[key] = conv(+e.target.value); frameVideo(); syncSplitUI(); draw(); changed({ typing: true }); };
+  frameInput("#spZoom", "zoom", v => v / 100); frameInput("#spFx", "fx", v => v); frameInput("#spFy", "fy", v => v);
+  $("#spCenter").onclick = () => { const sp = p.split; sp.fx = 50; sp.fy = sp.orient === "v" && p.height > p.width ? 32 : 50; sp.zoom = 1; frameVideo(); syncSplitUI(); changed(); };
   $("#spRatio").oninput = e => { p.split.ratio = +e.target.value / 100; syncSplitUI(); sizeStage(); changed({ typing: true }); };
   $("#spRatio").onchange = () => renderScenes();
   $("#spAi").onclick = async () => {
@@ -2346,7 +2394,7 @@ async function viewEditor(id) {
     await attachMedia(sc, f);
   };
   function renderScenes() {
-    const list = p.split.scenes, th = Math.round(150 * p.split.ratio * 16 / 9);
+    const list = p.split.scenes, fd = frameDims(p, p.width, p.height), vr = splitRects(p, fd.W, fd.H).vis, th = Math.max(60, Math.min(220, Math.round(150 * vr.h / vr.w)));
     $("#scenes").innerHTML = list.length ? list.map(sc => `
       <li class="scn" data-id="${sc.id}">
         <canvas class="scn-th" width="150" height="${th}"></canvas>
@@ -2407,7 +2455,7 @@ async function viewEditor(id) {
     $("#ratios").innerHTML = Object.entries(LAYOUTS).map(([k, L]) => { const r = L.r || vr, w = r >= 1 ? 30 : Math.round(30 * r), h = r >= 1 ? Math.round(30 / r) : 30; return `<button type="button" class="ratio" data-v="${k}" aria-pressed="${p.layout === k}"><i style="width:${w}px;height:${h}px"></i>${L.n}</button>`; }).join("");
     $$("#fitSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === p.fit));
     $("#fitSeg").hidden = p.layout === "orig";
-    $("#frameNote").hidden = !p.split.on; $("#ratios").style.opacity = p.split.on ? ".4" : ""; $("#ratios").style.pointerEvents = p.split.on ? "none" : "";
+    $("#frameNote").hidden = !p.split.on; $("#frameNote").textContent = `ตอนนี้เปิด Split Screen อยู่ เฟรมจะเป็น ${p.split.orient === "h" ? "16:9" : "9:16"} อัตโนมัติ ปรับได้ในแท็บ Split Screen`; $("#ratios").style.opacity = p.split.on ? ".4" : ""; $("#ratios").style.pointerEvents = p.split.on ? "none" : "";
   }
   $("#ratios").addEventListener("click", e => { const b = e.target.closest(".ratio"); if (!b) return; p.layout = b.dataset.v; syncFrame(); changed(); sizeStage(); });
   $$("#fitSeg button").forEach(b => b.onclick = () => { p.fit = b.dataset.v; syncFrame(); changed(); });
