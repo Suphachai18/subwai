@@ -290,6 +290,30 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .sx .nm{flex:1;align-self:center;padding:0 8px;font-family:var(--ui);font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sx .ad{width:40px;font-size:18px;color:var(--accent-text);border-left:1px solid var(--line)}
 .sx.mine .nm{color:var(--accent-text)}
+/* editor v4: split screen, inline typing, script list */
+.screen .scv{pointer-events:none;touch-action:auto}
+.ovedit{position:absolute;transform:translate(-50%,-50%);width:88%;z-index:3;text-align:center;border:2px dashed var(--accent);border-radius:10px;padding:4px 8px;line-height:1.35;resize:none;overflow:hidden;outline:none;caret-color:var(--accent);box-sizing:border-box}
+.ovbar{position:absolute;top:8px;right:8px;z-index:4;display:flex;gap:6px}
+.ovbar button{min-height:34px;padding:0 12px;border-radius:99px;border:0;background:rgba(0,0,0,.7);color:#fff;font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer}
+.ovbar #ovDone{background:var(--accent);color:var(--on-accent)}
+.ln{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 8px;align-items:start;padding:6px 8px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.ln.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.ln.sel{border-color:var(--fg)}
+.ln-t{border:0;background:var(--raise);border-radius:6px;padding:5px 7px;font-size:11.5px;color:var(--muted);cursor:pointer;margin-top:4px}
+.ln-in{width:100%;border:0;background:none;color:var(--fg);resize:none;overflow:hidden;font-family:var(--ui);font-size:16px;line-height:1.45;padding:4px 2px;min-height:32px;display:block}
+.ln-in:focus{outline:none}
+.ln-in.tr{grid-column:2;font-size:15px;color:var(--accent-text);padding-top:0}
+.ln .ln-sfx{grid-column:2;font-size:12px;color:var(--muted)}
+.scenes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.scn{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.scn-th{width:96px;height:auto;border-radius:8px;background:#222831;display:block}
+.scn-b{display:grid;gap:4px;min-width:0;align-content:start}
+.scn-title{font-family:var(--ui);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scn-acts{display:flex;flex-wrap:wrap;gap:2px}
+.scn-acts label.mini{display:inline-flex;align-items:center;cursor:pointer}
+.scn-ed{grid-column:1/-1;display:grid;gap:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.sw.big{font-family:var(--ui);font-weight:700;font-size:16px}
+.sw.big input{width:22px;height:22px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -355,7 +379,7 @@ const langOptions = (sel, extra = "") => extra + LANGS.map(([v, n]) => `<option 
 
 /* ================= settings ================= */
 const SKEY = "subwai.settings.v1";
-const DEFAULT_STYLE = { font: "Kanit", weight: 700, size: 64, pos: 80, color: "#FFFFFF", strokeColor: "#000000", stroke: 5, box: false, boxColor: "#000000", boxOpacity: 0.7, shadow: true, size2: 72, color2: "#FFE14D", order: "below", anim: "none", hl: "#FFD400", glow: "", dshadow: "", look: "", kw: true, kwColor: "#FFE14D" };
+const DEFAULT_STYLE = { font: "Kanit", weight: 700, size: 64, pos: 80, color: "#FFFFFF", strokeColor: "#000000", stroke: 5, box: false, boxColor: "#000000", boxOpacity: 0.7, shadow: true, size2: 72, color2: "#FFE14D", order: "below", anim: "none", hl: "#FFD400", glow: "", dshadow: "", look: "", kw: true, kwColor: "#FFE14D", posX: 50 };
 const settings = Object.assign({ provider: "", groqKey: "", apiKey: "", lang: "th", lang2: "", vocab: "", maxChars: 22, chatModel: "", style: { ...DEFAULT_STYLE } }, (() => { try { return JSON.parse(localStorage.getItem(SKEY)) || {}; } catch { return {}; } })());
 settings.style = { ...DEFAULT_STYLE, ...settings.style };
 if (!settings.provider) settings.provider = settings.apiKey && !settings.groqKey ? "openai" : "groq";
@@ -366,12 +390,13 @@ const DB = {
   db: null,
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open("subwai", 2);
+      const r = indexedDB.open("subwai", 3);
       r.onupgradeneeded = () => {
         const d = r.result;
         if (!d.objectStoreNames.contains("projects")) d.createObjectStore("projects", { keyPath: "id" });
         if (!d.objectStoreNames.contains("videos")) d.createObjectStore("videos");
         if (!d.objectStoreNames.contains("sfx")) d.createObjectStore("sfx", { keyPath: "id" });
+        if (!d.objectStoreNames.contains("media")) d.createObjectStore("media", { keyPath: "id" });
       };
       r.onsuccess = () => { this.db = r.result; res(); };
       r.onerror = () => rej(r.error);
@@ -387,7 +412,10 @@ const DB = {
   async del(id) { await this.q(this.st("projects", "readwrite").delete(id)); await this.q(this.st("videos", "readwrite").delete(id)); },
   sfxAll() { return this.q(this.st("sfx", "readonly").getAll()); },
   sfxPut(x) { return this.q(this.st("sfx", "readwrite").put(x)); },
-  sfxDel(id) { return this.q(this.st("sfx", "readwrite").delete(id)); }
+  sfxDel(id) { return this.q(this.st("sfx", "readwrite").delete(id)); },
+  mediaPut(x) { return this.q(this.st("media", "readwrite").put(x)); },
+  mediaGet(id) { return this.q(this.st("media", "readonly").get(id)); },
+  mediaDel(id) { return this.q(this.st("media", "readwrite").delete(id)); }
 };
 function normalize(p) {
   p.style = { ...DEFAULT_STYLE, ...(p.style || {}) };
@@ -397,6 +425,7 @@ function normalize(p) {
   p.lang = p.lang || "th";
   p.layout = p.layout || "orig";
   p.fit = p.fit || "blur";
+  p.split = p.split || { on: false, ratio: 0.5, top: "visual", scenes: [] };
   return p;
 }
 
@@ -805,6 +834,9 @@ function drawCaption(ctx, W, H, cap, p, t) {
   const total = rows.reduce((a, r) => a + r.lh, 0);
   const pad0 = main.px * 0.3;
   const cy = Math.min(H - total / 2 - pad0, Math.max(total / 2 + pad0, H * st.pos / 100));
+  // horizontal position: keep the widest line inside the frame
+  const maxRow = rows.reduce((m, r) => Math.max(m, r.w + r.px * 0.9), 0);
+  const cx = Math.min(W - maxRow / 2 - W * 0.02, Math.max(maxRow / 2 + W * 0.02, W * (st.posX == null ? 50 : st.posX) / 100));
   let y = cy - total / 2;
   rows.forEach(r => { r.y = y + r.lh / 2; y += r.lh; });
 
@@ -831,11 +863,11 @@ function drawCaption(ctx, W, H, cap, p, t) {
   else if (ANIMS[A].w) alpha = k(0.06);
   if (alpha <= 0.001) { ctx.restore(); return; }
   ctx.globalAlpha = alpha;
-  ctx.translate(W / 2 + dx, cy + dy); ctx.scale(sc, sc); ctx.translate(-W / 2, -cy);
+  ctx.translate(cx + dx, cy + dy); ctx.scale(sc, sc); ctx.translate(-cx, -cy);
 
   if (st.box) {
     ctx.fillStyle = hexA(st.boxColor, st.boxOpacity);
-    rows.forEach(rw => { const padX = rw.px * 0.42; rrect(ctx, W / 2 - rw.w / 2 - padX, rw.y - rw.lh / 2, rw.w + padX * 2, rw.lh + 0.5, rw.px * 0.18); ctx.fill(); });
+    rows.forEach(rw => { const padX = rw.px * 0.42; rrect(ctx, cx - rw.w / 2 - padX, rw.y - rw.lh / 2, rw.w + padX * 2, rw.lh + 0.5, rw.px * 0.18); ctx.fill(); });
   }
   // per-word state
   const state = tk => {
@@ -852,7 +884,7 @@ function drawCaption(ctx, W, H, cap, p, t) {
   rows.forEach(rw => {
     ctx.font = font(rw.px);
     const yy = rw.y + rw.px * 0.04;
-    let x = W / 2 - rw.w / 2;
+    let x = cx - rw.w / 2;
     const items = rw.toks.map(tk => { const it = { tk, x, ...(tk.sp ? { show: "" } : state(tk)) }; if (tk.kw && !it.color && !it.hbox) it.color = st.kwColor || "#FFE14D"; x += tk.w; return it; });
     const withPop = (it, fn) => {
       if (!it.pop || it.pop === 1) { fn(); return; }
@@ -895,7 +927,7 @@ function pickMime() {
 const LAYOUTS = { orig: { n: "ต้นฉบับ", r: 0 }, "9:16": { n: "9:16", r: 9 / 16 }, "4:5": { n: "4:5", r: 4 / 5 }, "1:1": { n: "1:1", r: 1 }, "16:9": { n: "16:9", r: 16 / 9 } };
 function frameDims(p, vw, vh, maxSide = 1920) {
   vw = vw || p.width || 1080; vh = vh || p.height || 1920;
-  const r = (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
+  const r = p.split && p.split.on ? 9 / 16 : (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
   let W, H; if (r >= 1) { W = maxSide; H = maxSide / r; } else { H = maxSide; W = maxSide * r; }
   const k = Math.min(1, Math.max(vw, vh) / maxSide);
   return { W: Math.max(2, Math.round(W * k / 2) * 2), H: Math.max(2, Math.round(H * k / 2) * 2) };
@@ -916,7 +948,205 @@ function drawVideo(ctx, W, H, v, p, fallback) {
   ctx.drawImage(tinyCv, 0, 0, W, H); ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0, 0, W, H);
   const w = sw * contain, h = sh * contain; ctx.drawImage(src, (W - w) / 2, (H - h) / 2, w, h);
 }
-function renderFrame(ctx, W, H, v, p, t) { try { drawVideo(ctx, W, H, v, p, null); } catch {} const c = captionAt(p.captions, t); if (c) { try { drawCaption(ctx, W, H, c, p, t); } catch (e) { console.error(e); } } }
+function renderFrame(ctx, W, H, v, p, t, media) {
+  if (p.split && p.split.on) {
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    const { vis, vid } = splitRects(p, W, H);
+    try { if (v && v.videoWidth) drawCover(ctx, v, vid); } catch {}
+    const sc = sceneAt(p, t);
+    if (sc) { try { drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, t - sc.start, media ? media(sc, t) : null); } catch (e) { console.error(e); } }
+  } else { try { drawVideo(ctx, W, H, v, p, null); } catch {} }
+  const c = captionAt(p.captions, t); if (c) { try { drawCaption(ctx, W, H, c, p, t); } catch (e) { console.error(e); } }
+}
+
+/* ================= Split screen: animated explainer scenes ================= */
+const SCENE_TYPES = { big: "หัวข้อ", number: "ตัวเลข", list: "ลิสต์", vs: "เปรียบเทียบ", bars: "กราฟ", quote: "คำพูด" };
+const THEMES = [["#14213D", "#3A5BD9"], ["#0B3D3A", "#11A37F"], ["#2E0F5C", "#C2185B"], ["#1A1A2E", "#E94560"], ["#22223B", "#E09F3E"], ["#0D1B2A", "#0582CA"]];
+const EMOJI_FONT = `"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+const SFONT = (w, px) => `${w} ${px}px "Kanit", "Noto Sans Thai", sans-serif`;
+const hashStr = s => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); };
+const eOut = x => 1 - Math.pow(1 - clamp01(x), 3);
+const bOut = x => easeOutBack(clamp01(x));
+function fitText(ctx, text, maxW, px, weight, maxLines) {
+  let size = px, lines = [];
+  for (let k = 0; k < 9; k++) {
+    ctx.font = SFONT(weight, size); lines = wrapLines(ctx, String(text), maxW, "th");
+    if (lines.length <= maxLines && lines.every(l => ctx.measureText(l).width <= maxW)) break;
+    size *= 0.88;
+  }
+  return { size, lines: lines.slice(0, maxLines + 1) };
+}
+function sceneAt(p, t) { const sc = (p.split && p.split.scenes) || []; for (const s of sc) { if (t >= s.start && t < s.end) return s; } return null; }
+function splitRects(p, W, H) {
+  const sp = p.split, vh = Math.round(H * sp.ratio);
+  return sp.top === "video"
+    ? { vid: { x: 0, y: 0, w: W, h: H - vh }, vis: { x: 0, y: H - vh, w: W, h: vh } }
+    : { vis: { x: 0, y: 0, w: W, h: vh }, vid: { x: 0, y: vh, w: W, h: H - vh } };
+}
+function drawCover(ctx, src, r, zoom = 1) {
+  const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight; if (!sw) return;
+  const k = Math.max(r.w / sw, r.h / sh) * zoom;
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  ctx.drawImage(src, r.x + (r.w - sw * k) / 2, r.y + (r.h - sh * k) / 2, sw * k, sh * k); ctx.restore();
+}
+/* t = seconds since the scene started */
+function drawScene(ctx, X, Y, W, H, sc, t, media) {
+  ctx.save(); ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip(); ctx.translate(X, Y);
+  const dur = Math.max(0.5, sc.end - sc.start), e = Math.max(0, t), u = Math.min(W, H) / 100;
+  if (media && (media.naturalWidth || media.videoWidth)) {
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    try { drawCover(ctx, media, { x: 0, y: 0, w: W, h: H }, media.videoWidth ? 1 : 1 + 0.08 * clamp01(e / dur)); } catch {}
+    ctx.restore(); return;
+  }
+  const th = THEMES[(sc.theme != null ? sc.theme : hashStr(sc.id)) % THEMES.length];
+  const ang = e * 0.25, g = ctx.createLinearGradient(W / 2 - Math.cos(ang) * W, 0, W / 2 + Math.cos(ang) * W, H);
+  g.addColorStop(0, th[0]); g.addColorStop(1, th[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const seed = hashStr(sc.id);
+  for (let i = 0; i < 6; i++) {
+    const r = (8 + ((seed >> (i * 3)) % 14)) * u;
+    const x = ((seed * (i + 3) * 37) % 100) / 100 * W + Math.sin(e * 0.6 + i) * 6 * u;
+    const y = ((seed * (i + 7) * 53) % 100) / 100 * H + Math.cos(e * 0.5 + i * 2) * 6 * u;
+    ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  const inK = eOut(e / 0.35), outK = clamp01((dur - e) / 0.25);
+  ctx.globalAlpha = Math.min(inK, outK); ctx.translate(0, (1 - inK) * 6 * u);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const accent = "#FFD400", white = "#FFFFFF";
+  const shadowOn = () => { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 2 * u; ctx.shadowOffsetY = 0.6 * u; };
+  const shadowOff = () => { ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; };
+  const emoji = (ch, x, y, px, k = 1) => { if (!ch || k <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.font = `${px}px ${EMOJI_FONT}`; ctx.fillText(ch, 0, 0); ctx.restore(); };
+  const block = (text, x, y, maxW, px, weight, color, maxLines, shown) => {
+    if (!text) return; const f = fitText(ctx, text, maxW, px, weight, maxLines);
+    ctx.font = SFONT(weight, f.size); ctx.fillStyle = color; shadowOn();
+    const lines = shown == null ? f.lines : wrapLines(ctx, shown, maxW, "th");
+    const lh = f.size * 1.3, y0 = y - (f.lines.length - 1) * lh / 2;
+    lines.forEach((l, i) => ctx.fillText(l, x, y0 + i * lh)); shadowOff();
+  };
+  const type = SCENE_TYPES[sc.type] ? sc.type : "big";
+  if (type === "big") {
+    emoji(sc.emoji, W / 2, H * 0.3, 20 * u, bOut(e / 0.5) * (1 + 0.04 * Math.sin(e * 3)));
+    block(sc.title, W / 2, H * (sc.emoji ? 0.62 : 0.5), W * 0.86, 11 * u, 800, white, 2);
+    if (sc.label) { ctx.save(); ctx.globalAlpha *= clamp01((e - 0.3) / 0.3); block(sc.label, W / 2, H * 0.83, W * 0.8, 5.5 * u, 500, "rgba(255,255,255,.88)", 2); ctx.restore(); }
+  } else if (type === "number") {
+    const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/);
+    let shown = raw;
+    if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * eOut(e / 0.9)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
+    emoji(sc.emoji, W / 2, H * 0.2, 12 * u, bOut(e / 0.4));
+    ctx.save(); const f = fitText(ctx, raw, W * 0.9, 19 * u, 800, 1); ctx.font = SFONT(800, f.size); ctx.fillStyle = accent; shadowOn(); ctx.fillText(shown, W / 2, H * 0.47); ctx.restore();
+    block(sc.label || sc.title, W / 2, H * 0.74, W * 0.84, 6.5 * u, 600, white, 2);
+  } else if (type === "list") {
+    const items = (sc.items || []).filter(Boolean).slice(0, 4), top = sc.title ? H * 0.24 : H * 0.1;
+    if (sc.title) block((sc.emoji ? sc.emoji + " " : "") + sc.title, W / 2, H * 0.13, W * 0.88, 7.5 * u, 800, white, 1);
+    const n = items.length || 1, rowH = Math.min(17 * u, (H - top - 5 * u) / n);
+    items.forEach((it, i) => {
+      const k = eOut((e - 0.3 - i * 0.4) / 0.35); if (k <= 0) return;
+      const y = top + rowH * (i + 0.5) + (1 - k) * 4 * u, x0 = W * 0.08, bw = W * 0.84, bh = rowH * 0.8;
+      ctx.save(); ctx.globalAlpha *= k;
+      ctx.fillStyle = "rgba(255,255,255,.15)"; rrect(ctx, x0, y - bh / 2, bw, bh, bh * 0.25); ctx.fill();
+      ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(x0 + bh * 0.55, y, bh * 0.28, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#1B1503"; ctx.lineWidth = bh * 0.07; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath(); ctx.moveTo(x0 + bh * 0.42, y); ctx.lineTo(x0 + bh * 0.52, y + bh * 0.1); ctx.lineTo(x0 + bh * 0.7, y - bh * 0.12); ctx.stroke();
+      ctx.textAlign = "left"; const f = fitText(ctx, it, bw - bh * 1.3, Math.min(6.5 * u, bh * 0.42), 600, 1);
+      ctx.font = SFONT(600, f.size); ctx.fillStyle = white; ctx.fillText(f.lines[0] || "", x0 + bh * 1.05, y); ctx.restore();
+    });
+  } else if (type === "vs") {
+    const kA = eOut(e / 0.45), kB = eOut((e - 0.2) / 0.45), cw = W * 0.4, ch = H * 0.62, y = H * 0.54;
+    const ems = sc.items || [];
+    const card = (x, txt, col, k, em) => { if (k <= 0) return; ctx.save(); ctx.globalAlpha *= k; ctx.fillStyle = col; rrect(ctx, x - cw / 2, y - ch / 2, cw, ch, 3 * u); ctx.fill(); emoji(em, x, y - ch * 0.2, 11 * u); block(txt, x, y + ch * 0.18, cw * 0.86, 6.5 * u, 700, white, 3); ctx.restore(); };
+    card(W * 0.26 - (1 - kA) * 20 * u, sc.a, "rgba(255,255,255,.17)", kA, ems[0] || "");
+    card(W * 0.74 + (1 - kB) * 20 * u, sc.b, "rgba(0,0,0,.28)", kB, ems[1] || "");
+    const pk = bOut((e - 0.4) / 0.4);
+    if (pk > 0) { ctx.save(); ctx.translate(W / 2, y); ctx.scale(pk * (1 + 0.05 * Math.sin(e * 5)), pk); ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(0, 0, 7 * u, 0, Math.PI * 2); ctx.fill(); ctx.font = SFONT(800, 6 * u); ctx.fillStyle = "#1B1503"; ctx.fillText("VS", 0, 0.3 * u); ctx.restore(); }
+    if (sc.title) block(sc.title, W / 2, H * 0.11, W * 0.9, 6.5 * u, 800, white, 1);
+  } else if (type === "bars") {
+    const rows = (sc.items || []).map(s => { const m = String(s).match(/^(.*?)[\s:：=\-]+(-?\d+(?:\.\d+)?)\s*%?\s*$/); return m ? { l: m[1].trim(), v: +m[2] } : null; }).filter(Boolean).slice(0, 5);
+    if (sc.title) block(sc.title, W / 2, H * 0.12, W * 0.9, 7 * u, 800, white, 1);
+    const max = Math.max(1, ...rows.map(r => r.v)), top = H * 0.24, n = rows.length || 1, rh = (H * 0.7) / n;
+    rows.forEach((r, i) => {
+      const k = eOut((e - 0.2 - i * 0.2) / 0.7), y = top + rh * (i + 0.5), x0 = W * 0.08, bw = W * 0.84, bhh = Math.min(rh * 0.32, 7 * u);
+      ctx.font = SFONT(600, Math.min(5.5 * u, rh * 0.3)); ctx.fillStyle = white;
+      ctx.textAlign = "left"; ctx.fillText(r.l, x0, y - bhh * 0.9);
+      ctx.textAlign = "right"; ctx.fillText(String(Math.round(r.v * k * 10) / 10), x0 + bw, y - bhh * 0.9); ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(255,255,255,.16)"; rrect(ctx, x0, y, bw, bhh, bhh / 2); ctx.fill();
+      ctx.fillStyle = accent; rrect(ctx, x0, y, Math.max(bhh, bw * r.v / max * k), bhh, bhh / 2); ctx.fill();
+    });
+    if (!rows.length && !sc.title) block("—", W / 2, H / 2, W * 0.8, 10 * u, 800, white, 1);
+  } else if (type === "quote") {
+    ctx.font = SFONT(800, 30 * u); ctx.fillStyle = "rgba(255,255,255,.22)"; ctx.fillText("“", W * 0.14, H * 0.24);
+    const txt = String(sc.title || ""), gs = graphemes(txt);
+    const n = Math.floor(gs.length * clamp01(e / Math.min(dur * 0.6, gs.length * 0.05 + 0.2)));
+    block(txt, W / 2, H * 0.5, W * 0.8, 8 * u, 700, white, 3, gs.slice(0, n).join(""));
+    if (sc.label) block("— " + sc.label, W / 2, H * 0.84, W * 0.8, 5 * u, 500, accent, 1);
+  }
+  ctx.restore();
+}
+function normalizeScenes(list, dur) {
+  list.sort((a, b) => a.start - b.start);
+  const out = [];
+  for (const s of list) { const last = out[out.length - 1]; if (last && s.start < last.end - 0.05) { if (s.end <= last.end) continue; s.start = last.end; } out.push(s); }
+  out.forEach((s, i) => { if (i === 0) s.start = 0; if (i < out.length - 1) s.end = out[i + 1].start; else s.end = Math.max(s.end, dur || s.end); s.theme = i % THEMES.length; });
+  return out;
+}
+function plainScenes(p) {
+  const out = []; let cur = null;
+  for (const c of p.captions) {
+    if (!cur) cur = { id: uid(), start: c.start, end: c.end, type: "big", emoji: "", title: c.text, label: "", value: "", items: [], a: "", b: "", media: null };
+    else { cur.end = c.end; cur.title = joinTok(cur.title, c.text); }
+    if (cur.end - cur.start >= 3) { cur.title = cur.title.slice(0, 60); out.push(cur); cur = null; }
+  }
+  if (cur) { cur.title = cur.title.slice(0, 60); out.push(cur); }
+  return normalizeScenes(out, p.duration);
+}
+async function aiScenes(p) {
+  const caps = p.captions, raw = [], B = 70;
+  for (let s = 0; s < caps.length; s += B) {
+    const j = await chatJSON([
+      { role: "system", content: `You are a motion designer making animated explainer visuals for the top half of a split-screen short video. Split the script into scenes. Each scene covers consecutive lines ("from" and "to" are line indexes) and lasts roughly 3 to 7 seconds; together the scenes must cover every line in order with no gaps. For each scene choose the visual that best explains what is said:
+- "big": a keyword headline with one emoji (the default)
+- "number": a key number, price, percentage or count in "value" (like "189,000 บาท", "3 ข้อ", "50%") with a short "label"
+- "list": 2 to 4 short bullet "items" with a short "title"
+- "vs": a comparison of two things in "a" and "b", with "items" holding one emoji for each side
+- "bars": comparing amounts, "items" like "ความเร็ว: 40"
+- "quote": a strong statement or customer quote in "title", "label" = who said it
+Write all on-screen text in the same language as the script and keep it very short (headline under 20 characters, items under 18). Pick one fitting emoji per scene. Reply only with JSON: {"scenes":[{"from":0,"to":2,"type":"big","emoji":"🚗","title":"","label":"","value":"","items":[],"a":"","b":""}]}` },
+      { role: "user", content: JSON.stringify({ lines: caps.slice(s, s + B).map((c, k) => ({ i: s + k, t: +c.start.toFixed(1), text: c.text })) }) }
+    ]);
+    (j.scenes || []).forEach(x => raw.push(x));
+  }
+  const str = (v, n) => String(v == null ? "" : v).slice(0, n);
+  const scenes = raw.map(x => {
+    const f = caps[+x.from], to = caps[Math.max(+x.from, +x.to)] || f; if (!f) return null;
+    return { id: uid(), start: f.start, end: to.end, type: SCENE_TYPES[x.type] ? x.type : "big", emoji: str(x.emoji, 8), title: str(x.title, 60), label: str(x.label, 60), value: str(x.value, 30),
+      items: Array.isArray(x.items) ? x.items.map(v => str(v, 40)).filter(Boolean).slice(0, 5) : [], a: str(x.a, 40), b: str(x.b, 40), media: null };
+  }).filter(Boolean);
+  if (!scenes.length) throw new Error("AI ไม่ได้สร้างฉากใดเลย ลองใหม่อีกครั้ง");
+  return normalizeScenes(scenes, p.duration);
+}
+/* user photos / clips placed on scenes */
+async function loadMediaEls(p, cache) {
+  for (const sc of (p.split && p.split.scenes) || []) {
+    if (!sc.media || cache[sc.media.id]) continue;
+    const rec = await DB.mediaGet(sc.media.id); if (!rec) continue;
+    const url = URL.createObjectURL(rec.blob); let el;
+    if (rec.kind === "video") {
+      el = document.createElement("video"); el.muted = true; el.playsInline = true; el.setAttribute("playsinline", ""); el.preload = "auto"; el.loop = true; el.src = url;
+      el.style.cssText = "position:fixed;left:-10px;top:0;width:2px;height:2px;opacity:0;pointer-events:none"; document.body.appendChild(el);
+    } else { el = new Image(); el.src = url; try { await el.decode(); } catch {} }
+    cache[sc.media.id] = { el, url, kind: rec.kind };
+  }
+}
+function mediaFor(cache, sc, t, playing) {
+  for (const k in cache) { const m = cache[k]; if (m.kind === "video" && (!sc || !sc.media || sc.media.id !== k) && !m.el.paused) m.el.pause(); }
+  if (!sc || !sc.media) return null;
+  const m = cache[sc.media.id]; if (!m) return null;
+  if (m.kind === "video") {
+    const v = m.el, d = v.duration || 0, want = d ? (t - sc.start) % d : t - sc.start;
+    if (playing) { if (v.paused) v.play().catch(() => {}); if (Math.abs(v.currentTime - want) > 0.35) v.currentTime = want; }
+    else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - want) > 0.05) v.currentTime = want; }
+  }
+  return m.el;
+}
+function freeMedia(cache) { for (const k in cache) { const m = cache[k]; try { if (m.kind === "video") { m.el.pause(); m.el.remove(); } URL.revokeObjectURL(m.url); } catch {} delete cache[k]; } }
 
 /* ================= AI proofreading and keyword emphasis ================= */
 async function aiProofread(p, onProg) {
@@ -1041,7 +1271,8 @@ function viewNew() {
       <div class="field"><span class="lab">ให้ AI ช่วย</span>
         <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
         <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญด้วยสี</label>
-        <label class="sw"><input type="checkbox" id="npSfx"> ใส่เอฟเฟกต์เสียงให้อัตโนมัติ</label></div>
+        <label class="sw"><input type="checkbox" id="npSfx"> ใส่เอฟเฟกต์เสียงให้อัตโนมัติ</label>
+        <label class="sw"><input type="checkbox" id="npSplit"> ทำ Split Screen: AI สร้างแอนิเมชันประกอบสคริปต์ (เหมาะกับคลิปเล่าเรื่อง)</label></div>
       <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
       <ol class="steps" id="steps" hidden>
         <li data-s="audio"><span class="dot"></span><span id="audLab">แยกเสียงจากวิดีโอ</span></li>
@@ -1051,6 +1282,7 @@ function viewNew() {
         <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
         <li data-s="kw" hidden><span class="dot"></span>AI เลือกคำสำคัญ</li>
         <li data-s="sfx" hidden><span class="dot"></span>AI ใส่เอฟเฟกต์เสียง</li>
+        <li data-s="split" hidden><span class="dot"></span>AI สร้างแอนิเมชันประกอบ</li>
       </ol>
       <div class="err" id="err" hidden></div>
     </div>`;
@@ -1062,6 +1294,7 @@ function viewNew() {
   $("#npSfx").checked = settings.autoSfx !== false;
   $("#npFix").checked = settings.autoFix !== false;
   $("#npKw").checked = settings.autoKw !== false;
+  $("#npSplit").checked = !!settings.autoSplit;
   const syncNp = () => {
     $("#npFont").value = npStyle.font; $("#npAnim").value = ANIMS[npStyle.anim] ? npStyle.anim : "none";
     $$("#npLooks .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === npStyle.look));
@@ -1113,13 +1346,15 @@ function viewNew() {
     $$("li", steps).forEach(li => li.className = "");
     $('li[data-s="tr"]', steps).hidden = !lang2;
     const autoSfx = $("#npSfx").checked, autoFix = $("#npFix").checked, autoKw = $("#npKw").checked;
+    const autoSplit = $("#npSplit").checked;
+    $('li[data-s="split"]', steps).hidden = !autoSplit;
     $('li[data-s="sfx"]', steps).hidden = !autoSfx; $('li[data-s="fix"]', steps).hidden = !autoFix; $('li[data-s="kw"]', steps).hidden = !autoKw;
     if (lang2) $("#trLab").textContent = "แปลเป็นภาษา" + LNAME[lang2];
     const mark = (s, c) => { $(`li[data-s="${s}"]`, steps).className = c; };
     let stage = "audio";
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
-      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; saveSettings();
+      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoSplit = autoSplit; saveSettings();
       mark("audio", "doing");
       const { chunks, duration } = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
       if (cap) cap.dispose();
@@ -1168,7 +1403,14 @@ function viewNew() {
       if (autoSfx) {
         stage = "sfx"; mark("sfx", "doing");
         try { await aiSuggestSfx(p); mark("sfx", "done"); await DB.put(p); }
-        catch (e) { mark("sfx", "fail"); toast("ซับพร้อมแล้ว แต่ใส่เอฟเฟกต์ไม่สำเร็จ กดให้ AI ใส่ใหม่ได้ในแท็บเอฟเฟกต์", 5000); await sleep(1200); }
+        catch (e) { mark("sfx", "fail"); toast("ซับพร้อมแล้ว แต่ใส่เอฟเฟกต์ไม่สำเร็จ กดให้ AI ใส่ใหม่ได้ในแท็บเสียง", 5000); await sleep(1200); }
+      }
+      if (autoSplit) {
+        stage = "split"; mark("split", "doing");
+        try { p.split.scenes = await aiScenes(p); }
+        catch (e) { p.split.scenes = plainScenes(p); toast("AI สร้างฉากไม่สำเร็จ ใช้ฉากจากซับแทน กดสร้างใหม่ได้ในแท็บ Split", 5000); }
+        p.split.on = true; p.split.prevPos = p.style.pos; p.style.pos = 50;
+        mark("split", "done"); await DB.put(p);
       }
       await sleep(300);
       busy = false;
@@ -1208,9 +1450,10 @@ async function viewEditor(id) {
   await loadCustomLib();
   let blob = tempVideos[id] || (p.videoSaved ? await DB.getVideo(id) : null);
   let url = null, raf = 0, saveT = 0, histT = 0, exporting = null, sched = new Set(), live = [];
-  let video = null, cv = null, thumbImg = null, sid = null, playUntil = null, fxRaf = 0, activeId, tab = "text";
+  let video = null, cv = null, thumbImg = null, sid = null, playUntil = null, fxRaf = 0, activeId, tab = "text", edId = null, guideOn = false;
+  const pvMedia = {};
 
-  const TOOLS = [["text", "ข้อความ"], ["style", "สไตล์"], ["font", "ฟอนต์"], ["anim", "อนิเมชัน"], ["sfx", "เสียง"], ["frame", "เฟรม"], ["export", "ส่งออก"]];
+  const TOOLS = [["text", "ข้อความ"], ["split", "Split Screen"], ["style", "สไตล์"], ["font", "ฟอนต์"], ["anim", "อนิเมชัน"], ["sfx", "เสียง"], ["frame", "เฟรม"], ["export", "ส่งออก"]];
   const COLORS = ["#FFFFFF", "#FFE14D", "#FFD400", "#FF9F1C", "#FF5A5A", "#FF8FD1", "#7CFFB2", "#4DE0FF", "#7AA7FF", "#111111", "#1B2A4A"];
   const swatches = k => `<div class="swatches" data-sw="${k}">${COLORS.map(c => `<button type="button" class="sw-c" data-c="${c}" style="background:${c}" aria-label="สี ${c}"></button>`).join("")}<input type="color" class="sw-custom" data-cc="${k}" aria-label="เลือกสีเอง"></div>`;
   const modeBtns = [["main", "ภาษาหลัก"], ["both", "สองภาษา"], ["tr", "เฉพาะคำแปล"]];
@@ -1256,9 +1499,20 @@ async function viewEditor(id) {
             <span class="hint">สร้างบรรทัดซับใหม่จากผลถอดเสียงเดิม คำที่แก้ไว้และคำแปลจะหายไป (กด ↶ ย้อนได้)</span>
             <button class="btn small" id="rGo">จัดบรรทัดใหม่</button>
           </div>
-          <p class="hint" style="margin:0">แตะบรรทัดเพื่อแก้ไข · หรือแตะซับบนวิดีโอได้เลย</p>
+          <p class="hint" style="margin:0">พิมพ์แก้ได้เลย · Enter = แยกเป็นบรรทัดใหม่ · ลบที่ต้นบรรทัด = รวมกับบรรทัดก่อน · แตะเวลาเพื่อตั้งค่าบรรทัด</p>
           <ol class="lines" id="lines"></ol>
           <button class="btn small" id="addEnd">+ เพิ่มบรรทัดท้ายสุด</button>
+        </section>
+
+        <section class="pane" data-p="split" hidden>
+          <label class="sw big"><input type="checkbox" id="spOn"> เปิด Split Screen</label>
+          <span class="hint" style="margin-top:-8px">ครึ่งหนึ่งเป็นแอนิเมชันหรือรูป/คลิปประกอบ อีกครึ่งเป็นคลิปของคุณ ส่งออกเป็นเฟรม 9:16 เหมาะกับคลิปเล่าเรื่อง</span>
+          <button class="btn primary block" id="spAi">✨ ให้ AI สร้างแอนิเมชันประกอบสคริปต์</button>
+          <span class="hint" id="spStat" style="margin-top:-8px"></span>
+          <div class="field"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual">ด้านบน</button><button type="button" data-v="video">ด้านล่าง</button></div></div>
+          <div class="ctl"><label for="spRatio">ขนาดภาพประกอบ</label><input type="range" id="spRatio" min="30" max="70" step="1"><output id="oRatio"></output></div>
+          <div class="row"><label class="btn small" for="spAdd">＋ ใส่รูป/คลิปของคุณ ณ ตำแหน่งนี้</label><input type="file" id="spAdd" accept="image/*,video/*" hidden><button class="btn small" id="spPlain">สร้างฉากจากซับ (ไม่ใช้ AI)</button></div>
+          <ol class="scenes" id="scenes"></ol>
         </section>
 
         <section class="pane" data-p="style" hidden>
@@ -1310,6 +1564,7 @@ async function viewEditor(id) {
         </section>
 
         <section class="pane" data-p="frame" hidden>
+          <p class="hint" id="frameNote" hidden style="margin:0">ตอนนี้เปิด Split Screen อยู่ เฟรมจะเป็น 9:16 อัตโนมัติ</p>
           <div class="field"><span class="lab">ขนาดเฟรม</span><div class="ratios" id="ratios"></div>
             <span class="hint">TikTok, Reels, Shorts ใช้ 9:16 · โพสต์ Facebook/IG ใช้ 4:5 หรือ 1:1 · YouTube ใช้ 16:9</span></div>
           <div class="field"><span class="lab">การจัดภาพ</span><div class="seg" id="fitSeg"><button type="button" data-v="blur">พอดีเฟรม + พื้นหลังเบลอ</button><button type="button" data-v="fill">เต็มเฟรม (ตัดขอบ)</button></div></div>
@@ -1344,7 +1599,7 @@ async function viewEditor(id) {
     </div>`;
 
   /* ---------- save + undo/redo ---------- */
-  const snap = () => JSON.stringify({ captions: p.captions, sfx: p.sfx, style: p.style, tr: p.tr, layout: p.layout, fit: p.fit, lang: p.lang, audio: p.audio, maxChars: p.maxChars });
+  const snap = () => JSON.stringify({ captions: p.captions, sfx: p.sfx, style: p.style, tr: p.tr, layout: p.layout, fit: p.fit, lang: p.lang, audio: p.audio, maxChars: p.maxChars, split: p.split });
   let hist = [snap()], hi = 0;
   const syncUndo = () => { $("#undo").disabled = hi <= 0 && !histT; $("#redo").disabled = hi >= hist.length - 1; };
   const pushHist = () => { clearTimeout(histT); histT = 0; const s = snap(); if (s !== hist[hi]) { hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 80) hist.shift(); hi = hist.length - 1; } syncUndo(); };
@@ -1357,7 +1612,7 @@ async function viewEditor(id) {
   }
   function restore(i) {
     Object.assign(p, JSON.parse(hist[i])); hi = i; save(); syncUndo();
-    renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); sizeStage();
+    renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); syncSplitUI(); renderScenes(); sizeStage(); loadMediaEls(p, pvMedia).then(hookMedia);
     if (sid) { if (p.captions.some(c => c.id === sid)) fillSheet(); else closeSheet(); }
   }
   $("#undo").onclick = () => { if (histT) pushHist(); if (hi > 0) { restore(hi - 1); toast("ย้อนกลับแล้ว", 1000); } };
@@ -1376,6 +1631,7 @@ async function viewEditor(id) {
     if (tab === "anim") startFx(); else stopFx();
     if (tab === "style") { paintLooks(); renderMine(); }
     if (tab === "export") syncExportHint();
+    if (tab === "split") renderScenes();
   });
 
   /* ---------- player ---------- */
@@ -1389,7 +1645,7 @@ async function viewEditor(id) {
     }
     url = URL.createObjectURL(blob);
     col.innerHTML = `<div class="player" id="player">
-        <div class="screen" id="screen"><canvas id="bgcv" class="bgcv" width="48" height="85" aria-hidden="true"></canvas><video id="vid" playsinline webkit-playsinline preload="auto"${p.thumb ? ` poster="${p.thumb}"` : ""}></video><canvas id="cv" aria-label="วิดีโอ แตะเพื่อเล่นหรือหยุด แตะซับเพื่อแก้ ลากซับขึ้นลงเพื่อย้าย"></canvas></div>
+        <div class="screen" id="screen"><canvas id="bgcv" class="bgcv" width="48" height="85" aria-hidden="true"></canvas><canvas id="scv" class="scv" hidden></canvas><video id="vid" playsinline webkit-playsinline preload="auto"${p.thumb ? ` poster="${p.thumb}"` : ""}></video><canvas id="cv" aria-label="วิดีโอ แตะเพื่อเล่นหรือหยุด แตะซับเพื่อพิมพ์แก้ ลากซับเพื่อย้าย"></canvas><textarea id="ovEdit" class="ovedit" rows="1" enterkeyhint="enter" hidden aria-label="พิมพ์แก้ซับ"></textarea><div class="ovbar" id="ovBar" hidden><button type="button" id="ovMore">ตั้งค่าบรรทัด</button><button type="button" id="ovDone">✓ เสร็จ</button></div></div>
         <button class="fs-close" id="fsClose" aria-label="ออกจากเต็มจอ">✕</button>
         <div class="pctl">
           <button class="pbtn play" id="pPlay" aria-label="เล่น">▶</button>
@@ -1409,28 +1665,33 @@ async function viewEditor(id) {
     $("#pFs").onclick = () => setFs(!$("#player").classList.contains("fs"));
     $("#fsClose").onclick = () => setFs(false);
     $("#pSeek").oninput = e => { if (!video.duration) return; playUntil = null; video.currentTime = e.target.value / 1000 * video.duration; draw(); };
-    $("#pEdit").onclick = () => { video.pause(); const c = capNear(video.currentTime); if (c) openSheet(c); };
-    /* tap = play/pause, tap on a caption = edit it, drag a caption = move it */
+    $("#pEdit").onclick = () => { video.pause(); const c = capNear(video.currentTime); if (c) { seekTo(c.start); startInline(c); } };
+    setupInline();
+    /* tap = play/pause, tap on a caption = type into it, drag a caption = move it anywhere */
     let pd = null;
     cv.addEventListener("pointerdown", e => {
-      const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * 100;
-      const c = captionAt(p.captions, video.currentTime);
-      pd = { y0: e.clientY, pos: p.style.pos, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 16 };
+      if (edId) endInline();
+      const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * 100, x = (e.clientX - r.left) / r.width * 100;
+      const c = captionAt(p.captions, video.currentTime), px = p.style.posX == null ? 50 : p.style.posX;
+      pd = { x0: e.clientX, y0: e.clientY, pos: p.style.pos, posX: px, w: r.width, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 16 && Math.abs(x - px) < 46 };
       try { cv.setPointerCapture(e.pointerId); } catch {}
     });
     cv.addEventListener("pointermove", e => {
       if (!pd || !pd.onCap) return;
-      const dy = e.clientY - pd.y0;
-      if (!pd.moved && Math.abs(dy) < 8) return;
-      pd.moved = true; p.style.pos = Math.round(Math.max(8, Math.min(94, pd.pos + dy / pd.h * 100))); draw();
+      const dx = e.clientX - pd.x0, dy = e.clientY - pd.y0;
+      if (!pd.moved && Math.hypot(dx, dy) < 8) return;
+      pd.moved = true;
+      p.style.pos = Math.round(Math.max(6, Math.min(94, pd.pos + dy / pd.h * 100)));
+      let nx = pd.posX + dx / pd.w * 100; guideOn = Math.abs(nx - 50) < 3; if (guideOn) nx = 50;
+      p.style.posX = Math.round(Math.max(5, Math.min(95, nx))); draw();
     });
     cv.addEventListener("pointerup", () => {
-      if (!pd) return; const d = pd; pd = null;
+      if (!pd) return; const d = pd; pd = null; guideOn = false;
       if (d.moved) { syncStyleUI(); changed(); }
-      else if (d.onCap) { video.pause(); const c = captionAt(p.captions, video.currentTime); if (c) openSheet(c); }
+      else if (d.onCap) { const c = captionAt(p.captions, video.currentTime); if (c) startInline(c); }
       else togglePlay();
     });
-    cv.addEventListener("pointercancel", () => { pd = null; });
+    cv.addEventListener("pointercancel", () => { pd = null; guideOn = false; draw(); });
     sizeStage();
   }
   const syncPlayBtn = () => { const b = $("#pPlay"); if (!b || !video) return; const on = !video.paused && !video.ended; b.textContent = on ? "❚❚" : "▶"; b.setAttribute("aria-label", on ? "หยุด" : "เล่น"); const lp = $("#lsPlay"); if (lp) lp.textContent = on ? "❚❚ หยุด" : "▶ เล่นบรรทัดนี้"; };
@@ -1445,7 +1706,7 @@ async function viewEditor(id) {
   }
   const onFsChange = () => { const pl = $("#player"); if (pl && !document.fullscreenElement && pl.classList.contains("fs")) setFs(false); else sizeStage(); };
   document.addEventListener("fullscreenchange", onFsChange);
-  const onKey = e => { if (e.key === "Escape") { if ($("#player") && $("#player").classList.contains("fs")) setFs(false); else if (sid) closeSheet(); } };
+  const onKey = e => { if (e.key === "Escape") { if (edId) return; if ($("#player") && $("#player").classList.contains("fs")) setFs(false); else if (sid) closeSheet(); } };
   document.addEventListener("keydown", onKey);
   function sizeStage() {
     const scr = $("#screen"); if (!scr || !cv) return;
@@ -1458,12 +1719,20 @@ async function viewEditor(id) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
     const bg = $("#bgcv"); if (bg) { bg.width = 48; bg.height = Math.max(1, Math.round(48 / ratio)); }
+    const sv = $("#scv");
+    if (p.split.on) {
+      const { vis, vid } = splitRects(p, w, h);
+      Object.assign(video.style, { left: vid.x + "px", top: vid.y + "px", width: vid.w + "px", height: vid.h + "px", objectFit: "cover" });
+      sv.hidden = false; Object.assign(sv.style, { left: vis.x + "px", top: vis.y + "px", width: vis.w + "px", height: vis.h + "px" });
+      sv.width = Math.round(vis.w * dpr); sv.height = Math.round(vis.h * dpr);
+    } else { Object.assign(video.style, { left: "0px", top: "0px", width: "100%", height: "100%" }); sv.hidden = true; }
     draw();
   }
   let bgAt = 0;
   function paintBg(force) {
     // blurred fill behind the video when the frame shape differs from the clip
     const bg = $("#bgcv"); if (!bg || !video) return;
+    if (p.split.on) { bg.hidden = true; return; }
     const vr = (video.videoWidth || p.width || 9) / (video.videoHeight || p.height || 16), fr = bg.width / bg.height;
     const need = p.layout !== "orig" && p.fit !== "fill" && Math.abs(vr - fr) > 0.01;
     bg.hidden = !need; video.style.objectFit = p.fit === "fill" && p.layout !== "orig" ? "cover" : "contain";
@@ -1481,8 +1750,11 @@ async function viewEditor(id) {
     const ctx = cv.getContext("2d"), t = video ? video.currentTime : 0;
     ctx.clearRect(0, 0, cv.width, cv.height);
     paintBg(video && video.paused);
+    if (p.split.on) paintScene(t);
     const c = captionAt(p.captions, t);
-    if (c) { try { drawCaption(ctx, cv.width, cv.height, c, p, t); } catch (e) { console.error(e); } }
+    if (c && c.id !== edId) { try { drawCaption(ctx, cv.width, cv.height, c, p, t); } catch (e) { console.error(e); } }
+    if (guideOn) { ctx.save(); ctx.strokeStyle = "rgba(255,212,0,.95)"; ctx.setLineDash([10, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cv.width / 2, 0); ctx.lineTo(cv.width / 2, cv.height); ctx.stroke(); ctx.restore(); }
+    if (edId) styleInline();
     const d = (video && video.duration) || p.duration || 0;
     const pt = $("#pTime"); if (pt) pt.textContent = `${fmtDur(t)} / ${fmtDur(d)}`;
     const sk = $("#pSeek"); if (sk && document.activeElement !== sk) sk.value = d ? Math.round(t / d * 1000) : 0;
@@ -1511,26 +1783,120 @@ async function viewEditor(id) {
     };
     f();
   }
+  function paintScene(t) {
+    const sv = $("#scv"); if (!sv || sv.hidden) return;
+    const g = sv.getContext("2d"), sc = sceneAt(p, t);
+    if (!sc) { g.fillStyle = "#14161c"; g.fillRect(0, 0, sv.width, sv.height); return; }
+    try { drawScene(g, 0, 0, sv.width, sv.height, sc, t - sc.start, mediaFor(pvMedia, sc, t, !!video && !video.paused)); } catch (e) { console.error(e); }
+  }
+  function hookMedia() { for (const k in pvMedia) { const m = pvMedia[k]; if (m.kind === "video" && !m.hooked) { m.hooked = true; m.el.addEventListener("loadeddata", () => { draw(); paintSceneThumbs(); }); m.el.addEventListener("seeked", () => { if (video && video.paused) draw(); }); } } draw(); }
+  const seekTo = t => { if (video) { playUntil = null; video.currentTime = t + 0.01; } };
   const onResize = () => sizeStage();
   window.addEventListener("resize", onResize);
   const capNear = t => { let c = captionAt(p.captions, t); if (!c) { for (const x of p.captions) { if (x.start <= t) c = x; else break; } } return c || p.captions[0]; };
 
   /* ---------- caption list ---------- */
-  const markHl = c => { let s = esc(c.text); (c.hl || []).forEach(w => { if (w) s = s.split(esc(w)).join(`<mark>${esc(w)}</mark>`); }); return s || `<span class="hint">(ว่าง แตะเพื่อพิมพ์)</span>`; };
+  const grow = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
   const rowHTML = c => {
-    const fx = p.sfx.filter(s => s.t >= c.start && s.t < c.end).map(s => sfxName(s.key)).join(", ");
-    return `<button type="button" class="ln-b"><span class="ln-t mono">${fmtT(c.start)}</span><span class="ln-x">${markHl(c)}</span>${p.tr.lang ? `<span class="ln-tr">${esc(c.tr || "")}</span>` : ""}${fx ? `<span class="ln-sfx">♪ ${esc(fx)}</span>` : ""}</button>`;
+    const fx = p.sfx.filter(x => x.t >= c.start && x.t < c.end).map(x => sfxName(x.key)).join(", ");
+    return `<button type="button" class="ln-t mono" data-open aria-label="ตั้งค่าบรรทัดเวลา ${fmtT(c.start)}">${fmtT(c.start)}</button><textarea class="ln-in" data-f="text" rows="1" enterkeyhint="enter" aria-label="ข้อความซับ" placeholder="พิมพ์ซับ…">${esc(c.text)}</textarea>${p.tr.lang ? `<textarea class="ln-in tr" data-f="tr" rows="1" aria-label="คำแปล" placeholder="คำแปลภาษา${LNAME[p.tr.lang]}">${esc(c.tr || "")}</textarea>` : ""}${c.hl && c.hl.length ? `<span class="ln-sfx">เน้น: ${esc(c.hl.join(", "))}</span>` : ""}${fx ? `<span class="ln-sfx">♪ ${esc(fx)}</span>` : ""}`;
   };
-  function renderList() {
+  function renderList(focusId, caret) {
     $("#lines").innerHTML = p.captions.map(c => `<li class="ln${c.id === sid ? " sel" : ""}" data-id="${c.id}">${rowHTML(c)}</li>`).join("");
+    $$("#lines .ln-in").forEach(grow);
     activeId = undefined; draw();
+    if (focusId) { const ta = $(`.ln[data-id="${focusId}"] .ln-in`); if (ta) { ta.focus(); const pos = caret == null ? ta.value.length : caret; try { ta.setSelectionRange(pos, pos); } catch {} } }
   }
-  const updateRow = c => { const li = $(`.ln[data-id="${c.id}"]`); if (li) li.innerHTML = rowHTML(c); };
-  $("#lines").addEventListener("click", e => { const li = e.target.closest(".ln"); if (!li) return; const c = p.captions.find(x => x.id === li.dataset.id); if (c) openSheet(c, { seek: true }); });
+  const syncRowText = c => { const ta = $(`.ln[data-id="${c.id}"] .ln-in[data-f="text"]`); if (ta && document.activeElement !== ta) { ta.value = c.text; grow(ta); } };
+  const updateRow = c => { const li = $(`.ln[data-id="${c.id}"]`); if (!li) return; if (!li.contains(document.activeElement)) { li.innerHTML = rowHTML(c); $$(".ln-in", li).forEach(grow); } };
+  const capOf = el => { const li = el.closest(".ln"); return li ? p.captions.find(x => x.id === li.dataset.id) : null; };
+  function splitAt(c, pos) {
+    const i = p.captions.indexOf(c); if (i < 0) return null;
+    const left = c.text.slice(0, pos).trim(), right = c.text.slice(pos).trim(), next = p.captions[i + 1];
+    let st, en;
+    if (!left && right) return null;
+    if (!right) {
+      const room = (next ? next.start : c.end + 2) - c.end;
+      if (room >= 0.6) { st = c.end; en = c.end + Math.min(2, room); }
+      else { st = (c.start + c.end) / 2; en = c.end; c.end = +st.toFixed(2); }
+    } else {
+      const ratio = Math.max(1, vlen(left)) / (Math.max(1, vlen(left)) + Math.max(1, vlen(right)));
+      st = c.start + (c.end - c.start) * ratio; en = c.end; c.end = +st.toFixed(2);
+    }
+    c.text = left;
+    const n = { id: uid(), start: +st.toFixed(2), end: +en.toFixed(2), text: right, tr: "", hl: (c.hl || []).filter(w => right.includes(w)) };
+    c.hl = (c.hl || []).filter(w => left.includes(w));
+    p.captions.splice(i + 1, 0, n); return n;
+  }
+  function mergePrev(c) {
+    const i = p.captions.indexOf(c); if (i <= 0) return null;
+    const pr = p.captions[i - 1], joined = joinTok(pr.text, c.text), pos = joined.length - c.text.length;
+    pr.text = joined; pr.tr = joinTok(pr.tr || "", c.tr || ""); pr.end = c.end; pr.hl = [...(pr.hl || []), ...(c.hl || [])];
+    p.captions.splice(i, 1); return { prev: pr, pos };
+  }
+  const lines = $("#lines");
+  lines.addEventListener("click", e => { const b = e.target.closest("[data-open]"); if (!b) return; const c = capOf(b); if (c) openSheet(c, { seek: true }); });
+  lines.addEventListener("focusin", e => {
+    const ta = e.target.closest(".ln-in"); if (!ta) return; const c = capOf(ta); if (!c) return;
+    if (video) { video.pause(); playUntil = null; if (video.currentTime < c.start || video.currentTime >= c.end) seekTo(c.start); }
+    $$(".ln.sel").forEach(x => x.classList.remove("sel")); ta.closest(".ln").classList.add("sel");
+  });
+  lines.addEventListener("input", e => {
+    const ta = e.target.closest(".ln-in"); if (!ta) return; const c = capOf(ta), f = ta.dataset.f; if (!c) return;
+    if (f === "text" && ta.value.includes("\n")) { const nl = ta.value.indexOf("\n"); c.text = ta.value.replace(/\n/g, ""); const n = splitAt(c, nl); changed(); renderList(n ? n.id : c.id, 0); if (n) seekTo(n.start); return; }
+    c[f] = ta.value; grow(ta); if (c.id === sid) fillSheet(); changed({ typing: true });
+  });
+  lines.addEventListener("keydown", e => {
+    const ta = e.target.closest('.ln-in[data-f="text"]'); if (!ta) return; const c = capOf(ta); if (!c) return;
+    if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); const n = splitAt(c, ta.selectionStart); if (n) { changed(); renderList(n.id, 0); seekTo(n.start); } }
+    else if (e.key === "Backspace" && ta.selectionStart === 0 && ta.selectionEnd === 0) { const r = mergePrev(c); if (r) { e.preventDefault(); changed(); renderList(r.prev.id, r.pos); seekTo(r.prev.start); } }
+    else if (e.key === "ArrowDown" && ta.selectionStart === ta.value.length) { const nx = ta.closest(".ln").nextElementSibling; if (nx) { e.preventDefault(); $(".ln-in", nx).focus(); } }
+    else if (e.key === "ArrowUp" && ta.selectionStart === 0) { const pv = ta.closest(".ln").previousElementSibling; if (pv) { e.preventDefault(); $(".ln-in", pv).focus(); } }
+  });
+
+  /* ---------- typing straight onto the caption in the video ---------- */
+  function startInline(c, caret) {
+    if (!c) return; edId = c.id; if (video) { video.pause(); playUntil = null; }
+    const ta = $("#ovEdit"); ta.hidden = false; $("#ovBar").hidden = false; ta.value = c.text;
+    styleInline(); draw(); ta.focus({ preventScroll: true });
+    const pos = caret == null ? ta.value.length : caret; try { ta.setSelectionRange(pos, pos); } catch {}
+  }
+  function styleInline() {
+    const ta = $("#ovEdit"), scr = $("#screen"); if (!ta || ta.hidden || !scr) return;
+    const st = p.style, px = Math.max(15, st.size * Math.min(scr.clientWidth, scr.clientHeight) / 1080);
+    Object.assign(ta.style, { fontFamily: `"${st.font}", "Noto Sans Thai", sans-serif`, fontWeight: st.weight, fontSize: px + "px", color: st.color,
+      background: textOn(st.color) === "#111111" ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.85)", left: (st.posX == null ? 50 : st.posX) + "%", top: st.pos + "%" });
+    ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px";
+  }
+  function endInline() {
+    if (!edId) return; edId = null; const ta = $("#ovEdit"); ta.hidden = true; $("#ovBar").hidden = true;
+    if (document.activeElement === ta) ta.blur();
+    if (histT) pushHist(); renderList(); draw();
+  }
+  function setupInline() {
+    const ov = $("#ovEdit");
+    ov.addEventListener("keydown", e => {
+      const c = capById(edId); if (!c) return;
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); const n = splitAt(c, ov.selectionStart); if (n) { changed(); renderList(); seekTo(n.start); startInline(n, 0); toast("ขึ้นบรรทัดใหม่แล้ว", 900); } }
+      else if (e.key === "Backspace" && ov.selectionStart === 0 && ov.selectionEnd === 0) { const r = mergePrev(c); if (r) { e.preventDefault(); changed(); renderList(); seekTo(r.prev.start); startInline(r.prev, r.pos); } }
+      else if (e.key === "Escape") { e.preventDefault(); endInline(); }
+    });
+    ov.addEventListener("input", () => {
+      const c = capById(edId); if (!c) return;
+      const v = ov.value, nl = v.indexOf("\n");
+      if (nl >= 0) { c.text = v.replace(/\n/g, ""); const n = splitAt(c, nl); changed(); renderList(); if (n) { seekTo(n.start); startInline(n, 0); } else startInline(c); return; }
+      c.text = v; syncRowText(c); styleInline(); if (c.id === sid) fillSheet(); changed({ typing: true });
+    });
+    ov.addEventListener("blur", () => setTimeout(() => { if (edId && document.activeElement !== ov) endInline(); }, 250));
+    $("#ovDone").addEventListener("pointerdown", e => e.preventDefault());
+    $("#ovMore").addEventListener("pointerdown", e => e.preventDefault());
+    $("#ovDone").onclick = endInline;
+    $("#ovMore").onclick = () => { const c = capById(edId); endInline(); if (c) openSheet(c); };
+  }
   $("#addEnd").onclick = () => {
     const last = p.captions[p.captions.length - 1], s = last ? last.end : (video ? video.currentTime : 0);
     const c = { id: uid(), start: +s.toFixed(2), end: +(s + 2).toFixed(2), text: "", tr: "", hl: [] };
-    p.captions.push(c); changed(); renderList(); openSheet(c, { seek: true }); $("#lsText").focus();
+    p.captions.push(c); changed(); renderList(c.id); seekTo(c.start);
   };
 
   /* ---------- line editor sheet ---------- */
@@ -1561,8 +1927,8 @@ async function viewEditor(id) {
   }
   const pauseOnFocus = () => { if (video) { video.pause(); playUntil = null; } };
   $("#lsText").addEventListener("focus", pauseOnFocus); $("#lsTr").addEventListener("focus", pauseOnFocus);
-  $("#lsText").oninput = e => { const c = capById(sid); if (!c) return; c.text = e.target.value; updateRow(c); renderWords(c); changed({ typing: true }); };
-  $("#lsTr").oninput = e => { const c = capById(sid); if (!c) return; c.tr = e.target.value; updateRow(c); changed({ typing: true }); };
+  $("#lsText").oninput = e => { const c = capById(sid); if (!c) return; c.text = e.target.value; syncRowText(c); renderWords(c); changed({ typing: true }); };
+  $("#lsTr").oninput = e => { const c = capById(sid); if (!c) return; c.tr = e.target.value; const ta = $(`.ln[data-id="${c.id}"] .ln-in[data-f="tr"]`); if (ta) { ta.value = c.tr; grow(ta); } changed({ typing: true }); };
   $("#lsWords").addEventListener("click", e => {
     const b = e.target.closest(".word"); const c = capById(sid); if (!b || !c) return;
     const w = b.dataset.w; c.hl = c.hl.includes(w) ? c.hl.filter(x => x !== w) : [...c.hl, w];
@@ -1592,14 +1958,9 @@ async function viewEditor(id) {
     const b = e.target.closest("[data-l]"); const c = capById(sid); if (!b || !c) return;
     const i = p.captions.indexOf(c), a = b.dataset.l;
     if (a === "split") {
-      const ta = $("#lsText"), pos = ta.selectionStart;
-      const left = c.text.slice(0, pos).trim(), right = c.text.slice(pos).trim();
-      if (!left || !right) { toast("แตะในข้อความตรงจุดที่จะแยกก่อน แล้วกดแยก", 2600); return; }
-      const ratio = Math.max(1, vlen(left)) / (Math.max(1, vlen(left)) + Math.max(1, vlen(right)));
-      const mid = +(c.start + (c.end - c.start) * ratio).toFixed(2);
-      const n = { id: uid(), start: mid, end: c.end, text: right, tr: "", hl: (c.hl || []).filter(w => right.includes(w)) };
-      c.text = left; c.end = mid; c.hl = (c.hl || []).filter(w => left.includes(w));
-      p.captions.splice(i + 1, 0, n); changed(); renderList(); openSheet(c); toast("แยกเป็น 2 บรรทัดแล้ว", 1400);
+      const n = splitAt(c, $("#lsText").selectionStart);
+      if (!n || !c.text) { toast("แตะในข้อความตรงจุดที่จะแยกก่อน แล้วกดแยก", 2600); return; }
+      changed(); renderList(); openSheet(c); toast("แยกเป็น 2 บรรทัดแล้ว", 1400);
     } else if (a === "merge") {
       const n = p.captions[i + 1]; if (!n) { toast("เป็นบรรทัดสุดท้ายแล้ว"); return; }
       c.text = joinTok(c.text, n.text); c.tr = joinTok(c.tr || "", n.tr || ""); c.end = n.end; c.hl = [...(c.hl || []), ...(n.hl || [])];
@@ -1846,12 +2207,111 @@ async function viewEditor(id) {
     b.disabled = false;
   };
 
+  /* ---------- split screen ---------- */
+  function syncSplitUI() {
+    const sp = p.split; $("#spOn").checked = sp.on;
+    $$("#spTop button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.top));
+    $("#spRatio").value = Math.round(sp.ratio * 100); $("#oRatio").textContent = Math.round(sp.ratio * 100) + "%";
+  }
+  function setSplit(on) {
+    const sp = p.split; if (sp.on === on) return;
+    sp.on = on;
+    if (on) { sp.prevPos = p.style.pos; p.style.pos = 50; if (!sp.scenes.length) { sp.scenes = plainScenes(p); $("#spStat").textContent = "สร้างฉากจากซับให้แล้ว กด ✨ เพื่อให้ AI ทำแอนิเมชันที่ตรงเนื้อหากว่านี้"; } }
+    else if (sp.prevPos != null) p.style.pos = sp.prevPos;
+    syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); changed();
+  }
+  $("#spOn").onchange = e => setSplit(e.target.checked);
+  $$("#spTop button").forEach(b => b.onclick = () => { p.split.top = b.dataset.v; syncSplitUI(); sizeStage(); renderScenes(); changed(); });
+  $("#spRatio").oninput = e => { p.split.ratio = +e.target.value / 100; syncSplitUI(); sizeStage(); changed({ typing: true }); };
+  $("#spRatio").onchange = () => renderScenes();
+  $("#spAi").onclick = async () => {
+    if (!hasKey()) { openSettings(); return; }
+    const b = $("#spAi"), st = $("#spStat"); b.disabled = true; st.textContent = "AI กำลังอ่านสคริปต์และออกแบบฉาก…";
+    try {
+      const sc = await aiScenes(p); p.split.scenes = sc; if (!p.split.on) setSplit(true);
+      changed(); renderScenes(); sizeStage(); st.textContent = `สร้างแล้ว ${sc.length} ฉาก กดเล่นวิดีโอเพื่อดู แก้ข้อความหรือใส่รูป/คลิปเองได้ทุกฉาก`;
+    } catch (e) { st.textContent = ""; toast(e.message, 5000); }
+    b.disabled = false;
+  };
+  $("#spPlain").onclick = () => { p.split.scenes = plainScenes(p); if (!p.split.on) setSplit(true); changed(); renderScenes(); sizeStage(); };
+  async function attachMedia(sc, f) {
+    if (!f || !sc) return;
+    if (f.size > 300e6) { toast("ไฟล์ใหญ่เกิน 300 MB"); return; }
+    const kind = (f.type || "").startsWith("video") ? "video" : "image", mid = uid();
+    try { await DB.mediaPut({ id: mid, blob: f, kind, name: f.name }); } catch { toast("บันทึกไฟล์ไม่ได้ พื้นที่ในเครื่องอาจเต็ม"); return; }
+    sc.media = { id: mid, kind, name: f.name };
+    await loadMediaEls(p, pvMedia); hookMedia(); changed(); renderScenes();
+    toast(kind === "video" ? "ใส่คลิปแล้ว" : "ใส่รูปแล้ว", 1400);
+  }
+  $("#spAdd").onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    if (!p.split.scenes.length) p.split.scenes = plainScenes(p);
+    if (!p.split.on) setSplit(true);
+    const t = video ? video.currentTime : 0, sc = sceneAt(p, t) || p.split.scenes[p.split.scenes.length - 1];
+    await attachMedia(sc, f);
+  };
+  function renderScenes() {
+    const list = p.split.scenes, th = Math.round(150 * p.split.ratio * 16 / 9);
+    $("#scenes").innerHTML = list.length ? list.map(sc => `
+      <li class="scn" data-id="${sc.id}">
+        <canvas class="scn-th" width="150" height="${th}"></canvas>
+        <div class="scn-b">
+          <span class="hint mono">${fmtT(sc.start)}–${fmtT(sc.end)} · ${sc.media ? (sc.media.kind === "video" ? "คลิปของคุณ" : "รูปของคุณ") : SCENE_TYPES[sc.type] || ""}</span>
+          <b class="scn-title">${esc(sc.media ? sc.media.name : (sc.title || sc.value || sc.a || "ฉาก"))}</b>
+          <div class="scn-acts"><button class="mini" data-s="go">ดูฉากนี้</button>${sc.media ? "" : `<button class="mini" data-s="edit">แก้ข้อความ</button>`}<label class="mini" for="spf_${sc.id}">${sc.media ? "เปลี่ยนรูป/คลิป" : "ใส่รูป/คลิปเอง"}</label><input type="file" id="spf_${sc.id}" data-s="file" accept="image/*,video/*" hidden>${sc.media ? `<button class="mini" data-s="unmedia">กลับไปใช้แอนิเมชัน</button>` : ""}<button class="mini del" data-s="del">ลบฉาก</button></div>
+        </div>
+        <div class="scn-ed" hidden>
+          <div class="two"><div class="field"><label class="hint">แบบภาพ</label><select class="input" data-k="type">${Object.entries(SCENE_TYPES).map(([k, n]) => `<option value="${k}"${k === sc.type ? " selected" : ""}>${n}</option>`).join("")}</select></div>
+            <div class="field"><label class="hint">อีโมจิ</label><input class="input" data-k="emoji" value="${esc(sc.emoji)}"></div></div>
+          <div class="field"><label class="hint">หัวข้อ / ข้อความหลัก</label><input class="input" data-k="title" value="${esc(sc.title)}"></div>
+          <div class="two"><div class="field"><label class="hint">ตัวเลข (แบบตัวเลข)</label><input class="input" data-k="value" value="${esc(sc.value)}"></div>
+            <div class="field"><label class="hint">คำอธิบายสั้นๆ</label><input class="input" data-k="label" value="${esc(sc.label)}"></div></div>
+          <div class="field"><label class="hint">รายการ บรรทัดละ 1 รายการ (แบบกราฟใช้ “ชื่อ: ตัวเลข”)</label><textarea class="input" data-k="items" rows="3">${esc((sc.items || []).join("\n"))}</textarea></div>
+          <div class="two"><div class="field"><label class="hint">ฝั่ง A (เปรียบเทียบ)</label><input class="input" data-k="a" value="${esc(sc.a)}"></div>
+            <div class="field"><label class="hint">ฝั่ง B</label><input class="input" data-k="b" value="${esc(sc.b)}"></div></div>
+        </div>
+      </li>`).join("") : `<li class="hint">ยังไม่มีฉาก กด “ให้ AI สร้างแอนิเมชันประกอบสคริปต์” หรือ “สร้างฉากจากซับ”</li>`;
+    paintSceneThumbs();
+  }
+  async function paintSceneThumbs() {
+    try { await document.fonts.load('800 40px "Kanit"', "ทดสอบ"); } catch {}
+    for (const li of $$("#scenes .scn")) {
+      const sc = p.split.scenes.find(x => x.id === li.dataset.id), c = $(".scn-th", li); if (!sc || !c) continue;
+      try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, 1.8, sc.media && pvMedia[sc.media.id] ? pvMedia[sc.media.id].el : null); } catch {}
+    }
+  }
+  const scOf = el => { const li = el.closest(".scn"); return li ? p.split.scenes.find(x => x.id === li.dataset.id) : null; };
+  $("#scenes").addEventListener("click", e => {
+    const b = e.target.closest("button[data-s]"); if (!b) return; const sc = scOf(b); if (!sc) return;
+    const a = b.dataset.s;
+    if (a === "go") { if (!p.split.on) setSplit(true); seekTo(sc.start); draw(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    else if (a === "edit") { const ed = $(".scn-ed", b.closest(".scn")); ed.hidden = !ed.hidden; }
+    else if (a === "unmedia") { sc.media = null; changed(); renderScenes(); }
+    else if (a === "del") {
+      if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบฉาก"; } }, 3000); return; }
+      const list = p.split.scenes, i = list.indexOf(sc); list.splice(i, 1);
+      if (list[i - 1]) list[i - 1].end = sc.end; else if (list[i]) list[i].start = sc.start;
+      changed(); renderScenes();
+    }
+  });
+  $("#scenes").addEventListener("change", e => { const inp = e.target.closest('input[data-s="file"]'); if (!inp) return; const sc = scOf(inp), f = inp.files[0]; inp.value = ""; attachMedia(sc, f); });
+  const onSceneEdit = e => {
+    const el = e.target.closest("[data-k]"); if (!el) return; const sc = scOf(el); if (!sc) return;
+    const k = el.dataset.k; sc[k] = k === "items" ? el.value.split("\n").map(x => x.trim()).filter(Boolean) : el.value;
+    const c = $(".scn-th", el.closest(".scn")); try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, 1.8, null); } catch {}
+    if (video && (video.currentTime < sc.start || video.currentTime >= sc.end)) seekTo(sc.start);
+    changed({ typing: true });
+  };
+  $("#scenes").addEventListener("input", onSceneEdit);
+  $("#scenes").addEventListener("change", e => { if (e.target.matches("select[data-k]")) onSceneEdit(e); });
+
   /* ---------- frame ---------- */
   function syncFrame() {
     const vr = p.width && p.height ? p.width / p.height : 9 / 16;
     $("#ratios").innerHTML = Object.entries(LAYOUTS).map(([k, L]) => { const r = L.r || vr, w = r >= 1 ? 30 : Math.round(30 * r), h = r >= 1 ? Math.round(30 / r) : 30; return `<button type="button" class="ratio" data-v="${k}" aria-pressed="${p.layout === k}"><i style="width:${w}px;height:${h}px"></i>${L.n}</button>`; }).join("");
     $$("#fitSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === p.fit));
     $("#fitSeg").hidden = p.layout === "orig";
+    $("#frameNote").hidden = !p.split.on; $("#ratios").style.opacity = p.split.on ? ".4" : ""; $("#ratios").style.pointerEvents = p.split.on ? "none" : "";
   }
   $("#ratios").addEventListener("click", e => { const b = e.target.closest(".ratio"); if (!b) return; p.layout = b.dataset.v; syncFrame(); changed(); sizeStage(); });
   $$("#fitSeg button").forEach(b => b.onclick = () => { p.fit = b.dataset.v; syncFrame(); changed(); });
@@ -1884,8 +2344,8 @@ async function viewEditor(id) {
     const job = { cancel: false }; exporting = job;
     $("#burn").disabled = true; $("#exProg").hidden = false; $("#exRes").hidden = true; $("#exBar").style.width = "0%"; $("#exTxt").textContent = "กำลังเตรียม…";
     let wake = null; try { wake = await navigator.wakeLock.request("screen"); } catch {}
-    const srcs = [];
-    const finish = () => { srcs.forEach(s => { try { s.stop(); } catch {} }); try { v.pause(); } catch {} try { ac.close(); } catch {} v.remove(); URL.revokeObjectURL(vurl); try { wake && wake.release(); } catch {} exporting = null; $("#burn").disabled = false; $("#exProg").hidden = true; };
+    const srcs = [], exMedia = {};
+    const finish = () => { freeMedia(exMedia); srcs.forEach(s => { try { s.stop(); } catch {} }); try { v.pause(); } catch {} try { ac.close(); } catch {} v.remove(); URL.revokeObjectURL(vurl); try { wake && wake.release(); } catch {} exporting = null; $("#burn").disabled = false; $("#exProg").hidden = true; };
     try {
       await unlock;
       if (v.readyState < 1) await once(v, "loadedmetadata");
@@ -1903,7 +2363,8 @@ async function viewEditor(id) {
       rec.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
       const stopped = new Promise(r => rec.onstop = r);
       v.currentTime = 0; if (v.seeking) await once(v, "seeked");
-      const frame = () => renderFrame(ctx, W, H, v, p, v.currentTime);
+      await loadMediaEls(p, exMedia);
+      const frame = () => renderFrame(ctx, W, H, v, p, v.currentTime, (sc, t) => mediaFor(exMedia, sc, t, true));
       const done = new Set();
       const schedule = () => {
         const now = v.currentTime;
@@ -1946,12 +2407,13 @@ async function viewEditor(id) {
   };
 
   await ensureFont(p.style);
-  syncStyleUI(); syncAudio(); syncLang(); syncFrame();
-  buildStage(); renderList(); renderLib(); renderSfx(); syncExportHint();
+  await loadMediaEls(p, pvMedia);
+  syncStyleUI(); syncAudio(); syncLang(); syncFrame(); syncSplitUI();
+  buildStage(); renderList(); renderLib(); renderSfx(); syncExportHint(); hookMedia();
   cleanup = () => {
     cancelAnimationFrame(raf); stopFx(); stopLive(); clearTimeout(saveT); if (histT) clearTimeout(histT); DB.put(p);
     window.removeEventListener("resize", onResize); document.removeEventListener("fullscreenchange", onFsChange); document.removeEventListener("keydown", onKey);
-    document.documentElement.style.overflow = ""; if (url) URL.revokeObjectURL(url);
+    document.documentElement.style.overflow = ""; if (url) URL.revokeObjectURL(url); freeMedia(pvMedia);
   };
 }
 
