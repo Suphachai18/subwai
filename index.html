@@ -291,7 +291,8 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .sx .ad{width:40px;font-size:18px;color:var(--accent-text);border-left:1px solid var(--line)}
 .sx.mine .nm{color:var(--accent-text)}
 /* editor v4: split screen, inline typing, script list */
-.screen .scv{pointer-events:none;touch-action:auto}
+.screen .scv{pointer-events:none;touch-action:auto;z-index:1}
+.screen #cv{z-index:2}
 .ovedit{position:absolute;transform:translate(-50%,-50%);width:88%;z-index:3;text-align:center;border:2px dashed var(--accent);border-radius:10px;padding:4px 8px;line-height:1.35;resize:none;overflow:hidden;outline:none;caret-color:var(--accent);box-sizing:border-box}
 .ovbar{position:absolute;top:8px;right:8px;z-index:4;display:flex;gap:6px}
 .ovbar button{min-height:34px;padding:0 12px;border-radius:99px;border:0;background:rgba(0,0,0,.7);color:#fff;font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer}
@@ -318,6 +319,9 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .chip2.thm i{width:14px;height:14px;border-radius:50%;display:block}
 .vbox{position:absolute;inset:0;overflow:hidden}
 .vbox video{position:absolute;inset:0;width:100%;height:100%}
+.scn.off{opacity:.55}
+#npOrient .chips{margin-top:4px}
+#npOrient .chip2[aria-pressed="true"],#spMode button[aria-pressed="true"]{border-color:var(--accent)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -430,7 +434,10 @@ function normalize(p) {
   p.layout = p.layout || "orig";
   p.fit = p.fit || "blur";
   p.split = p.split || { on: false, ratio: 0.5, top: "visual", scenes: [] };
-  p.split.theme = p.split.theme || "navy";
+  p.split.mode = p.split.mode || (p.split.on ? "split" : "card");
+  p.split.card = p.split.card || "16:9";
+  if (p.split.cardY == null) p.split.cardY = 0.42;
+  p.split.theme = p.split.theme || "glass";
   p.split.orient = p.split.orient || "v";
   if (p.split.fx == null) p.split.fx = 50;
   if (p.split.fy == null) p.split.fy = p.height > p.width ? 32 : 50;
@@ -967,7 +974,7 @@ function pickMime() {
 const LAYOUTS = { orig: { n: "ต้นฉบับ", r: 0 }, "9:16": { n: "9:16", r: 9 / 16 }, "4:5": { n: "4:5", r: 4 / 5 }, "1:1": { n: "1:1", r: 1 }, "16:9": { n: "16:9", r: 16 / 9 } };
 function frameDims(p, vw, vh, maxSide = 1920) {
   vw = vw || p.width || 1080; vh = vh || p.height || 1920;
-  const r = p.split && p.split.on ? (p.split.orient === "h" ? 16 / 9 : 9 / 16) : (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
+  const r = p.split && p.split.on && p.split.mode === "split" ? (p.split.orient === "h" ? 16 / 9 : 9 / 16) : (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
   let W, H; if (r >= 1) { W = maxSide; H = maxSide / r; } else { H = maxSide; W = maxSide * r; }
   const k = Math.min(1, Math.max(vw, vh) / maxSide);
   return { W: Math.max(2, Math.round(W * k / 2) * 2), H: Math.max(2, Math.round(H * k / 2) * 2) };
@@ -989,36 +996,81 @@ function drawVideo(ctx, W, H, v, p, fallback) {
   const w = sw * contain, h = sh * contain; ctx.drawImage(src, (W - w) / 2, (H - h) / 2, w, h);
 }
 function renderFrame(ctx, W, H, v, p, t, media) {
-  if (p.split && p.split.on) {
+  const sp = p.split;
+  if (sp && sp.on && sp.mode === "split") {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     const { vis, vid } = splitRects(p, W, H);
-    try { if (v && v.videoWidth) drawFramed(ctx, v, vid, p.split.fx, p.split.fy, p.split.zoom); } catch {}
+    try { if (v && v.videoWidth) drawFramed(ctx, v, vid, sp.fx, sp.fy, sp.zoom); } catch {}
     const sc = sceneAt(p, t);
-    if (sc) { try { drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, t - sc.start, media ? media(sc, t) : null, p.split.theme); } catch (e) { console.error(e); } }
-  } else { try { drawVideo(ctx, W, H, v, p, null); } catch {} }
+    if (sc) { try { drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, t - sc.start, media ? media(sc, t) : null, sp.theme, v); } catch (e) { console.error(e); } }
+  } else {
+    try { drawVideo(ctx, W, H, v, p, null); } catch {}
+    if (sp && sp.on) { try { drawSceneLayer(ctx, p, W, H, t, media, v); } catch (e) { console.error(e); } }
+  }
   const c = captionAt(p.captions, t); if (c) { try { drawCaption(ctx, W, H, c, p, t); } catch (e) { console.error(e); } }
 }
 
 /* ================= Split screen: animated explainer scenes ================= */
 const SCENE_TYPES = { big: "หัวข้อ", number: "ตัวเลข", list: "ลิสต์", vs: "เปรียบเทียบ", bars: "กราฟ", quote: "คำพูด" };
 const SCENE_THEMES = {
-  navy: { n: "กรมท่า", bg: ["#0B1730", "#1A2E56"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#F5C542", ink: "#1B1503", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", dot: "rgba(255,255,255,.06)" },
-  night: { n: "ดำเทค", bg: ["#090C12", "#171F2D"], fg: "#FFFFFF", sub: "rgba(255,255,255,.68)", accent: "#4DD8FF", ink: "#04202A", card: "rgba(255,255,255,.07)", line: "rgba(255,255,255,.14)", dot: "rgba(255,255,255,.05)" },
-  light: { n: "ขาวสะอาด", bg: ["#F8F9FB", "#E8ECF2"], fg: "#0F172A", sub: "rgba(15,23,42,.62)", accent: "#2457F5", ink: "#FFFFFF", card: "rgba(15,23,42,.05)", line: "rgba(15,23,42,.12)", dot: "rgba(15,23,42,.06)" },
-  green: { n: "เขียวสนาม", bg: ["#082820", "#114536"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#A6E35A", ink: "#10220A", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", dot: "rgba(255,255,255,.06)" },
-  warm: { n: "ส้มอุ่น", bg: ["#22101C", "#46192A"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#FFB347", ink: "#2A1500", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", dot: "rgba(255,255,255,.06)" }
+  glass: { n: "กระจก (เบลอจากคลิป)", glass: true, bg: ["rgba(9,13,22,.66)", "rgba(9,13,22,.84)"], fg: "#FFFFFF", sub: "rgba(255,255,255,.74)", accent: "#F5C542", ink: "#16110A", card: "rgba(255,255,255,.10)", line: "rgba(255,255,255,.18)", grain: 0.05 },
+  navy: { n: "กรมท่า", bg: ["#0B1730", "#182B52"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#F5C542", ink: "#16110A", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", grain: 0.05 },
+  night: { n: "ดำ", bg: ["#0A0C10", "#15191F"], fg: "#FFFFFF", sub: "rgba(255,255,255,.66)", accent: "#FF5A3C", ink: "#FFFFFF", card: "rgba(255,255,255,.07)", line: "rgba(255,255,255,.14)", grain: 0.06 },
+  paper: { n: "กระดาษ", bg: ["#F4F1EA", "#E9E4D8"], fg: "#141414", sub: "rgba(20,20,20,.62)", accent: "#1F4FE0", ink: "#FFFFFF", card: "rgba(20,20,20,.05)", line: "rgba(20,20,20,.14)", grain: 0.07 },
+  green: { n: "เขียวสนาม", bg: ["#082820", "#0F3F31"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#B5E65A", ink: "#10220A", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", grain: 0.05 }
 };
-const EMOJI_FONT = `"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
 const SFONT = (w, px) => `${w} ${px}px "Kanit", "Noto Sans Thai", sans-serif`;
+const EMOJI_FONT = `"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
 const hashStr = s => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); };
 const eOut = x => 1 - Math.pow(1 - clamp01(x), 3);
+const xOut = x => { x = clamp01(x); return x === 1 ? 1 : 1 - Math.pow(2, -10 * x); };
 const bOut = x => easeOutBack(clamp01(x));
+/* line icons on a 24-unit grid, drawn stroke by stroke */
+const ICONS = {
+  check: ["ตรวจสอบ/ใช่", c => { c.moveTo(5, 12.5); c.lineTo(10, 17.5); c.lineTo(19, 7); }],
+  bolt: ["ไฟฟ้า/พลัง/เร็ว", c => { c.moveTo(13, 2.5); c.lineTo(4.5, 13.5); c.lineTo(11.5, 13.5); c.lineTo(10.5, 21.5); c.lineTo(19.5, 10.5); c.lineTo(12.5, 10.5); c.closePath(); }],
+  battery: ["แบตเตอรี่/ชาร์จ", c => { rrect(c, 2.5, 7, 16, 10, 2); c.moveTo(21, 10.5); c.lineTo(21, 13.5); c.moveTo(6, 10); c.lineTo(6, 14); c.moveTo(9.5, 10); c.lineTo(9.5, 14); c.moveTo(13, 10); c.lineTo(13, 14); }],
+  money: ["เงิน/ราคา/คุ้ม", c => { rrect(c, 2.5, 6, 19, 12, 2); c.moveTo(15, 12); c.arc(12, 12, 3, 0, Math.PI * 2); c.moveTo(6.5, 9.5); c.lineTo(6.5, 9.6); c.moveTo(17.5, 14.4); c.lineTo(17.5, 14.5); }],
+  tag: ["ป้ายราคา/โปรโมชัน", c => { c.moveTo(3, 3); c.lineTo(11, 3); c.lineTo(21, 13); c.lineTo(13, 21); c.lineTo(3, 11); c.closePath(); c.moveTo(9, 7.5); c.arc(7.5, 7.5, 1.5, 0, Math.PI * 2); }],
+  cart: ["รถ/รถกอล์ฟ/ยานพาหนะ", c => { c.moveTo(4, 15.5); c.lineTo(4, 11); c.lineTo(8, 11); c.lineTo(10, 6); c.lineTo(17, 6); c.lineTo(19, 11); c.lineTo(20.5, 11); c.lineTo(20.5, 15.5); c.moveTo(4, 15.5); c.lineTo(5.5, 15.5); c.moveTo(10, 15.5); c.lineTo(15, 15.5); c.moveTo(19.5, 15.5); c.lineTo(20.5, 15.5); c.moveTo(10, 16.5); c.arc(7.7, 16.5, 2.3, 0, Math.PI * 2); c.moveTo(19.6, 16.5); c.arc(17.3, 16.5, 2.3, 0, Math.PI * 2); c.moveTo(8, 11); c.lineTo(19, 11); }],
+  clock: ["เวลา/รวดเร็ว", c => { c.moveTo(21, 12); c.arc(12, 12, 9, 0, Math.PI * 2); c.moveTo(12, 7); c.lineTo(12, 12); c.lineTo(15.5, 14); }],
+  star: ["คุณภาพ/รีวิว/เด่น", c => { for (let i = 0; i < 10; i++) { const r = i % 2 ? 4.2 : 9.5, a = -Math.PI / 2 + i * Math.PI / 5, x = 12 + r * Math.cos(a), y = 12.5 + r * Math.sin(a); i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); }],
+  shield: ["รับประกัน/ปลอดภัย", c => { c.moveTo(12, 2.5); c.lineTo(19.5, 5.5); c.lineTo(19.5, 11); c.bezierCurveTo(19.5, 16, 16, 19.5, 12, 21.5); c.bezierCurveTo(8, 19.5, 4.5, 16, 4.5, 11); c.lineTo(4.5, 5.5); c.closePath(); c.moveTo(8.5, 12); c.lineTo(11, 14.5); c.lineTo(15.5, 9.5); }],
+  chart: ["เติบโต/สถิติ/เพิ่มขึ้น", c => { c.moveTo(3, 20.5); c.lineTo(21, 20.5); c.moveTo(6, 17); c.lineTo(6, 14); c.moveTo(10.5, 17); c.lineTo(10.5, 11); c.moveTo(15, 17); c.lineTo(15, 8); c.moveTo(4, 9.5); c.lineTo(9, 5.5); c.lineTo(13, 7.5); c.lineTo(20, 3); c.moveTo(16.5, 3); c.lineTo(20, 3); c.lineTo(20, 6.5); }],
+  pin: ["สถานที่/สาขา/จัดส่ง", c => { c.moveTo(12, 21.5); c.bezierCurveTo(7, 16, 5, 12.5, 5, 9.5); c.arc(12, 9.5, 7, Math.PI, 0); c.bezierCurveTo(19, 12.5, 17, 16, 12, 21.5); c.moveTo(14.5, 9.5); c.arc(12, 9.5, 2.5, 0, Math.PI * 2); }],
+  phone: ["โทร/ติดต่อ/แอป", c => { rrect(c, 6.5, 2.5, 11, 19, 2.5); c.moveTo(10.5, 18); c.lineTo(13.5, 18); }],
+  chat: ["พูดคุย/รีวิวลูกค้า/คำถาม", c => { c.moveTo(4, 5.5); c.lineTo(20, 5.5); c.lineTo(20, 16); c.lineTo(10, 16); c.lineTo(6, 19.5); c.lineTo(6, 16); c.lineTo(4, 16); c.closePath(); c.moveTo(8, 10.5); c.lineTo(16, 10.5); }],
+  alert: ["ข้อควรระวัง/ปัญหา", c => { c.moveTo(12, 3); c.lineTo(21.5, 20); c.lineTo(2.5, 20); c.closePath(); c.moveTo(12, 9.5); c.lineTo(12, 14); c.moveTo(12, 16.8); c.lineTo(12, 16.9); }],
+  heart: ["ชอบ/ความรู้สึก/ใส่ใจ", c => { c.moveTo(12, 20); c.bezierCurveTo(4, 14.5, 2.5, 10.5, 4, 7.5); c.bezierCurveTo(5.5, 4.5, 10, 4, 12, 7.5); c.bezierCurveTo(14, 4, 18.5, 4.5, 20, 7.5); c.bezierCurveTo(21.5, 10.5, 20, 14.5, 12, 20); }],
+  gift: ["ของแถม/โปร", c => { rrect(c, 3.5, 9, 17, 4, 1); c.moveTo(5, 13); c.lineTo(5, 21); c.lineTo(19, 21); c.lineTo(19, 13); c.moveTo(12, 9); c.lineTo(12, 21); c.moveTo(12, 9); c.bezierCurveTo(9, 3, 5, 6, 8, 9); c.moveTo(12, 9); c.bezierCurveTo(15, 3, 19, 6, 16, 9); }],
+  gear: ["ระบบ/เครื่องยนต์/บริการ", c => { c.moveTo(15, 12); c.arc(12, 12, 3, 0, Math.PI * 2); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; c.moveTo(12 + 6.2 * Math.cos(a), 12 + 6.2 * Math.sin(a)); c.lineTo(12 + 8.8 * Math.cos(a), 12 + 8.8 * Math.sin(a)); } c.moveTo(18.2, 12); c.arc(12, 12, 6.2, 0, Math.PI * 2); }],
+  gauge: ["ความเร็ว/สมรรถนะ", c => { c.moveTo(3.5, 16); c.arc(12, 16, 8.5, Math.PI, 0); c.moveTo(12, 16); c.lineTo(16.5, 10); c.moveTo(13.2, 16); c.arc(12, 16, 1.2, 0, Math.PI * 2); }],
+  leaf: ["ประหยัด/รักษ์โลก", c => { c.moveTo(5, 19); c.bezierCurveTo(4, 9, 11, 4, 20, 4); c.bezierCurveTo(20, 13, 15, 20, 5, 19); c.moveTo(5, 19); c.lineTo(13, 11); }],
+  user: ["ลูกค้า/คน/ผู้ใช้", c => { c.moveTo(15.5, 8); c.arc(12, 8, 3.5, 0, Math.PI * 2); c.moveTo(4.5, 20.5); c.bezierCurveTo(5, 15.5, 8, 13.5, 12, 13.5); c.bezierCurveTo(16, 13.5, 19, 15.5, 19.5, 20.5); }],
+  calendar: ["วันที่/ระยะเวลา/ผ่อน", c => { rrect(c, 3.5, 5, 17, 15.5, 2); c.moveTo(3.5, 10); c.lineTo(20.5, 10); c.moveTo(8, 3); c.lineTo(8, 7); c.moveTo(16, 3); c.lineTo(16, 7); }],
+  home: ["บ้าน/หมู่บ้าน/รีสอร์ต", c => { c.moveTo(3.5, 11); c.lineTo(12, 4); c.lineTo(20.5, 11); c.moveTo(6, 9.5); c.lineTo(6, 20); c.lineTo(18, 20); c.lineTo(18, 9.5); c.moveTo(10, 20); c.lineTo(10, 14.5); c.lineTo(14, 14.5); c.lineTo(14, 20); }],
+  flag: ["กอล์ฟ/เป้าหมาย", c => { c.moveTo(7, 21); c.lineTo(7, 3.5); c.lineTo(18, 7.5); c.lineTo(7, 11.5); c.moveTo(3.5, 21); c.lineTo(13, 21); }],
+  spark: ["ใหม่/ไอเดีย/เด่นพิเศษ", c => { c.moveTo(12, 3); c.quadraticCurveTo(13, 11, 21, 12); c.quadraticCurveTo(13, 13, 12, 21); c.quadraticCurveTo(11, 13, 3, 12); c.quadraticCurveTo(11, 11, 12, 3); }]
+};
+function drawIcon(ctx, name, cx, cy, size, color, k) {
+  const ic = ICONS[name]; if (!ic || k <= 0) return;
+  ctx.save(); ctx.translate(cx - size / 2, cy - size / 2); ctx.scale(size / 24, size / 24);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.7; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.setLineDash([140, 140]); ctx.lineDashOffset = 140 * (1 - clamp01(k));
+  ctx.beginPath(); ic[1](ctx); ctx.stroke(); ctx.restore();
+}
+let grainCv = null;
+function grainPattern(ctx) {
+  if (!grainCv) { grainCv = document.createElement("canvas"); grainCv.width = grainCv.height = 96; const g = grainCv.getContext("2d"), d = g.createImageData(96, 96); for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; } g.putImageData(d, 0, 0); }
+  try { return ctx.createPattern(grainCv, "repeat"); } catch { return null; }
+}
+const blurCv = document.createElement("canvas");
 function fitText(ctx, text, maxW, px, weight, maxLines) {
   let size = px, lines = [];
-  for (let k = 0; k < 9; k++) {
+  for (let k = 0; k < 10; k++) {
     ctx.font = SFONT(weight, size); lines = wrapLines(ctx, String(text), maxW, "th");
     if (lines.length <= maxLines && lines.every(l => ctx.measureText(l).width <= maxW)) break;
-    size *= 0.88;
+    size *= 0.9;
   }
   return { size, lines: lines.slice(0, maxLines + 1) };
 }
@@ -1034,120 +1086,191 @@ function splitRects(p, W, H) {
   return first ? { vis: { x: 0, y: 0, w: W, h: vh }, vid: { x: 0, y: vh, w: W, h: H - vh } }
                : { vid: { x: 0, y: 0, w: W, h: H - vh }, vis: { x: 0, y: H - vh, w: W, h: vh } };
 }
-/* place the speaker clip inside its box: fx/fy = which part stays in view (0-100), zoom >= 1 */
+const CARD_AR = { "16:9": 16 / 9, "1:1": 1, "4:5": 4 / 5 };
+/* where the illustration sits in the frame for card and full-screen modes */
+function cardRect(p, W, H) {
+  const sp = p.split;
+  if (sp.mode === "full") return { x: 0, y: 0, w: W, h: H, r: 0 };
+  const ar = CARD_AR[sp.card] || 16 / 9;
+  let w = W * (W / H > 1 ? 0.6 : 0.9), h = w / ar;
+  if (h > H * 0.6) { h = H * 0.6; w = h * ar; }
+  const cy = H * (sp.cardY == null ? 0.42 : sp.cardY);
+  return { x: (W - w) / 2, y: Math.max(H * 0.03, Math.min(H - h - H * 0.03, cy - h / 2)), w, h, r: Math.min(w, h) * 0.07 };
+}
 function drawFramed(ctx, src, r, fx = 50, fy = 50, zoom = 1) {
   const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight; if (!sw) return;
   const k = Math.max(r.w / sw, r.h / sh) * zoom, w = sw * k, h = sh * k;
   ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
   ctx.drawImage(src, r.x + (r.w - w) * fx / 100, r.y + (r.h - h) * fy / 100, w, h); ctx.restore();
 }
-function drawCover(ctx, src, r, zoom = 1) {
-  const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight; if (!sw) return;
-  const k = Math.max(r.w / sw, r.h / sh) * zoom;
-  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
-  ctx.drawImage(src, r.x + (r.w - sw * k) / 2, r.y + (r.h - sh * k) / 2, sw * k, sh * k); ctx.restore();
-}
-/* t = seconds since the scene started; theme = key of SCENE_THEMES (one look for the whole video) */
-function drawScene(ctx, X, Y, W, H, sc, t, media, theme) {
+const drawCover = (ctx, src, r, zoom = 1) => drawFramed(ctx, src, r, 50, 50, zoom);
+/* t = seconds since the scene began. bgSrc (video or image) feeds the frosted-glass look. */
+function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   ctx.save(); ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip(); ctx.translate(X, Y);
-  const dur = Math.max(0.5, sc.end - sc.start), e = Math.max(0, t), u = Math.min(W, H) / 100;
-  const T = SCENE_THEMES[theme] || SCENE_THEMES.navy;
+  const dur = Math.max(0.5, sc.end - sc.start), e = Math.max(0, t), u = Math.min(W, H) / 100, land = W / H > 1.2;
+  const T = SCENE_THEMES[theme] || SCENE_THEMES.glass;
   if (media && (media.naturalWidth || media.videoWidth)) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     try { drawCover(ctx, media, { x: 0, y: 0, w: W, h: H }, media.videoWidth ? 1 : 1.02 + 0.06 * clamp01(e / dur)); } catch {}
     ctx.restore(); return;
   }
-  /* backdrop: calm gradient, drifting dot grid, soft accent glow */
-  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, T.bg[0]); g.addColorStop(1, T.bg[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const gx = W * (0.3 + 0.4 * Math.sin(e * 0.35 + hashStr(sc.id) % 7)), gy = H * 0.35;
-  const rg = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.7); rg.addColorStop(0, T.accent + "26"); rg.addColorStop(1, T.accent + "00"); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
-  const step = 6 * u, off = (e * u * 1.2) % step; ctx.fillStyle = T.dot;
-  for (let y = -step + off; y < H + step; y += step) for (let x = step / 2; x < W; x += step) { ctx.beginPath(); ctx.arc(x, y, 0.35 * u, 0, Math.PI * 2); ctx.fill(); }
-  /* scene progress line */
-  ctx.fillStyle = T.line; ctx.fillRect(0, H - 0.8 * u, W, 0.8 * u);
-  ctx.fillStyle = T.accent; ctx.fillRect(0, H - 0.8 * u, W * clamp01(e / dur), 0.8 * u);
-  /* content enters from the right, leaves with a short fade */
-  const inK = eOut(e / 0.45), outK = clamp01((dur - e) / 0.22);
-  ctx.globalAlpha = Math.min(inK, outK); ctx.translate((1 - inK) * 10 * u, 0);
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const shadow = on => { if (on && theme !== "light") { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 1.6 * u; ctx.shadowOffsetY = 0.4 * u; } else { ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; } };
-  const badge = (ch, x, y, r, k) => {
-    if (!ch || k <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(k, k);
-    ctx.fillStyle = T.card; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = T.accent; ctx.globalAlpha *= 0.7; ctx.lineWidth = 0.45 * u; ctx.stroke(); ctx.globalAlpha /= 0.7;
-    ctx.font = `${r * 1.05}px ${EMOJI_FONT}`; ctx.fillText(ch, 0, r * 0.06); ctx.restore();
+  /* backdrop */
+  let glassOk = false;
+  if (T.glass && bgSrc && (bgSrc.videoWidth || bgSrc.naturalWidth)) {
+    try {
+      const sw = bgSrc.videoWidth || bgSrc.naturalWidth, sh = bgSrc.videoHeight || bgSrc.naturalHeight, tw = 28, th = Math.max(1, Math.round(28 * H / W));
+      blurCv.width = tw; blurCv.height = th; const b = blurCv.getContext("2d"), k = Math.max(tw / sw, th / sh) * 1.15;
+      b.drawImage(bgSrc, (tw - sw * k) / 2, (th - sh * k) / 2, sw * k, sh * k);
+      ctx.imageSmoothingEnabled = true; try { ctx.imageSmoothingQuality = "high"; } catch {}
+      ctx.drawImage(blurCv, -W * 0.05, -H * 0.05, W * 1.1, H * 1.1); glassOk = true;
+    } catch {}
+  }
+  const bg0 = glassOk ? T.bg[0] : (T.glass ? "#101521" : T.bg[0]), bg1 = glassOk ? T.bg[1] : (T.glass ? "#1A2132" : T.bg[1]);
+  const g = ctx.createLinearGradient(0, 0, W * 0.3, H); g.addColorStop(0, bg0); g.addColorStop(1, bg1); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const drift = Math.sin(e * 0.4 + hashStr(sc.id) % 9) * 0.08;
+  const rg = ctx.createRadialGradient(W * (0.78 + drift), H * 0.12, 0, W * (0.78 + drift), H * 0.12, Math.max(W, H) * 0.75);
+  rg.addColorStop(0, T.accent + "22"); rg.addColorStop(1, T.accent + "00"); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+  const pat = grainPattern(ctx); if (pat) { ctx.save(); ctx.globalAlpha = T.grain; ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  ctx.fillStyle = T.line; ctx.fillRect(0, H - 0.7 * u, W, 0.7 * u);
+  ctx.fillStyle = T.accent; ctx.fillRect(0, H - 0.7 * u, W * clamp01(e / dur), 0.7 * u);
+  /* gentle exit */
+  ctx.globalAlpha = clamp01((dur - e) / 0.22);
+  ctx.textBaseline = "middle";
+  const ls = v => { try { if ("letterSpacing" in ctx) ctx.letterSpacing = v; } catch {} };
+  /* text that rises from behind its own line, with an optional marker sweep behind one word */
+  const lineReveal = (text, x, y, size, weight, color, delay, align, mark) => {
+    const k = xOut((e - delay) / 0.6); if (k <= 0 || !text) return;
+    ctx.font = SFONT(weight, size); const w = ctx.measureText(text).width, x0 = align === "left" ? x : x - w / 2;
+    ctx.save(); ctx.beginPath(); ctx.rect(x0 - size, y - size * 0.95, w + size * 2, size * 1.85); ctx.clip();
+    const yy = y + (1 - k) * size * 1.25;
+    const mi = mark ? text.indexOf(mark) : -1;
+    if (mi >= 0) {
+      const mx = x0 + ctx.measureText(text.slice(0, mi)).width, mw = ctx.measureText(mark).width, mk = xOut((e - delay - 0.35) / 0.5);
+      if (mk > 0) { ctx.fillStyle = T.accent; ctx.fillRect(mx - size * 0.12, yy - size * 0.58, (mw + size * 0.24) * mk, size * 1.12); }
+      ctx.textAlign = "left"; ctx.fillStyle = color; ctx.fillText(text, x0, yy);
+      if (mk > 0) { ctx.save(); ctx.beginPath(); ctx.rect(mx - size * 0.12, yy - size * 0.6, (mw + size * 0.24) * mk, size * 1.2); ctx.clip(); ctx.fillStyle = T.ink; ctx.fillText(mark, mx, yy); ctx.restore(); }
+    } else { ctx.textAlign = "left"; ctx.fillStyle = color; ctx.fillText(text, x0, yy); }
+    ctx.restore();
   };
-  /* lines rise into place one after another */
-  const reveal = (text, x, y, maxW, px, weight, color, maxLines, delay, shown) => {
-    if (!text) return 0; const f = fitText(ctx, text, maxW, px, weight, maxLines);
-    const lines = shown == null ? f.lines : wrapLines(ctx, shown, maxW, "th"), lh = f.size * 1.28, y0 = y - (f.lines.length - 1) * lh / 2;
-    ctx.font = SFONT(weight, f.size); ctx.fillStyle = color; shadow(true);
-    lines.forEach((l, i) => { const k = eOut((e - delay - i * 0.1) / 0.4); if (k <= 0) return; ctx.save(); ctx.globalAlpha *= k; ctx.fillText(l, x, y0 + i * lh + (1 - k) * 3 * u); ctx.restore(); });
-    shadow(false); return f.lines.length * lh;
+  const block = (text, x, y, maxW, px, weight, color, maxLines, delay, align, mark, gap = 1.22) => {
+    if (!text) return 0; const f = fitText(ctx, text, maxW, px, weight, maxLines), lh = f.size * gap, y0 = y - (f.lines.length - 1) * lh / 2;
+    f.lines.forEach((l, i) => lineReveal(l, x, y0 + i * lh, f.size, weight, color, delay + i * 0.09, align, mark && l.includes(mark) ? mark : null));
+    return f.lines.length * lh;
   };
-  const underline = (y, delay, w) => { const k = eOut((e - delay) / 0.5); if (k <= 0) return; ctx.fillStyle = T.accent; rrect(ctx, W / 2 - w * k / 2, y, w * k, 0.9 * u, 0.45 * u); ctx.fill(); };
-  const at = (tt, fb) => tt != null && isFinite(tt) ? Math.max(0, tt - sc.start) : fb;
-  const type = SCENE_TYPES[sc.type] ? sc.type : "big";
+  const kicker = (text, x, y, align, delay) => {
+    if (!text) return; const k = xOut((e - delay) / 0.5); if (k <= 0) return;
+    ctx.save(); ctx.globalAlpha *= k; ctx.font = SFONT(600, 4.4 * u); ls("0.08em"); ctx.fillStyle = T.accent; ctx.textAlign = "left";
+    const w = ctx.measureText(text).width, bar = 5 * u, total = bar + 1.6 * u + w, x0 = align === "left" ? x : x - total / 2;
+    ctx.fillRect(x0, y - 0.25 * u, bar * k, 0.5 * u); ctx.fillText(text, x0 + bar + 1.6 * u, y); ls("0px"); ctx.restore();
+  };
+  const icon = (cx, cy, r, delay) => {
+    const k = xOut((e - delay) / 0.5); if (k <= 0) return;
+    ctx.save(); ctx.globalAlpha *= Math.min(1, k * 1.4);
+    ctx.strokeStyle = T.line; ctx.lineWidth = 0.45 * u; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
+    if (ICONS[sc.icon]) drawIcon(ctx, sc.icon, cx, cy, r * 1.05, T.accent, xOut((e - delay - 0.15) / 0.7));
+    else if (sc.emoji) { ctx.font = `${r * 0.95}px ${EMOJI_FONT}`; ctx.textAlign = "center"; ctx.fillText(sc.emoji, cx, cy + r * 0.05); }
+    ctx.restore();
+  };
+  const hasIcon = !!(ICONS[sc.icon] || sc.emoji), type = SCENE_TYPES[sc.type] ? sc.type : "big";
+  const P = 8 * u, cw = W - P * 2;
   if (type === "big") {
-    const hasE = !!sc.emoji;
-    badge(sc.emoji, W / 2, H * 0.28, 10 * u, bOut(e / 0.55));
-    const hh = reveal(sc.title, W / 2, H * (hasE ? 0.58 : 0.45), W * 0.84, 10.5 * u, 800, T.fg, 2, 0.12);
-    underline(H * (hasE ? 0.58 : 0.45) + hh / 2 + 2 * u, 0.35, 16 * u);
-    reveal(sc.label, W / 2, H * (hasE ? 0.8 : 0.72), W * 0.8, 5.2 * u, 500, T.sub, 2, 0.45);
+    if (land) {
+      const tx = hasIcon ? W * 0.38 : P * 1.4, tw = W - tx - P * 1.2;
+      if (hasIcon) icon(W * 0.2, H * 0.5, Math.min(H * 0.2, W * 0.1), 0.05);
+      const hh = fitText(ctx, sc.title || "", tw, 9.5 * u, 800, 2); const th = hh.lines.length * hh.size * 1.22;
+      kicker(sc.kicker, tx, H * 0.5 - th / 2 - 5 * u, "left", 0.05);
+      block(sc.title, tx, H * 0.5, tw, 9.5 * u, 800, T.fg, 2, 0.12, "left", sc.mark);
+      block(sc.label, tx, H * 0.5 + th / 2 + 5 * u, tw, 4.6 * u, 400, T.sub, 2, 0.45, "left", null, 1.35);
+    } else {
+      if (hasIcon) icon(W / 2, H * 0.27, Math.min(W * 0.13, H * 0.11), 0.05);
+      const y = H * (hasIcon ? 0.56 : 0.46);
+      const hh = fitText(ctx, sc.title || "", cw, 9.5 * u, 800, 3); const th = hh.lines.length * hh.size * 1.22;
+      kicker(sc.kicker, W / 2, y - th / 2 - 5 * u, "center", 0.05);
+      block(sc.title, W / 2, y, cw, 9.5 * u, 800, T.fg, 3, 0.12, "center", sc.mark);
+      block(sc.label, W / 2, y + th / 2 + 6.5 * u, cw * 0.9, 4.6 * u, 400, T.sub, 2, 0.45, "center", null, 1.35);
+    }
   } else if (type === "number") {
-    const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/), t0 = at(sc.valueT, 0.2);
+    const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/), t0 = sc.valueT != null && isFinite(sc.valueT) ? Math.max(0, sc.valueT - sc.start) : 0.25;
     let shown = raw;
-    if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * eOut((e - t0) / 0.9)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
-    badge(sc.emoji, W / 2, H * 0.18, 6.5 * u, bOut(e / 0.5));
-    reveal(sc.title, W / 2, H * (sc.emoji ? 0.32 : 0.24), W * 0.84, 5.4 * u, 600, T.sub, 1, 0.1);
-    const f = fitText(ctx, raw, W * 0.9, 18 * u, 800, 1), k = eOut((e - t0 + 0.15) / 0.35);
-    if (k > 0) { ctx.save(); ctx.globalAlpha *= k; ctx.font = SFONT(800, f.size); ctx.fillStyle = T.accent; shadow(true); ctx.translate(W / 2, H * 0.52); const s = 0.85 + 0.15 * bOut((e - t0 + 0.15) / 0.45); ctx.scale(s, s); ctx.fillText(shown, 0, 0); ctx.restore(); }
-    underline(H * 0.52 + f.size * 0.62, t0 + 0.4, 22 * u);
-    reveal(sc.label, W / 2, H * 0.76, W * 0.84, 6 * u, 600, T.fg, 2, t0 + 0.3);
+    if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * xOut((e - t0) / 1.1)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
+    const align = land ? "left" : "center", x = land ? P * 1.4 : W / 2, maxW = land ? W * 0.62 : cw;
+    if (land && hasIcon) icon(W * 0.82, H * 0.5, Math.min(H * 0.18, W * 0.09), 0.1);
+    kicker(sc.kicker || sc.title, x, H * 0.28, align, 0.05);
+    const f = fitText(ctx, raw, maxW, (land ? 15 : 17) * u, 800, 1), k = xOut((e - t0 + 0.2) / 0.5);
+    if (k > 0) { ctx.save(); ctx.font = SFONT(800, f.size); ctx.fillStyle = T.accent; ctx.textAlign = align; ctx.beginPath(); ctx.rect(0, H * 0.48 - f.size * 0.85, W, f.size * 1.7); ctx.clip(); ctx.fillText(shown, x, H * 0.48 + (1 - k) * f.size); ctx.restore(); }
+    block(sc.label, x, H * 0.7, maxW, 5.4 * u, 600, T.fg, 2, t0 + 0.35, align, sc.mark);
   } else if (type === "list") {
     const items = (sc.items || []).filter(Boolean).slice(0, 4), tt = sc.itemsT || [];
-    if (sc.title) reveal((sc.emoji ? sc.emoji + "  " : "") + sc.title, W / 2, H * 0.14, W * 0.88, 7 * u, 800, T.fg, 1, 0.05);
-    const top = sc.title ? H * 0.25 : H * 0.1, n = items.length || 1, rowH = Math.min(16 * u, (H - top - 6 * u) / n);
-    const shownAt = items.map((_, i) => at(tt[i], 0.35 + i * 0.45));
-    let current = -1; shownAt.forEach((s, i) => { if (e >= s) current = i; });
+    const top = H * (sc.title ? 0.27 : 0.12), x0 = land ? P * 1.3 : P;
+    kicker(sc.kicker, land ? x0 : W / 2, H * 0.08 + 1.5 * u, land ? "left" : "center", 0);
+    if (sc.title) block(sc.title, land ? x0 : W / 2, H * 0.165, W - P * 2.6, 6.8 * u, 800, T.fg, 1, 0.08, land ? "left" : "center", sc.mark);
+    const n = items.length || 1, rowH = Math.min(15 * u, (H - top - 5 * u) / n), shownAt = items.map((_, i) => tt[i] != null && isFinite(tt[i]) ? Math.max(0, tt[i] - sc.start) : 0.4 + i * 0.5);
+    let cur = -1; shownAt.forEach((s, i) => { if (e >= s) cur = i; });
     items.forEach((it, i) => {
-      const k = eOut((e - shownAt[i]) / 0.35); if (k <= 0) return;
-      const y = top + rowH * (i + 0.5), x0 = W * 0.08 + (1 - k) * 6 * u, bw = W * 0.84, bh = rowH * 0.82, on = i === current;
-      ctx.save(); ctx.globalAlpha *= k * (on ? 1 : 0.78);
-      ctx.fillStyle = T.card; rrect(ctx, x0, y - bh / 2, bw, bh, bh * 0.22); ctx.fill();
-      if (on) { ctx.strokeStyle = T.accent; ctx.lineWidth = 0.4 * u; ctx.stroke(); }
-      ctx.fillStyle = T.accent; ctx.beginPath(); ctx.arc(x0 + bh * 0.55, y, bh * 0.27, 0, Math.PI * 2); ctx.fill();
-      ctx.font = SFONT(800, bh * 0.3); ctx.fillStyle = T.ink; ctx.fillText(String(i + 1), x0 + bh * 0.55, y + bh * 0.02);
-      ctx.textAlign = "left"; const f = fitText(ctx, it, bw - bh * 1.35, Math.min(6.2 * u, bh * 0.4), 600, 1);
-      ctx.font = SFONT(600, f.size); ctx.fillStyle = T.fg; ctx.fillText(f.lines[0] || "", x0 + bh * 1.05, y); ctx.restore();
+      const k = xOut((e - shownAt[i]) / 0.5); if (k <= 0) return;
+      const y = top + rowH * (i + 0.5), bw = W - x0 * 2, on = i === cur, ir = rowH * 0.22;
+      ctx.save(); ctx.globalAlpha *= on ? 1 : 0.72;
+      ctx.fillStyle = T.line; ctx.fillRect(x0, y + rowH * 0.46, bw * k, Math.max(1, 0.25 * u));
+      ctx.strokeStyle = on ? T.accent : T.line; ctx.lineWidth = 0.45 * u; ctx.beginPath(); ctx.arc(x0 + ir, y, ir, 0, Math.PI * 2); ctx.stroke();
+      drawIcon(ctx, "check", x0 + ir, y, ir * 1.35, on ? T.accent : T.fg, xOut((e - shownAt[i] - 0.1) / 0.45));
+      const f = fitText(ctx, it, bw - ir * 3.2, Math.min(5.8 * u, rowH * 0.42), 600, 1);
+      lineReveal(f.lines[0] || "", x0 + ir * 2.8, y, f.size, 600, T.fg, shownAt[i] + 0.05, "left", null);
+      ctx.restore();
     });
   } else if (type === "vs") {
-    const tb = at(sc.bT, 0.35), kA = eOut((e - 0.1) / 0.45), kB = eOut((e - tb) / 0.45), cw = W * 0.4, ch = H * (sc.title ? 0.58 : 0.66), y = H * (sc.title ? 0.58 : 0.52), ems = sc.items || [];
-    if (sc.title) reveal(sc.title, W / 2, H * 0.13, W * 0.9, 6.4 * u, 800, T.fg, 1, 0);
-    const card = (x, txt, k, em, strong) => { if (k <= 0) return; ctx.save(); ctx.globalAlpha *= k; ctx.translate(0, (1 - k) * 4 * u); ctx.fillStyle = T.card; rrect(ctx, x - cw / 2, y - ch / 2, cw, ch, 3 * u); ctx.fill(); if (strong) { ctx.strokeStyle = T.accent; ctx.lineWidth = 0.45 * u; ctx.stroke(); } badge(em, x, y - ch * 0.2, 7 * u, 1); reveal(txt, x, y + ch * 0.18, cw * 0.84, 6 * u, 700, T.fg, 3, -9); ctx.restore(); };
-    card(W * 0.26, sc.a, kA, ems[0] || "", false);
-    card(W * 0.74, sc.b, kB, ems[1] || "", true);
-    const pk = bOut((e - Math.min(tb, 0.6)) / 0.45);
-    if (pk > 0) { ctx.save(); ctx.translate(W / 2, y); ctx.scale(pk, pk); ctx.fillStyle = T.accent; ctx.beginPath(); ctx.arc(0, 0, 6.5 * u, 0, Math.PI * 2); ctx.fill(); ctx.font = SFONT(800, 5.2 * u); ctx.fillStyle = T.ink; ctx.fillText("VS", 0, 0.3 * u); ctx.restore(); }
+    const tb = sc.bT != null && isFinite(sc.bT) ? Math.max(0, sc.bT - sc.start) : 0.6, items = sc.items || [];
+    if (sc.title) block(sc.title, W / 2, H * 0.12, cw, 6 * u, 800, T.fg, 1, 0, "center", sc.mark);
+    const top = sc.title ? H * 0.22 : H * 0.08, area = H - top - 6 * u;
+    const box = (i, txt, delay, strong) => {
+      const k = xOut((e - delay) / 0.55); if (k <= 0) return;
+      let bx, by, bw, bh;
+      if (land) { bw = (W - P * 2 - 10 * u) / 2; bh = area; bx = P + i * (bw + 10 * u); by = top; }
+      else { bw = cw; bh = (area - 9 * u) / 2; bx = P; by = top + i * (bh + 9 * u); }
+      ctx.save(); ctx.globalAlpha *= k; ctx.translate(0, (1 - k) * 3 * u);
+      ctx.fillStyle = T.card; rrect(ctx, bx, by, bw, bh, 2.2 * u); ctx.fill();
+      if (strong) { ctx.fillStyle = T.accent; ctx.fillRect(bx, by + bh * 0.2, 0.7 * u, bh * 0.6); }
+      const ic = items[i]; const icy = land ? by + bh * 0.3 : by + bh / 2, icx = land ? bx + bw / 2 : bx + bh * 0.42;
+      if (ICONS[ic]) drawIcon(ctx, ic, icx, icy, Math.min(bw, bh) * 0.28, strong ? T.accent : T.sub, xOut((e - delay - 0.1) / 0.6));
+      block(txt, land ? bx + bw / 2 : bx + bh * 0.85, land ? by + bh * 0.66 : by + bh / 2, land ? bw * 0.84 : bw - bh * 1.05, 6 * u, 700, T.fg, 2, delay + 0.1, land ? "center" : "left");
+      ctx.restore();
+    };
+    box(0, sc.a, 0.12, false); box(1, sc.b, tb, true);
+    const pk = bOut((e - Math.min(tb, 0.7)) / 0.45);
+    if (pk > 0) { const vx = land ? W / 2 : W / 2, vy = land ? top + area / 2 : top + (area - 9 * u) / 2 + 4.5 * u; ctx.save(); ctx.translate(vx, vy); ctx.scale(pk, pk); ctx.fillStyle = T.accent; ctx.beginPath(); ctx.arc(0, 0, 4.6 * u, 0, Math.PI * 2); ctx.fill(); ctx.font = SFONT(800, 3.6 * u); ctx.fillStyle = T.ink; ctx.textAlign = "center"; ctx.fillText("VS", 0, 0.2 * u); ctx.restore(); }
   } else if (type === "bars") {
     const rows = (sc.items || []).map(s => { const m = String(s).match(/^(.*?)[\s:：=\-]+(-?\d+(?:\.\d+)?)\s*(%?)\s*$/); return m ? { l: m[1].trim(), v: +m[2], pct: m[3] } : null; }).filter(Boolean).slice(0, 5), tt = sc.itemsT || [];
-    if (sc.title) reveal(sc.title, W / 2, H * 0.12, W * 0.9, 6.8 * u, 800, T.fg, 1, 0);
-    const max = Math.max(1, ...rows.map(r => r.v)), top = H * 0.24, n = rows.length || 1, rh = (H * 0.68) / n;
+    kicker(sc.kicker, W / 2, H * 0.07 + 1.5 * u, "center", 0);
+    if (sc.title) block(sc.title, W / 2, H * 0.15, cw, 6.4 * u, 800, T.fg, 1, 0.05, "center", sc.mark);
+    const max = Math.max(1, ...rows.map(r => r.v)), top = H * 0.28, n = rows.length || 1, rh = (H * 0.64) / n;
     rows.forEach((r, i) => {
-      const k = eOut((e - at(tt[i], 0.25 + i * 0.3)) / 0.8), y = top + rh * (i + 0.5), x0 = W * 0.08, bw = W * 0.84, bh = Math.min(rh * 0.3, 6 * u);
-      ctx.font = SFONT(600, Math.min(5.2 * u, rh * 0.28)); ctx.fillStyle = T.fg;
-      ctx.textAlign = "left"; ctx.fillText(r.l, x0, y - bh);
-      ctx.textAlign = "right"; ctx.fillStyle = T.accent; ctx.fillText((Math.round(r.v * k * 10) / 10).toLocaleString("en-US") + r.pct, x0 + bw, y - bh); ctx.textAlign = "center";
-      ctx.fillStyle = T.card; rrect(ctx, x0, y, bw, bh, bh / 2); ctx.fill();
-      if (k > 0) { ctx.fillStyle = T.accent; rrect(ctx, x0, y, Math.max(bh, bw * r.v / max * k), bh, bh / 2); ctx.fill(); }
+      const k = xOut((e - (tt[i] != null && isFinite(tt[i]) ? Math.max(0, tt[i] - sc.start) : 0.3 + i * 0.35)) / 1), y = top + rh * (i + 0.5), bh = Math.min(rh * 0.24, 4.5 * u), best = r.v === max;
+      ctx.font = SFONT(600, Math.min(4.8 * u, rh * 0.26)); ctx.fillStyle = T.fg; ctx.textAlign = "left"; ctx.fillText(r.l, P, y - bh * 1.2);
+      ctx.textAlign = "right"; ctx.fillStyle = best ? T.accent : T.sub; ctx.fillText((Math.round(r.v * k * 10) / 10).toLocaleString("en-US") + r.pct, W - P, y - bh * 1.2);
+      ctx.fillStyle = T.line; ctx.fillRect(P, y, cw, bh);
+      if (k > 0) { ctx.fillStyle = best ? T.accent : T.fg; ctx.globalAlpha *= best ? 1 : 0.55; ctx.fillRect(P, y, cw * r.v / max * k, bh); ctx.globalAlpha /= best ? 1 : 0.55; }
     });
   } else if (type === "quote") {
-    ctx.font = SFONT(800, 26 * u); ctx.fillStyle = T.accent; ctx.globalAlpha *= 0.85; ctx.fillText("“", W * 0.16, H * 0.26); ctx.globalAlpha /= 0.85;
-    const txt = String(sc.title || ""), gs = graphemes(txt), n = Math.floor(gs.length * clamp01((e - 0.15) / Math.min(dur * 0.65, gs.length * 0.045 + 0.2)));
-    reveal(txt, W / 2, H * 0.5, W * 0.8, 7.5 * u, 700, T.fg, 3, -9, gs.slice(0, n).join(""));
-    reveal(sc.label ? "— " + sc.label : "", W / 2, H * 0.82, W * 0.8, 4.8 * u, 500, T.sub, 1, 0.6);
+    const k = xOut(e / 0.6); ctx.save(); ctx.globalAlpha *= k; ctx.font = SFONT(800, 22 * u); ctx.fillStyle = T.accent; ctx.textAlign = "left"; ctx.fillText("“", P * (land ? 1.4 : 1), H * 0.26); ctx.restore();
+    block(sc.title, land ? P * 1.4 : W / 2, H * 0.5, land ? W - P * 2.8 : cw, 8.5 * u, 700, T.fg, 3, 0.2, land ? "left" : "center", sc.mark, 1.3);
+    if (sc.label) kicker(sc.label, land ? P * 1.4 : W / 2, H * 0.82, land ? "left" : "center", 0.8);
   }
   ctx.restore();
+}
+/* one call for card / full-screen modes: container motion, shadow and rounded corners */
+function drawSceneLayer(ctx, p, W, H, t, mediaCb, bgSrc) {
+  const sc = sceneAt(p, t); if (!sc || sc.show === false) return;
+  const r = cardRect(p, W, H), e = t - sc.start, dur = sc.end - sc.start;
+  const k = xOut(e / 0.5), out = clamp01((dur - e) / 0.3), a = Math.min(k, out); if (a <= 0) return;
+  const full = p.split.mode === "full";
+  ctx.save();
+  if (!full) { ctx.fillStyle = `rgba(0,0,0,${0.22 * a})`; ctx.fillRect(0, 0, W, H); }
+  ctx.globalAlpha = a;
+  const s = full ? 1 : 0.94 + 0.06 * k, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  ctx.translate(cx, cy + (full ? 0 : (1 - k) * r.h * 0.04)); ctx.scale(s, s); ctx.translate(-cx, -cy);
+  if (!full) { ctx.save(); ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = r.w * 0.06; ctx.shadowOffsetY = r.w * 0.015; ctx.fillStyle = "#000"; rrect(ctx, r.x, r.y, r.w, r.h, r.r); ctx.fill(); ctx.restore(); }
+  ctx.save(); rrect(ctx, r.x, r.y, r.w, r.h, r.r); ctx.clip();
+  drawScene(ctx, r.x, r.y, r.w, r.h, sc, e, mediaCb ? mediaCb(sc, t) : null, p.split.theme, bgSrc);
+  ctx.restore(); ctx.restore();
 }
 function normalizeScenes(list, dur) {
   list.sort((a, b) => a.start - b.start);
@@ -1159,7 +1282,7 @@ function normalizeScenes(list, dur) {
 function plainScenes(p) {
   const out = []; let cur = null;
   for (const c of p.captions) {
-    if (!cur) cur = { id: uid(), start: c.start, end: c.end, type: "big", emoji: "", title: c.text, label: "", value: "", items: [], a: "", b: "", media: null };
+    if (!cur) cur = { id: uid(), start: c.start, end: c.end, type: "big", icon: "", kicker: "", mark: "", title: c.text, label: "", value: "", items: [], a: "", b: "", media: null, show: true };
     else { cur.end = c.end; cur.title = joinTok(cur.title, c.text); }
     if (cur.end - cur.start >= 3) { cur.title = cur.title.slice(0, 60); out.push(cur); cur = null; }
   }
@@ -1167,36 +1290,40 @@ function plainScenes(p) {
   return normalizeScenes(out, p.duration);
 }
 async function aiScenes(p) {
-  const caps = p.captions, raw = [], B = 60;
+  const caps = p.captions, raw = [], B = 60, iconList = Object.entries(ICONS).map(([k, v]) => `${k} (${v[0]})`).join(", ");
   for (let s = 0; s < caps.length; s += B) {
     const j = await chatJSON([
-      { role: "system", content: `You are a senior motion designer making animated explainer visuals for the top half of a split-screen short video. The visuals must stay in sync with what the speaker is saying.
+      { role: "system", content: `You are a senior motion designer at a top agency, making on-screen explainer graphics that appear over a creator's talking video. They must look hand-designed by a professional editor, stay in sync with what is said, and never look templated or AI-made.
 Rules:
-1. Start a new scene exactly at the line where the speaker moves to a new idea, topic, number or example. A scene usually spans 1 to 3 lines. "start" is the index of the line where the scene begins; it lasts until the next scene begins. The first scene must start at first_line. Scenes must be in order.
-2. Show only what is actually said in those lines. Use the exact numbers, prices, names, models and terms the speaker says. Never invent facts.
-3. Pick the type that explains it best:
- - "big": "title" headline under 18 characters, optional short "label", one fitting emoji
- - "number": "value" exactly as said with its unit (for example "189,000 บาท", "50%", "3 ปี"), "title" a 2-4 word lead-in, "label" what the number is, "value_line" the index of the line where the number is said
- - "list": "title" plus 2 to 4 "items", each {"text": under 16 characters, "line": index of the line where that item is said}
- - "vs": "a" versus "b" (under 14 characters each), "items": [emoji for a, emoji for b], optional "title", "b_line" the line where b is said
- - "bars": only when the speaker compares amounts: "title" plus items {"text": "label: number", "line": index}
- - "quote": "title" a short striking sentence from the speaker (under 40 characters), "label" who said it if mentioned
-4. Use "number" only when a number is actually said. Vary the types when it fits the content.
-5. All on-screen text in the same language as the script, short phrases rather than sentences.
-Reply only with JSON: {"scenes":[{"start":0,"type":"big","emoji":"🚗","title":"","label":"","value":"","value_line":0,"items":[{"text":"","line":0}],"a":"","b":"","b_line":0}]}` },
+1. Start a new scene exactly at the line where the speaker moves to a new idea, number, product point or example. A scene usually spans 1 to 3 lines. "start" is the index of the line where it begins; it lasts until the next scene. The first scene must start at first_line. Scenes in order.
+2. Show only what is actually said in those lines, with the exact numbers, prices, names, models and terms used. Never invent facts.
+3. "show": true when a graphic helps the viewer (facts, numbers, features, comparisons, steps, prices). false for greetings, personal small talk, jokes and calls to action where the speaker's face matters. Aim for about 60% true.
+4. Types:
+ - "big": "title" a punchy headline under 22 characters, optional "kicker" (1-2 word label above it, e.g. "จุดเด่น", "เคล็ดลับ"), optional "label" one short supporting line
+ - "number": "value" exactly as said with its unit ("189,000 บาท", "50%", "3 ปี"), "kicker" what it is (1-3 words), "label" a short explanation, "value_line" index of the line where the number is said
+ - "list": "title" plus 2-4 "items" each {"text": under 18 characters, "line": index where that item is said}
+ - "vs": "a" versus "b" (under 16 characters each), "items": [icon for a, icon for b], optional "title", "b_line" where b is said
+ - "bars": only when amounts are compared: "title" plus items {"text": "label: number", "line": index}
+ - "quote": "title" a short striking sentence quoted from the speaker (under 45 characters)
+5. "icon": the single best icon from: ${iconList}. Use "" if none fits.
+6. "mark": the one word or short phrase inside "title" (or "label" for numbers) to highlight, copied exactly; "" if none.
+7. Text in the script's language, short phrases, no emoji, no exclamation marks, no clichés like "สุดยอด" unless the speaker said it.
+Reply only with JSON: {"scenes":[{"start":0,"show":true,"type":"big","icon":"cart","kicker":"","title":"","mark":"","label":"","value":"","value_line":0,"items":[{"text":"","line":0}],"a":"","b":"","b_line":0}]}` },
       { role: "user", content: JSON.stringify({ first_line: s, lines: caps.slice(s, s + B).map((c, k) => ({ i: s + k, t: +c.start.toFixed(1), text: c.text })) }) }
     ]);
     (j.scenes || []).forEach(x => raw.push(x));
   }
-  const str = (v, n) => String(v == null ? "" : v).trim().slice(0, n);
+  const str = (v, n) => String(v == null ? "" : v).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").trim().slice(0, n);
   const lineT = i => { const c = caps[+i]; return c ? c.start : undefined; };
   const scenes = raw.map(x => {
     const first = caps[+x.start]; if (!first) return null;
-    let type = SCENE_TYPES[x.type] ? x.type : "big";
+    const type = SCENE_TYPES[x.type] ? x.type : "big";
     const itemsRaw = Array.isArray(x.items) ? x.items : [];
-    const items = itemsRaw.map(v => typeof v === "object" && v ? str(v.text, 40) : str(v, 40)).filter(Boolean).slice(0, 5);
+    let items = itemsRaw.map(v => typeof v === "object" && v ? str(v.text, 40) : String(v == null ? "" : v).trim().slice(0, 40)).filter(Boolean).slice(0, 5);
     const itemsT = itemsRaw.map(v => typeof v === "object" && v ? lineT(v.line) : undefined).slice(0, items.length);
-    const sc = { id: uid(), start: Math.max(0, first.start - 0.12), end: first.end, type, emoji: str(x.emoji, 8), title: str(x.title, 60), label: str(x.label, 60), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
+    const sc = { id: uid(), start: Math.max(0, first.start - 0.12), end: first.end, type, show: x.show !== false, icon: ICONS[x.icon] ? x.icon : "", kicker: str(x.kicker, 24), title: str(x.title, 60), mark: str(x.mark, 30), label: str(x.label, 70), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
+    if (type === "vs") sc.items = items.filter(k => ICONS[k]);
+    if (sc.mark && !(sc.title.includes(sc.mark) || sc.label.includes(sc.mark))) sc.mark = "";
     if (type === "number" && !/\d/.test(sc.value)) { sc.type = "big"; sc.title = sc.title || sc.label; }
     if ((type === "list" || type === "bars") && items.length < 2) { sc.type = "big"; sc.title = sc.title || items[0] || ""; }
     if (type === "vs" && (!sc.a || !sc.b)) sc.type = "big";
@@ -1375,8 +1502,10 @@ function viewNew() {
         <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
         <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญ (สี + เด้ง) พร้อมเสียงตรงจังหวะคำนั้น</label>
         <label class="sw"><input type="checkbox" id="npSfx"> ใส่เสียงช่วงเปิดคลิปและเปลี่ยนเรื่องเพิ่ม</label>
-        <label class="sw"><input type="checkbox" id="npSplit"> ทำ Split Screen: AI สร้างแอนิเมชันประกอบสคริปต์ (เหมาะกับคลิปเล่าเรื่อง)</label>
-        <div class="seg" id="npOrient" hidden><button type="button" data-v="v">แนวตั้ง 9:16 · ภาพประกอบบน-คลิปล่าง</button><button type="button" data-v="h">แนวนอน 16:9 · ซ้าย-ขวา</button></div></div>
+        <label class="sw"><input type="checkbox" id="npSplit"> ใส่ภาพประกอบ: AI ทำกราฟิกเคลื่อนไหวประกอบสิ่งที่พูด (เหมาะกับคลิปเล่าเรื่อง)</label>
+        <div class="field" id="npOrient" hidden><span class="hint">แสดงภาพประกอบแบบ</span><div class="chips">
+          <button type="button" class="chip2" data-v="card:16:9">การ์ดกลางจอ แนวนอน 16:9 (แนะนำ)</button><button type="button" class="chip2" data-v="card:1:1">การ์ดกลางจอ สี่เหลี่ยม</button><button type="button" class="chip2" data-v="card:4:5">การ์ดกลางจอ แนวตั้ง 4:5</button>
+          <button type="button" class="chip2" data-v="full">เต็มจอ ตัดสลับกับหน้าคุณ</button><button type="button" class="chip2" data-v="split:v">แบ่งจอ บน-ล่าง 9:16</button><button type="button" class="chip2" data-v="split:h">แบ่งจอ ซ้าย-ขวา 16:9</button></div></div></div>
       <button class="btn primary block" id="go" disabled>เริ่มสร้างซับ</button>
       <ol class="steps" id="steps" hidden>
         <li data-s="audio"><span class="dot"></span><span id="audLab">แยกเสียงจากวิดีโอ</span></li>
@@ -1399,7 +1528,7 @@ function viewNew() {
   $("#npFix").checked = settings.autoFix !== false;
   $("#npKw").checked = settings.autoKw !== false;
   $("#npSplit").checked = !!settings.autoSplit;
-  let npOrient = settings.splitOrient || "v";
+  let npOrient = settings.splitLook || "card:16:9";
   const syncOrient = () => { $("#npOrient").hidden = !$("#npSplit").checked; $$("#npOrient button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === npOrient)); };
   $("#npSplit").onchange = syncOrient; $$("#npOrient button").forEach(b => b.onclick = () => { npOrient = b.dataset.v; syncOrient(); }); syncOrient();
   const syncNp = () => {
@@ -1461,7 +1590,7 @@ function viewNew() {
     let stage = "audio";
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
-      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoSplit = autoSplit; settings.splitOrient = npOrient; saveSettings();
+      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoSplit = autoSplit; settings.splitLook = npOrient; saveSettings();
       mark("audio", "doing");
       const { chunks, duration } = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
       if (cap) cap.dispose();
@@ -1516,7 +1645,8 @@ function viewNew() {
         stage = "split"; mark("split", "doing");
         try { p.split.scenes = await aiScenes(p); }
         catch (e) { p.split.scenes = plainScenes(p); toast("AI สร้างฉากไม่สำเร็จ ใช้ฉากจากซับแทน กดสร้างใหม่ได้ในแท็บ Split", 5000); }
-        p.split.on = true; p.split.orient = npOrient; p.split.prevPos = p.style.pos; p.style.pos = npOrient === "h" ? 86 : 50;
+        { const [m, a] = [npOrient.split(":")[0], npOrient.slice(npOrient.indexOf(":") + 1)]; p.split.mode = m; if (m === "card") p.split.card = a; if (m === "split") p.split.orient = a; }
+        p.split.on = true; p.split.prevPos = p.style.pos; p.style.pos = p.split.mode === "split" ? (p.split.orient === "h" ? 86 : 50) : 84;
         mark("split", "done"); await DB.put(p);
       }
       await sleep(300);
@@ -1560,7 +1690,7 @@ async function viewEditor(id) {
   let video = null, cv = null, thumbImg = null, sid = null, playUntil = null, fxRaf = 0, activeId, tab = "text", edId = null, guideOn = false;
   const pvMedia = {};
 
-  const TOOLS = [["text", "ข้อความ"], ["split", "Split Screen"], ["style", "สไตล์"], ["font", "ฟอนต์"], ["anim", "อนิเมชัน"], ["sfx", "เสียง"], ["frame", "เฟรม"], ["export", "ส่งออก"]];
+  const TOOLS = [["text", "ข้อความ"], ["split", "ภาพประกอบ"], ["style", "สไตล์"], ["font", "ฟอนต์"], ["anim", "อนิเมชัน"], ["sfx", "เสียง"], ["frame", "เฟรม"], ["export", "ส่งออก"]];
   const COLORS = ["#FFFFFF", "#FFE14D", "#FFD400", "#FF9F1C", "#FF5A5A", "#FF8FD1", "#7CFFB2", "#4DE0FF", "#7AA7FF", "#111111", "#1B2A4A"];
   const swatches = k => `<div class="swatches" data-sw="${k}">${COLORS.map(c => `<button type="button" class="sw-c" data-c="${c}" style="background:${c}" aria-label="สี ${c}"></button>`).join("")}<input type="color" class="sw-custom" data-cc="${k}" aria-label="เลือกสีเอง"></div>`;
   const modeBtns = [["main", "ภาษาหลัก"], ["both", "สองภาษา"], ["tr", "เฉพาะคำแปล"]];
@@ -1612,19 +1742,23 @@ async function viewEditor(id) {
         </section>
 
         <section class="pane" data-p="split" hidden>
-          <label class="sw big"><input type="checkbox" id="spOn"> เปิด Split Screen</label>
-          <span class="hint" style="margin-top:-8px">ครึ่งหนึ่งเป็นแอนิเมชันหรือรูป/คลิปประกอบ อีกครึ่งเป็นคลิปของคุณ ส่งออกเป็นเฟรม 9:16 เหมาะกับคลิปเล่าเรื่อง</span>
-          <button class="btn primary block" id="spAi">✨ ให้ AI สร้างแอนิเมชันประกอบสคริปต์</button>
+          <label class="sw big"><input type="checkbox" id="spOn"> เปิดภาพประกอบ</label>
+          <span class="hint" style="margin-top:-8px">กราฟิกเคลื่อนไหวประกอบสิ่งที่พูด ตรงจังหวะ ใส่รูปหรือคลิปของคุณแทนได้ทุกฉาก</span>
+          <button class="btn primary block" id="spAi">✨ ให้ AI ออกแบบภาพประกอบจากสคริปต์</button>
           <span class="hint" id="spStat" style="margin-top:-8px"></span>
-          <div class="field"><span class="lab">โทนสีภาพประกอบ</span><div class="chips" id="spTheme">${Object.entries(SCENE_THEMES).map(([k, T]) => `<button type="button" class="chip2 thm" data-v="${k}"><i style="background:linear-gradient(135deg,${T.bg[1]} 55%,${T.accent} 55%)"></i>${T.n}</button>`).join("")}</div></div>
-          <div class="field"><span class="lab">รูปแบบวิดีโอ</span><div class="seg" id="spOrient"><button type="button" data-v="v">แนวตั้ง 9:16 · บน-ล่าง</button><button type="button" data-v="h">แนวนอน 16:9 · ซ้าย-ขวา</button></div></div>
-          <div class="field"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual"></button><button type="button" data-v="video"></button></div></div>
-          <div class="xbox"><span class="lab">จัดตำแหน่งคลิปของคุณ</span><span class="hint" style="margin-top:-6px">ลากบนคลิปในวิดีโอเพื่อเลื่อนให้หน้าอยู่กลาง หรือปรับด้านล่าง</span>
+          <div class="field"><span class="lab">แสดงแบบ</span><div class="seg" id="spMode"><button type="button" data-v="card">การ์ดกลางจอ</button><button type="button" data-v="full">เต็มจอ</button><button type="button" data-v="split">แบ่งจอ</button></div>
+            <span class="hint" id="spModeHint"></span></div>
+          <div class="field" data-for="card"><span class="lab">รูปทรงการ์ด</span><div class="seg" id="spCard"><button type="button" data-v="16:9">แนวนอน 16:9</button><button type="button" data-v="1:1">สี่เหลี่ยม 1:1</button><button type="button" data-v="4:5">แนวตั้ง 4:5</button></div>
+            <div class="ctl"><label for="spCardY">ตำแหน่งการ์ด</label><input type="range" id="spCardY" min="25" max="65" step="1"><output id="oCardY"></output></div></div>
+          <div class="field" data-for="split"><span class="lab">รูปแบบวิดีโอ</span><div class="seg" id="spOrient"><button type="button" data-v="v">แนวตั้ง 9:16 · บน-ล่าง</button><button type="button" data-v="h">แนวนอน 16:9 · ซ้าย-ขวา</button></div></div>
+          <div class="field" data-for="split"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual"></button><button type="button" data-v="video"></button></div></div>
+          <div class="ctl" data-for="split"><label for="spRatio">ขนาดภาพประกอบ</label><input type="range" id="spRatio" min="30" max="70" step="1"><output id="oRatio"></output></div>
+          <div class="xbox" data-for="split"><span class="lab">จัดตำแหน่งคลิปของคุณ</span><span class="hint" style="margin-top:-6px">ลากบนคลิปในวิดีโอเพื่อเลื่อนให้หน้าอยู่กลาง หรือปรับด้านล่าง</span>
             <div class="ctl"><label for="spZoom">ซูม</label><input type="range" id="spZoom" min="100" max="220" step="5"><output id="oZoom"></output></div>
             <div class="ctl"><label for="spFx">ซ้าย-ขวา</label><input type="range" id="spFx" min="0" max="100" step="1"><output id="oFx"></output></div>
             <div class="ctl"><label for="spFy">บน-ล่าง</label><input type="range" id="spFy" min="0" max="100" step="1"><output id="oFy"></output></div>
             <button class="btn small" id="spCenter">จัดกึ่งกลางอัตโนมัติ</button></div>
-          <div class="ctl"><label for="spRatio">ขนาดภาพประกอบ</label><input type="range" id="spRatio" min="30" max="70" step="1"><output id="oRatio"></output></div>
+          <div class="field"><span class="lab">โทนภาพประกอบ</span><div class="chips" id="spTheme">${Object.entries(SCENE_THEMES).map(([k, T]) => `<button type="button" class="chip2 thm" data-v="${k}"><i style="background:linear-gradient(135deg,${T.glass ? "#6b7280" : T.bg[1]} 55%,${T.accent} 55%)"></i>${T.n}</button>`).join("")}</div></div>
           <div class="row"><label class="btn small" for="spAdd">＋ ใส่รูป/คลิปของคุณ ณ ตำแหน่งนี้</label><input type="file" id="spAdd" accept="image/*,video/*" hidden><button class="btn small" id="spPlain">สร้างฉากจากซับ (ไม่ใช้ AI)</button></div>
           <ol class="scenes" id="scenes"></ol>
         </section>
@@ -1790,7 +1924,7 @@ async function viewEditor(id) {
       const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * 100, x = (e.clientX - r.left) / r.width * 100;
       const c = captionAt(p.captions, video.currentTime), px = p.style.posX == null ? 50 : p.style.posX;
       pd = { x0: e.clientX, y0: e.clientY, pos: p.style.pos, posX: px, w: r.width, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 16 && Math.abs(x - px) < 46 };
-      if (!pd.onCap && p.split.on) { const { vid } = splitRects(p, r.width, r.height), lx = e.clientX - r.left, ly = e.clientY - r.top; if (lx >= vid.x && lx < vid.x + vid.w && ly >= vid.y && ly < vid.y + vid.h) Object.assign(pd, { pan: true, fx: p.split.fx, fy: p.split.fy, vw: vid.w, vh: vid.h }); }
+      if (!pd.onCap && p.split.on && p.split.mode === "split") { const { vid } = splitRects(p, r.width, r.height), lx = e.clientX - r.left, ly = e.clientY - r.top; if (lx >= vid.x && lx < vid.x + vid.w && ly >= vid.y && ly < vid.y + vid.h) Object.assign(pd, { pan: true, fx: p.split.fx, fy: p.split.fy, vw: vid.w, vh: vid.h }); }
       try { cv.setPointerCapture(e.pointerId); } catch {}
     });
     cv.addEventListener("pointermove", e => {
@@ -1838,20 +1972,23 @@ async function viewEditor(id) {
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
     const bg = $("#bgcv"); if (bg) { bg.width = 48; bg.height = Math.max(1, Math.round(48 / ratio)); }
     const sv = $("#scv");
-    if (p.split.on) {
+    if (p.split.on && p.split.mode === "split") {
       const { vis, vid } = splitRects(p, w, h);
       Object.assign($("#vbox").style, { left: vid.x + "px", top: vid.y + "px", width: vid.w + "px", height: vid.h + "px" });
       frameVideo();
       sv.hidden = false; Object.assign(sv.style, { left: vis.x + "px", top: vis.y + "px", width: vis.w + "px", height: vis.h + "px" });
       sv.width = Math.round(vis.w * dpr); sv.height = Math.round(vis.h * dpr);
-    } else { Object.assign($("#vbox").style, { left: "0px", top: "0px", width: "100%", height: "100%" }); Object.assign(video.style, { objectPosition: "50% 50%", transform: "" }); sv.hidden = true; }
+    } else {
+      Object.assign($("#vbox").style, { left: "0px", top: "0px", width: "100%", height: "100%" }); Object.assign(video.style, { objectPosition: "50% 50%", transform: "" });
+      sv.hidden = !p.split.on; Object.assign(sv.style, { left: "0px", top: "0px", width: "100%", height: "100%" }); sv.width = cv.width; sv.height = cv.height;
+    }
     draw();
   }
   let bgAt = 0;
   function paintBg(force) {
     // blurred fill behind the video when the frame shape differs from the clip
     const bg = $("#bgcv"); if (!bg || !video) return;
-    if (p.split.on) { bg.hidden = true; return; }
+    if (p.split.on && p.split.mode === "split") { bg.hidden = true; return; }
     const vr = (video.videoWidth || p.width || 9) / (video.videoHeight || p.height || 16), fr = bg.width / bg.height;
     const need = p.layout !== "orig" && p.fit !== "fill" && Math.abs(vr - fr) > 0.01;
     bg.hidden = !need; video.style.objectFit = p.fit === "fill" && p.layout !== "orig" ? "cover" : "contain";
@@ -1903,14 +2040,16 @@ async function viewEditor(id) {
     f();
   }
   function frameVideo() {
-    if (!video || !p.split.on) return; const sp = p.split;
+    if (!video || !p.split.on || p.split.mode !== "split") return; const sp = p.split;
     Object.assign(video.style, { objectFit: "cover", objectPosition: `${sp.fx}% ${sp.fy}%`, transformOrigin: `${sp.fx}% ${sp.fy}%`, transform: sp.zoom > 1 ? `scale(${sp.zoom})` : "" });
   }
   function paintScene(t) {
     const sv = $("#scv"); if (!sv || sv.hidden) return;
-    const g = sv.getContext("2d"), sc = sceneAt(p, t);
+    const g = sv.getContext("2d"), playing = !!video && !video.paused;
+    if (p.split.mode !== "split") { g.clearRect(0, 0, sv.width, sv.height); try { drawSceneLayer(g, p, sv.width, sv.height, t, (sc, tt) => mediaFor(pvMedia, sc, tt, playing), thumbImg); } catch (e) { console.error(e); } return; }
+    const sc = sceneAt(p, t);
     if (!sc) { g.fillStyle = "#14161c"; g.fillRect(0, 0, sv.width, sv.height); return; }
-    try { drawScene(g, 0, 0, sv.width, sv.height, sc, t - sc.start, mediaFor(pvMedia, sc, t, !!video && !video.paused), p.split.theme); } catch (e) { console.error(e); }
+    try { drawScene(g, 0, 0, sv.width, sv.height, sc, t - sc.start, mediaFor(pvMedia, sc, t, playing), p.split.theme, thumbImg); } catch (e) { console.error(e); }
   }
   function hookMedia() { for (const k in pvMedia) { const m = pvMedia[k]; if (m.kind === "video" && !m.hooked) { m.hooked = true; m.el.addEventListener("loadeddata", () => { draw(); paintSceneThumbs(); }); m.el.addEventListener("seeked", () => { if (video && video.paused) draw(); }); } } draw(); }
   const seekTo = t => { if (video) { playUntil = null; video.currentTime = t + 0.01; } };
@@ -2344,20 +2483,32 @@ async function viewEditor(id) {
     $("#spFx").value = sp.fx; $("#oFx").textContent = sp.fx; $("#spFy").value = sp.fy; $("#oFy").textContent = sp.fy;
     $$("#spTheme button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.theme));
     $("#spRatio").value = Math.round(sp.ratio * 100); $("#oRatio").textContent = Math.round(sp.ratio * 100) + "%";
+    $$("#spMode button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.mode));
+    $$("#spCard button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.card));
+    $("#spCardY").value = Math.round(sp.cardY * 100); $("#oCardY").textContent = Math.round(sp.cardY * 100) + "%";
+    $$("[data-for]").forEach(el => el.hidden = el.dataset.for !== sp.mode);
+    $("#spModeHint").textContent = { card: "การ์ดลอยกลางจอทับคลิปของคุณ คลิปไม่ถูกตัด เฟรมวิดีโอเท่าเดิม", full: "ภาพประกอบเต็มจอเฉพาะช่วงที่ AI เลือก สลับกับหน้าคุณแบบ B-roll", split: "แบ่งจอครึ่งหนึ่งเป็นภาพประกอบ อีกครึ่งเป็นคลิปของคุณ" }[sp.mode];
   }
+  const capPosFor = sp => sp.mode === "split" ? (sp.orient === "h" ? 86 : 50) : 84;
   function setSplit(on) {
     const sp = p.split; if (sp.on === on) return;
     sp.on = on;
-    if (on) { sp.prevPos = p.style.pos; p.style.pos = sp.orient === "h" ? 86 : 50; if (!sp.scenes.length) { sp.scenes = plainScenes(p); $("#spStat").textContent = "สร้างฉากจากซับให้แล้ว กด ✨ เพื่อให้ AI ทำแอนิเมชันที่ตรงเนื้อหากว่านี้"; } }
+    if (on) { sp.prevPos = p.style.pos; p.style.pos = capPosFor(sp); if (!sp.scenes.length) { sp.scenes = plainScenes(p); $("#spStat").textContent = "สร้างฉากจากซับให้แล้ว กด ✨ เพื่อให้ AI ทำแอนิเมชันที่ตรงเนื้อหากว่านี้"; } }
     else if (sp.prevPos != null) p.style.pos = sp.prevPos;
     syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); changed();
   }
   $("#spOn").onchange = e => setSplit(e.target.checked);
   $$("#spTheme button").forEach(b => b.onclick = () => { p.split.theme = b.dataset.v; syncSplitUI(); renderScenes(); changed(); });
   $$("#spTop button").forEach(b => b.onclick = () => { p.split.top = b.dataset.v; syncSplitUI(); sizeStage(); renderScenes(); changed(); });
+  $$("#spMode button").forEach(b => b.onclick = () => {
+    const sp = p.split; if (sp.mode === b.dataset.v) return; sp.mode = b.dataset.v; if (sp.on) p.style.pos = capPosFor(sp);
+    syncSplitUI(); syncStyleUI(); syncFrame(); sizeStage(); renderScenes(); changed();
+  });
+  $$("#spCard button").forEach(b => b.onclick = () => { p.split.card = b.dataset.v; syncSplitUI(); renderScenes(); draw(); changed(); });
+  $("#spCardY").oninput = e => { p.split.cardY = +e.target.value / 100; syncSplitUI(); draw(); changed({ typing: true }); };
   $$("#spOrient button").forEach(b => b.onclick = () => {
     const sp = p.split; if (sp.orient === b.dataset.v) return; sp.orient = b.dataset.v;
-    if (sp.on) p.style.pos = sp.orient === "h" ? 86 : 50;
+    if (sp.on) p.style.pos = capPosFor(sp);
     const portrait = p.height > p.width; sp.fx = 50; sp.fy = sp.orient === "v" && portrait ? 32 : 50; sp.zoom = 1;
     syncSplitUI(); syncStyleUI(); syncFrame(); sizeStage(); renderScenes(); changed();
     toast(sp.orient === "h" ? "เปลี่ยนเป็นวิดีโอแนวนอน 16:9" : "เปลี่ยนเป็นวิดีโอแนวตั้ง 9:16", 1400);
@@ -2394,18 +2545,20 @@ async function viewEditor(id) {
     await attachMedia(sc, f);
   };
   function renderScenes() {
-    const list = p.split.scenes, fd = frameDims(p, p.width, p.height), vr = splitRects(p, fd.W, fd.H).vis, th = Math.max(60, Math.min(220, Math.round(150 * vr.h / vr.w)));
+    const list = p.split.scenes, fd = frameDims(p, p.width, p.height), vr = p.split.mode === "split" ? splitRects(p, fd.W, fd.H).vis : cardRect(p, fd.W, fd.H), th = Math.max(60, Math.min(220, Math.round(150 * vr.h / vr.w)));
     $("#scenes").innerHTML = list.length ? list.map(sc => `
-      <li class="scn" data-id="${sc.id}">
+      <li class="scn${sc.show === false && p.split.mode !== "split" ? " off" : ""}" data-id="${sc.id}">
         <canvas class="scn-th" width="150" height="${th}"></canvas>
         <div class="scn-b">
           <span class="hint mono">${fmtT(sc.start)}–${fmtT(sc.end)} · ${sc.media ? (sc.media.kind === "video" ? "คลิปของคุณ" : "รูปของคุณ") : SCENE_TYPES[sc.type] || ""}</span>
           <b class="scn-title">${esc(sc.media ? sc.media.name : (sc.title || sc.value || sc.a || "ฉาก"))}</b>
-          <div class="scn-acts"><button class="mini" data-s="go">ดูฉากนี้</button>${sc.media ? "" : `<button class="mini" data-s="edit">แก้ข้อความ</button>`}<label class="mini" for="spf_${sc.id}">${sc.media ? "เปลี่ยนรูป/คลิป" : "ใส่รูป/คลิปเอง"}</label><input type="file" id="spf_${sc.id}" data-s="file" accept="image/*,video/*" hidden>${sc.media ? `<button class="mini" data-s="unmedia">กลับไปใช้แอนิเมชัน</button>` : ""}<button class="mini del" data-s="del">ลบฉาก</button></div>
+          <div class="scn-acts"><button class="mini" data-s="go">ดูฉากนี้</button>${p.split.mode !== "split" ? `<button class="mini" data-s="show">${sc.show === false ? "แสดงฉากนี้" : "ซ่อน (เห็นหน้าคุณ)"}</button>` : ""}${sc.media ? "" : `<button class="mini" data-s="edit">แก้ข้อความ</button>`}<label class="mini" for="spf_${sc.id}">${sc.media ? "เปลี่ยนรูป/คลิป" : "ใส่รูป/คลิปเอง"}</label><input type="file" id="spf_${sc.id}" data-s="file" accept="image/*,video/*" hidden>${sc.media ? `<button class="mini" data-s="unmedia">กลับไปใช้แอนิเมชัน</button>` : ""}<button class="mini del" data-s="del">ลบฉาก</button></div>
         </div>
         <div class="scn-ed" hidden>
           <div class="two"><div class="field"><label class="hint">แบบภาพ</label><select class="input" data-k="type">${Object.entries(SCENE_TYPES).map(([k, n]) => `<option value="${k}"${k === sc.type ? " selected" : ""}>${n}</option>`).join("")}</select></div>
-            <div class="field"><label class="hint">อีโมจิ</label><input class="input" data-k="emoji" value="${esc(sc.emoji)}"></div></div>
+            <div class="field"><label class="hint">ไอคอน</label><select class="input" data-k="icon"><option value="">ไม่มี</option>${Object.entries(ICONS).map(([k, v]) => `<option value="${k}"${k === sc.icon ? " selected" : ""}>${v[0]}</option>`).join("")}</select></div></div>
+          <div class="two"><div class="field"><label class="hint">ป้ายเล็กด้านบน</label><input class="input" data-k="kicker" value="${esc(sc.kicker || "")}"></div>
+            <div class="field"><label class="hint">คำที่ไฮไลต์</label><input class="input" data-k="mark" value="${esc(sc.mark || "")}"></div></div>
           <div class="field"><label class="hint">หัวข้อ / ข้อความหลัก</label><input class="input" data-k="title" value="${esc(sc.title)}"></div>
           <div class="two"><div class="field"><label class="hint">ตัวเลข (แบบตัวเลข)</label><input class="input" data-k="value" value="${esc(sc.value)}"></div>
             <div class="field"><label class="hint">คำอธิบายสั้นๆ</label><input class="input" data-k="label" value="${esc(sc.label)}"></div></div>
@@ -2420,7 +2573,7 @@ async function viewEditor(id) {
     try { await document.fonts.load('800 40px "Kanit"', "ทดสอบ"); } catch {}
     for (const li of $$("#scenes .scn")) {
       const sc = p.split.scenes.find(x => x.id === li.dataset.id), c = $(".scn-th", li); if (!sc || !c) continue;
-      try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, Math.max(0.6, sc.end - sc.start - 0.3), sc.media && pvMedia[sc.media.id] ? pvMedia[sc.media.id].el : null, p.split.theme); } catch {}
+      try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, Math.max(0.6, sc.end - sc.start - 0.3), sc.media && pvMedia[sc.media.id] ? pvMedia[sc.media.id].el : null, p.split.theme, thumbImg); } catch {}
     }
   }
   const scOf = el => { const li = el.closest(".scn"); return li ? p.split.scenes.find(x => x.id === li.dataset.id) : null; };
@@ -2430,6 +2583,7 @@ async function viewEditor(id) {
     if (a === "go") { if (!p.split.on) setSplit(true); seekTo(sc.start); draw(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     else if (a === "edit") { const ed = $(".scn-ed", b.closest(".scn")); ed.hidden = !ed.hidden; }
     else if (a === "unmedia") { sc.media = null; changed(); renderScenes(); }
+    else if (a === "show") { sc.show = sc.show === false; changed(); renderScenes(); seekTo(sc.start); draw(); }
     else if (a === "del") {
       if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบฉาก"; } }, 3000); return; }
       const list = p.split.scenes, i = list.indexOf(sc); list.splice(i, 1);
@@ -2442,7 +2596,7 @@ async function viewEditor(id) {
     const el = e.target.closest("[data-k]"); if (!el) return; const sc = scOf(el); if (!sc) return;
     const k = el.dataset.k; sc[k] = k === "items" ? el.value.split("\n").map(x => x.trim()).filter(Boolean) : el.value;
     if (k === "type" && sc.type === "number" && !sc.value) toast("ใส่ตัวเลขในช่อง “ตัวเลข” ด้วย", 2000);
-    const c = $(".scn-th", el.closest(".scn")); try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, Math.max(0.6, sc.end - sc.start - 0.3), null, p.split.theme); } catch {}
+    const c = $(".scn-th", el.closest(".scn")); try { drawScene(c.getContext("2d"), 0, 0, c.width, c.height, sc, Math.max(0.6, sc.end - sc.start - 0.3), null, p.split.theme, thumbImg); } catch {}
     if (video && (video.currentTime < sc.start || video.currentTime >= sc.end)) seekTo(sc.start);
     changed({ typing: true });
   };
@@ -2455,7 +2609,7 @@ async function viewEditor(id) {
     $("#ratios").innerHTML = Object.entries(LAYOUTS).map(([k, L]) => { const r = L.r || vr, w = r >= 1 ? 30 : Math.round(30 * r), h = r >= 1 ? Math.round(30 / r) : 30; return `<button type="button" class="ratio" data-v="${k}" aria-pressed="${p.layout === k}"><i style="width:${w}px;height:${h}px"></i>${L.n}</button>`; }).join("");
     $$("#fitSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === p.fit));
     $("#fitSeg").hidden = p.layout === "orig";
-    $("#frameNote").hidden = !p.split.on; $("#frameNote").textContent = `ตอนนี้เปิด Split Screen อยู่ เฟรมจะเป็น ${p.split.orient === "h" ? "16:9" : "9:16"} อัตโนมัติ ปรับได้ในแท็บ Split Screen`; $("#ratios").style.opacity = p.split.on ? ".4" : ""; $("#ratios").style.pointerEvents = p.split.on ? "none" : "";
+    const fixed = p.split.on && p.split.mode === "split"; $("#frameNote").hidden = !fixed; $("#frameNote").textContent = `ตอนนี้ใช้ภาพประกอบแบบแบ่งจอ เฟรมจะเป็น ${p.split.orient === "h" ? "16:9" : "9:16"} อัตโนมัติ ปรับได้ในแท็บภาพประกอบ`; $("#ratios").style.opacity = fixed ? ".4" : ""; $("#ratios").style.pointerEvents = fixed ? "none" : "";
   }
   $("#ratios").addEventListener("click", e => { const b = e.target.closest(".ratio"); if (!b) return; p.layout = b.dataset.v; syncFrame(); changed(); sizeStage(); });
   $$("#fitSeg button").forEach(b => b.onclick = () => { p.fit = b.dataset.v; syncFrame(); changed(); });
