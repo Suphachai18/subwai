@@ -29,7 +29,7 @@
   :root{ --bg:#F3F5F8; --surface:#FFFFFF; --raise:#ECEFF4; --line:#D9DEE6; --fg:#121821; --muted:#5A6473; --accent-text:#866200; --danger:#C93A34; --ok:#1F8A5B; color-scheme:light }
 }
 *{box-sizing:border-box}
-html,body{margin:0}
+html,body{margin:0;overscroll-behavior:none;overscroll-behavior-y:none}
 body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased;
   padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -128,6 +128,13 @@ textarea.input{min-height:72px;resize:vertical}
 .tabs button{flex:1;min-height:48px;background:none;border:0;border-bottom:2px solid transparent;cursor:pointer;font-family:var(--ui);font-weight:600;color:var(--muted);font-size:14px;padding:0 4px}
 .tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 .pane{padding:14px;display:grid;gap:14px}
+.subseg{margin:12px 14px 0}
+.drafts{display:grid;gap:10px;margin:0 0 18px}
+.dcard{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--card,transparent)}
+.dcard img{width:56px;height:56px;object-fit:cover;border-radius:10px;background:#0003;flex:none}
+.dcard .meta{flex:1;min-width:0;display:grid}
+.dcard .meta b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.savedok{color:var(--ok)}
 .tools{display:grid;gap:10px}
 details.box{border:1px solid var(--line);border-radius:10px;padding:0 12px}
 details.box summary{min-height:42px;display:flex;align-items:center;cursor:pointer;font-family:var(--ui);font-weight:600;font-size:14px}
@@ -233,7 +240,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .player.fs .fs-close{display:grid;position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;width:42px;height:42px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:18px;place-items:center;z-index:2;cursor:pointer}
 .toolbar{display:flex;gap:4px;overflow-x:auto;padding:8px;border-bottom:1px solid var(--line);scrollbar-width:none}
 .toolbar::-webkit-scrollbar{display:none}
-.toolbar button{flex:none;min-height:38px;padding:0 14px;border-radius:99px;border:0;background:none;font-family:var(--ui);font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+.toolbar button{flex:1 0 auto;min-height:38px;padding:0 9px;border-radius:99px;border:0;background:none;font-family:var(--ui);font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
 .toolbar button[aria-selected="true"]{background:var(--fg);color:var(--bg)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip2{min-height:36px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13.5px;cursor:pointer}
@@ -643,13 +650,13 @@ async function whisper(blob, { lang, prompt }) {
   if (!r.ok) { let j = {}; try { j = await r.json(); } catch {} throw apiError(r.status, j); }
   return r.json();
 }
-async function chatJSON(messages) {
+async function chatJSON(messages, opt = {}) {
   const P = prov(), mk = "chat_" + settings.provider;
   const models = [settings[mk], ...P.chat].filter((m, i, a) => m && a.indexOf(m) === i);
   let lastErr = null;
   for (const m of models) {
     const body = { model: m, messages, response_format: { type: "json_object" } };
-    if (m.startsWith("openai/gpt-oss")) body.reasoning_effort = "low";
+    if (m.startsWith("openai/gpt-oss")) body.reasoning_effort = opt.effort || "low";
     const r = await apiFetch("/chat/completions", { method: "POST", headers: { ...authH(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (r.ok) {
       const j = await r.json();
@@ -664,18 +671,53 @@ async function chatJSON(messages) {
   throw lastErr || new Error("ไม่พบโมเดล AI สำหรับแปลภาษาที่ใช้กับ key นี้ได้");
 }
 async function translateCaptions(caps, src, tgt, onProg) {
-  const B = 50;
-  const vocab = settings.vocab ? ` such as ${settings.vocab}` : "";
+  const SL = LEN[src] || "the spoken language", TL = LEN[tgt];
+  const vocab = settings.vocab ? ` Always keep these exactly as written: ${settings.vocab}.` : "";
+  const style = tgt === "th"
+    ? "Write natural spoken Thai the way a professional Thai subtitler for YouTube and Netflix would: smooth, everyday wording a Thai viewer would actually say, not stiff word-for-word or formal written Thai. Keep English brand, model and product names in English. Use a space (not a period) between phrases. Add ครับ or ค่ะ only where the speaker is clearly being polite."
+    : tgt === "en"
+    ? "Write natural, idiomatic conversational English the way a professional subtitler for YouTube and Netflix would: sentence case, contractions where natural, no stiff literal translation of Thai particles (ครับ, ค่ะ, นะ, เลย) or filler words."
+    : `Write natural, idiomatic ${TL} the way a professional subtitler would, not word-for-word.`;
+  /* 1) read the whole script once: topic, tone and a glossary keep every batch consistent */
+  let brief = { topic: "", tone: "", glossary: [] };
+  try {
+    const j = await chatJSON([
+      { role: "system", content: `You prepare a subtitle translation from ${SL} into ${TL}. Read the whole transcript and reply only JSON: {"topic": "one sentence: what the video is about and who it is for", "tone": "e.g. friendly product review, sales pitch, tutorial", "glossary": [{"src": "term as written in the transcript", "tgt": "how to write it in ${TL}"}]}. Glossary: names, brands, models, products, units, technical terms and slang that must be translated consistently (max 30). Brand and model names keep their original spelling.${vocab}` },
+      { role: "user", content: caps.map(c => c.text).join(" ").slice(0, 14000) }
+    ], { effort: "medium" });
+    if (j && typeof j === "object") brief = { topic: String(j.topic || ""), tone: String(j.tone || ""), glossary: Array.isArray(j.glossary) ? j.glossary.slice(0, 30) : [] };
+  } catch (e) { if (e && /401|429|key/i.test(String(e.message))) throw e; }
+  /* 2) translate in batches, each line keyed by its index so translations can never shift onto the wrong line */
+  const B = 30, maxLen = Math.max(28, Math.round(Math.max(...caps.map(c => vlen ? vlen(c.text) : c.text.length)) * (tgt === "th" ? 1.1 : 1.35)));
   for (let i = 0; i < caps.length; i += B) {
     const batch = caps.slice(i, i + B);
-    const msgs = [
-      { role: "system", content: `You translate video subtitles from ${LEN[src] || "the spoken language"} into ${LEN[tgt]}. Translate every line separately and keep exactly the same number of lines in the same order. Lines may be fragments of one sentence; use the context so each line reads naturally on screen. Keep each line short. Keep brand names, product names and model names exactly as written${vocab}. Reply only with JSON: {"t": ["line 1", "line 2", ...]}` },
-      { role: "user", content: JSON.stringify({ previous_lines: caps.slice(Math.max(0, i - 4), i).map(c => c.text), lines: batch.map(c => c.text) }) }
-    ];
+    const sys = `You are a senior professional subtitle translator (${SL} to ${TL}).
+${style}
+Rules:
+1. The lines are consecutive pieces of speech; each one is on screen exactly while that part is spoken, over the matching picture. Your translation of each line must say what THAT line says so it stays in sync with the video. When one sentence runs over several lines, translate the whole sentence first in your head, then split your translation at the matching points so every line reads naturally on its own and together.
+2. Translate meaning and intent, not word by word. Keep numbers, prices, units and names exactly. Use the glossary for every term it covers.${vocab}
+3. Keep lines short and easy to read in about 2 seconds (aim under ${maxLen} characters). Drop filler words, repetitions and hesitations (um, uh, เอ่อ, แบบว่า) unless they carry meaning.
+4. No quotation marks, no line numbers, no notes. No full stop at the end of a line unless it ends a full sentence in a language that uses one.
+Video: ${brief.topic || "unknown"} Tone: ${brief.tone || "natural"}
+Reply only JSON: {"t": [{"i": line index, "tr": "translation"}, ...]} with exactly one entry for every line index given.`;
+    const user = JSON.stringify({
+      glossary: brief.glossary,
+      before: caps.slice(Math.max(0, i - 6), i).map(c => ({ text: c.text, tr: c.tr || "" })),
+      lines: batch.map((c, k) => ({ i: i + k, text: c.text })),
+      after: caps.slice(i + B, i + B + 3).map(c => c.text)
+    });
     let out = null;
-    for (let a = 0; a < 2 && !out; a++) { const j = await chatJSON(msgs); if (Array.isArray(j.t) && j.t.length === batch.length) out = j.t; }
+    for (let a = 0; a < 3 && !out; a++) {
+      const j = await chatJSON([{ role: "system", content: sys }, { role: "user", content: user }], { effort: a ? "low" : "medium" });
+      const arr = Array.isArray(j.t) ? j.t : Array.isArray(j.lines) ? j.lines : null;
+      if (!arr) continue;
+      if (arr.length && typeof arr[0] === "string") { if (arr.length === batch.length) out = arr; continue; }
+      const m = new Map(arr.map(x => [Number(x && x.i), x && (x.tr ?? x.t ?? x.text)]));
+      const got = batch.map((c, k) => m.get(i + k));
+      if (got.filter(x => typeof x === "string" && x.trim()).length >= batch.length - (a === 2 ? Math.floor(batch.length / 10) : 0)) out = got;
+    }
     if (!out) throw new Error("AI แปลไม่ครบทุกบรรทัด กดแปลใหม่อีกครั้ง");
-    batch.forEach((c, k) => c.tr = String(out[k] || "").trim());
+    batch.forEach((c, k) => { const t = String(out[k] ?? "").replace(/^["“”'«»]+|["“”'«»]+$/g, "").trim(); if (t) c.tr = t; else if (!c.tr) c.tr = ""; });
     if (onProg) onProg(Math.min(caps.length, i + B), caps.length);
   }
 }
@@ -1438,34 +1480,52 @@ async function aiSuggestSfx(p) {
 
 /* ================= views ================= */
 const app = $("#app");
+/* keep work safe: warn before leaving while busy, keep the screen awake */
+let BUSY = 0, wakeL = null;
+function setBusy(on) {
+  BUSY = Math.max(0, BUSY + (on ? 1 : -1));
+  if (BUSY) { try { if (!wakeL) navigator.wakeLock.request("screen").then(w => { wakeL = w; w.addEventListener && w.addEventListener("release", () => { wakeL = null; }); }).catch(() => {}); } catch {} }
+  else if (wakeL) { try { wakeL.release(); } catch {} wakeL = null; }
+}
+window.addEventListener("beforeunload", e => { if (BUSY) { e.preventDefault(); e.returnValue = ""; return ""; } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && BUSY && !wakeL) { BUSY--; setBusy(true); } });
+function route(h) { try { history.replaceState(null, "", h ? "#" + h : location.pathname + location.search); } catch {} }
 let cleanup = null;
 function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null; } window.scrollTo(0, 0); fn(); }
 
 /* ---------- Home ---------- */
 async function viewHome() {
-  const projects = (await DB.all()).sort((a, b) => b.createdAt - a.createdAt);
+  route("");
+  const all = (await DB.all()).sort((a, b) => b.createdAt - a.createdAt);
+  const drafts = all.filter(p => p.draft), projects = all.filter(p => !p.draft);
   app.innerHTML = `
     ${hasKey() ? "" : `<div class="notice"><p><b>เริ่มต้นใช้งาน:</b> ใส่ API key ก่อน แนะนำ Groq ใช้ฟรีและไม่ต้องใช้บัตร สมัครได้ในหน้าตั้งค่า</p><button class="btn primary small" id="nkey">ใส่ API key</button></div>`}
     <div class="home-head">
       <div><h1>โปรเจกต์ของฉัน</h1><div class="muted">${projects.length ? projects.length + " โปรเจกต์ เก็บไว้ในเครื่องนี้" : "อัปโหลดวิดีโอ แล้ว AI จะถอดเสียงและใส่ซับให้"}</div></div>
       <button class="btn primary" id="newp">+ โปรเจกต์ใหม่</button>
     </div>
+    ${drafts.length ? `<div class="field"><span class="lab">งานที่ทำค้างไว้ (วิดีโอบันทึกไว้แล้ว ไม่ต้องอัปโหลดใหม่)</span><div class="drafts">${drafts.map(d => `
+      <div class="dcard"><img src="${d.thumb || ""}" alt=""><div class="meta"><b>${esc(d.name || d.fileName || "วิดีโอ")}</b><span class="hint">${d.raw ? "ถอดเสียงเสร็จแล้ว รอทำต่อ" : "เลือกวิดีโอไว้แล้ว ยังไม่ได้สร้างซับ"}${d.duration ? " · " + fmtDur(d.duration) : ""}</span></div>
+      <button class="btn primary small" data-resume="${d.id}">ทำต่อ</button><button class="btn small" data-ddel="${d.id}" aria-label="ลบงานค้าง">ลบ</button></div>`).join("")}</div></div>` : ""}
     ${projects.length ? `<div class="grid">${projects.map(p => `
       <button class="pcard" data-id="${p.id}">
         <div class="thumb">${p.thumb ? `<img src="${p.thumb}" alt="">` : ""}<span class="dur mono">${fmtDur(p.duration)}</span></div>
         <div class="meta"><b>${esc(p.name)}</b><span class="hint">${p.captions.length} บรรทัด${p.tr && p.tr.lang ? " · " + (LNAME[p.lang] || "") + "+" + LNAME[p.tr.lang] : ""}${p.sfx && p.sfx.length ? " · เอฟเฟกต์ " + p.sfx.length : ""} · ${new Date(p.createdAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span></div>
       </button>`).join("")}</div>`
-      : `<div class="empty"><span class="sample">ซับขึ้นแบบนี้ อ่านง่าย<small>Subtitles look like this</small></span><p class="muted" style="margin:0;max-width:42ch">ยังไม่มีโปรเจกต์ เลือกวิดีโอจากเครื่อง AI จะถอดเสียง แปลเป็นภาษาที่สองได้ ใส่ซาวด์เอฟเฟกต์ แล้วดาวน์โหลดวิดีโอที่ฝังซับแล้ว</p><button class="btn primary" id="newp2">สร้างโปรเจกต์แรก</button></div>`}
+      : drafts.length ? "" : `<div class="empty"><span class="sample">ซับขึ้นแบบนี้ อ่านง่าย<small>Subtitles look like this</small></span><p class="muted" style="margin:0;max-width:42ch">ยังไม่มีโปรเจกต์ เลือกวิดีโอจากเครื่อง AI จะถอดเสียง แปลเป็นภาษาที่สองได้ ใส่ซาวด์เอฟเฟกต์ แล้วดาวน์โหลดวิดีโอที่ฝังซับแล้ว</p><button class="btn primary" id="newp2">สร้างโปรเจกต์แรก</button></div>`}
   `;
   $("#newp").onclick = () => setView(viewNew);
   const n2 = $("#newp2"); if (n2) n2.onclick = () => setView(viewNew);
   const nk = $("#nkey"); if (nk) nk.onclick = openSettings;
   $$(".pcard").forEach(b => b.onclick = () => setView(() => viewEditor(b.dataset.id)));
+  $$("[data-resume]").forEach(b => b.onclick = () => setView(() => viewNew(b.dataset.resume)));
+  $$("[data-ddel]").forEach(b => b.onclick = async () => { if (!confirm("ลบงานที่ค้างไว้นี้?")) return; await DB.del(b.dataset.ddel); setView(viewHome); });
 }
 
 /* ---------- New project ---------- */
-function viewNew() {
+function viewNew(resumeId) {
   let file = null, meta = null, maxChars = settings.maxChars || 22, busy = false;
+  let draftId = resumeId || null, draft = null, saving = null;
   app.innerHTML = `
     <div class="np">
       <button class="back" id="bk">← กลับ</button>
@@ -1519,7 +1579,7 @@ function viewNew() {
       </ol>
       <div class="err" id="err" hidden></div>
     </div>`;
-  $("#bk").onclick = () => { if (!busy) setView(viewHome); };
+  $("#bk").onclick = () => { if (busy) { toast("กำลังทำงานอยู่ รอให้เสร็จก่อน"); return; } setView(viewHome); };
   $$("#mc button").forEach(b => b.onclick = () => { $$("#mc button").forEach(x => x.setAttribute("aria-pressed", x === b)); maxChars = +b.dataset.v; });
   /* style picker */
   let npStyle = { ...DEFAULT_STYLE, ...settings.style }, npBg = null, npRaf = 0;
@@ -1545,14 +1605,27 @@ function viewNew() {
   ensureFont(npStyle); syncNp(); paintNpLooks();
   const setNpShape = (w, h) => { const cv = $("#npPrev"); if (w && h && h > w) { cv.width = 360; cv.height = 640; } else { cv.width = 640; cv.height = 360; } };
 
-  const refresh = () => { $("#go").disabled = !file || busy; if (!busy) $("#go").textContent = hasKey() ? "เริ่มสร้างซับ" : "ใส่ API key แล้วเริ่มสร้างซับ"; };
+  const refresh = () => { $("#go").disabled = !file || busy; if (!busy) $("#go").textContent = !hasKey() ? "ใส่ API key แล้วเริ่มสร้างซับ" : draft && draft.raw ? "ทำต่อ (ถอดเสียงไว้แล้ว)" : "เริ่มสร้างซับ"; };
   refresh();
 
-  async function takeFile(f) {
+  async function saveDraft() {
+    if (!draftId) return;
+    draft = { ...(draft || {}), id: draftId, draft: true, name: $("#pname").value.trim() || (file && file.name) || "วิดีโอ", fileName: file ? file.name : (draft && draft.fileName) || "",
+      createdAt: (draft && draft.createdAt) || Date.now(), updatedAt: Date.now(), captions: [], videoSaved: true,
+      duration: meta ? meta.duration : (draft && draft.duration) || 0, width: meta ? meta.width : (draft && draft.width) || 0, height: meta ? meta.height : (draft && draft.height) || 0, thumb: meta ? meta.thumb : (draft && draft.thumb) || "" };
+    try { await DB.put(draft); } catch {}
+  }
+  async function takeFile(f, resumed) {
     if (!f) return;
     if (!/^video\//.test(f.type) && !/\.(mov|mp4|m4v|webm|avi|mkv)$/i.test(f.name)) { toast("กรุณาเลือกไฟล์วิดีโอ"); return; }
     file = f; meta = null;
-    const fi = $("#finfo"); fi.hidden = false; fi.innerHTML = `<div class="fileinfo"><img id="fthumb" alt=""><div><b>${esc(f.name)}</b><span class="hint" id="fmeta">${fmtSize(f.size)} · กำลังอ่านไฟล์…</span></div><button class="btn small" id="chg">เปลี่ยน</button></div>`;
+    if (!resumed) {
+      if (draft) delete draft.raw;
+      draftId = draftId || uid(); route("n=" + draftId);
+      saving = DB.putVideo(draftId, f).then(() => { const m = $("#fsave"); if (m) { m.textContent = "✓ บันทึกวิดีโอไว้ในเครื่องแล้ว ถ้าหน้ารีเฟรชกลับมาทำต่อได้ ไม่ต้องอัปโหลดใหม่"; m.className = "hint savedok"; } return true; })
+        .catch(() => { const m = $("#fsave"); if (m) m.textContent = "พื้นที่เครื่องไม่พอสำหรับเก็บวิดีโอ ระหว่างทำงานอย่าปิดหรือรีเฟรชหน้านี้"; tempVideos[draftId] = f; return false; });
+    } else saving = Promise.resolve(true);
+    const fi = $("#finfo"); fi.hidden = false; fi.innerHTML = `<div class="fileinfo"><img id="fthumb" alt=""><div><b>${esc(f.name)}</b><span class="hint" id="fmeta">${fmtSize(f.size)} · กำลังอ่านไฟล์…</span><span class="hint" id="fsave">${resumed ? "" : "กำลังบันทึกวิดีโอไว้ในเครื่อง…"}</span></div><button class="btn small" id="chg">เปลี่ยน</button></div>`;
     $("#chg").onclick = e => { e.preventDefault(); $("#vfile").click(); };
     if (!$("#pname").value.trim()) $("#pname").value = f.name.replace(/\.[^.]+$/, "");
     try {
@@ -1564,8 +1637,22 @@ function viewNew() {
       $("#fmeta").textContent = `${fmtSize(f.size)} · ยาว ${fmtDur(meta.duration)} · ${meta.width}×${meta.height} · ค่า AI ประมาณ $${est.toFixed(2)}`;
       if (meta.duration > 1800) toast("คลิปยาวเกิน 30 นาที อาจใช้เวลานานและเครื่องอาจค้าง", 4000);
     } catch { $("#fmeta").textContent = fmtSize(f.size) + " · อ่านข้อมูลวิดีโอไม่ได้ แต่ยังลองถอดเสียงได้"; }
+    if (resumed && meta && draft && !draft.thumb) draft.thumb = meta.thumb;
+    if (!resumed || (draft && !draft.duration)) await saveDraft();
     refresh();
   }
+  $("#pname").addEventListener("change", () => { if (draftId && draft) saveDraft(); });
+  if (resumeId) (async () => {
+    draft = await DB.get(resumeId);
+    if (!draft || !draft.draft) { setView(draft ? () => viewEditor(resumeId) : viewHome); return; }
+    route("n=" + resumeId);
+    $("#pname").value = draft.name || "";
+    const b = await DB.getVideo(resumeId).catch(() => null) || tempVideos[resumeId];
+    if (!b) { toast("ไม่พบวิดีโอที่บันทึกไว้ กรุณาเลือกวิดีโออีกครั้ง", 4000); return; }
+    const f = b instanceof File ? b : new File([b], draft.fileName || "video.mp4", { type: b.type || "video/mp4" });
+    await takeFile(f, true);
+    if (draft.raw) { $("#go").textContent = "ทำต่อ (ถอดเสียงไว้แล้ว)"; toast("ถอดเสียงไว้แล้ว กด “ทำต่อ” ได้เลย", 3500); }
+  })();
   $("#vfile").onchange = e => takeFile(e.target.files[0]);
   const drop = $("#drop");
   drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
@@ -1576,8 +1663,9 @@ function viewNew() {
     if (!hasKey()) { openSettings(); return; }
     const lang = $("#lang").value, lang2 = $("#lang2").value;
     if (lang2 && lang2 === lang) { toast("ภาษาที่สองต้องต่างจากภาษาที่พูด"); return; }
-    const cap = prepareCapture(file);
-    busy = true; refresh(); $("#go").textContent = "กำลังทำงาน… อย่าปิดหน้านี้"; $("#err").hidden = true;
+    const haveRaw = !!(draft && draft.raw && draft.raw.words);
+    const cap = haveRaw ? null : prepareCapture(file);
+    busy = true; setBusy(true); refresh(); $("#go").textContent = "กำลังทำงาน… อย่าปิดหน้านี้"; $("#err").hidden = true;
     const steps = $("#steps"); steps.hidden = false;
     $$("li", steps).forEach(li => li.className = "");
     $('li[data-s="tr"]', steps).hidden = !lang2;
@@ -1591,12 +1679,16 @@ function viewNew() {
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
       settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoSplit = autoSplit; settings.splitLook = npOrient; saveSettings();
+      if (saving) await saving;
+      let raw, detected = lang, duration = meta ? meta.duration : 0;
+      if (haveRaw) { raw = draft.raw; detected = draft.detected || lang; mark("audio", "done"); mark("ai", "done"); }
+      else {
       mark("audio", "doing");
-      const { chunks, duration } = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
+      const ex = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
       if (cap) cap.dispose();
+      const chunks = ex.chunks; duration = ex.duration;
       mark("audio", "done"); stage = "ai"; mark("ai", "doing");
-      const raw = { words: [], segments: [] };
-      let detected = lang;
+      raw = { words: [], segments: [] };
       for (let i = 0; i < chunks.length; i++) {
         if (chunks.length > 1) $("#aiLab").textContent = `ส่งให้ AI ถอดเสียง (ช่วงที่ ${i + 1}/${chunks.length})`;
         const res = await whisper(chunks[i].blob, { lang, prompt: settings.vocab });
@@ -1605,20 +1697,24 @@ function viewNew() {
         (res.words || []).forEach(w => raw.words.push({ word: w.word, start: w.start + o, end: w.end + o }));
         (res.segments || []).forEach(s => raw.segments.push({ text: s.text, start: s.start + o, end: s.end + o }));
       }
+      if (draftId) { draft = { ...(draft || { id: draftId, draft: true, captions: [], createdAt: Date.now() }), raw, detected, lang, lang2 }; await saveDraft(); }
+      }
       mark("ai", "done"); stage = "cap"; mark("cap", "doing");
       const plang = detected === "auto" ? "th" : detected;
       const captions = buildCaptions(raw, maxChars, plang);
       if (!captions.length) throw new Error("AI ไม่พบคำพูดในคลิปนี้");
       mark("cap", "done");
-      const id = uid();
+      const id = draftId || uid();
       const p = normalize({
         id, name: $("#pname").value.trim() || file.name, createdAt: Date.now(), updatedAt: Date.now(),
         duration: (meta && meta.duration) || duration, width: meta ? meta.width : 0, height: meta ? meta.height : 0,
         thumb: meta ? meta.thumb : "", fileName: file.name, lang: plang, maxChars, raw, captions, style: { ...npStyle },
         tr: { lang: lang2 && lang2 !== plang ? lang2 : "", mode: lang2 && lang2 !== plang ? "both" : "main" }, videoSaved: false
       });
-      try { await DB.putVideo(id, file); p.videoSaved = true; } catch { tempVideos[id] = file; }
-      await DB.put(p);
+      if (draftId && saving && await saving) p.videoSaved = true;
+      else { try { await DB.putVideo(id, file); p.videoSaved = true; } catch { tempVideos[id] = file; } }
+      if (draft && draft.createdAt) p.createdAt = draft.createdAt;
+      await DB.put(p); draft = null;
       if (autoFix) {
         stage = "fix"; mark("fix", "doing");
         try { const n = await aiProofread(p, (d, t) => $("#fixLab").textContent = `AI ตรวจคำผิด (${d}/${t})`); $("#fixLab").textContent = `AI ตรวจคำผิด · แก้ ${n} บรรทัด`; mark("fix", "done"); await DB.put(p); }
@@ -1650,13 +1746,14 @@ function viewNew() {
         mark("split", "done"); await DB.put(p);
       }
       await sleep(300);
-      busy = false;
+      busy = false; setBusy(false);
       setView(() => viewEditor(id));
     } catch (e) {
       if (cap) cap.dispose();
       mark(stage, "fail");
       const er = $("#err"); er.hidden = false; er.textContent = e.message || String(e);
-      busy = false; refresh(); $("#go").textContent = "ลองใหม่";
+      busy = false; setBusy(false); refresh(); $("#go").textContent = draft && draft.raw ? "ทำต่อ (ถอดเสียงไว้แล้ว)" : "ลองใหม่";
+      if (draftId) { const d = await DB.get(draftId).catch(() => null); if (d && !d.draft) { toast("ซับพร้อมแล้ว เปิดหน้าแก้ไข…"); setView(() => viewEditor(draftId)); } }
     }
   };
 }
@@ -1683,6 +1780,8 @@ async function probeVideo(f) {
 async function viewEditor(id) {
   const got = await DB.get(id);
   if (!got) { setView(viewHome); return; }
+  if (got.draft) { setView(() => viewNew(id)); return; }
+  route("p=" + id);
   const p = normalize(got);
   await loadCustomLib();
   let blob = tempVideos[id] || (p.videoSaved ? await DB.getVideo(id) : null);
@@ -1690,7 +1789,9 @@ async function viewEditor(id) {
   let video = null, cv = null, thumbImg = null, sid = null, playUntil = null, fxRaf = 0, activeId, tab = "text", edId = null, guideOn = false;
   const pvMedia = {};
 
-  const TOOLS = [["text", "ข้อความ"], ["split", "ภาพประกอบ"], ["style", "สไตล์"], ["font", "ฟอนต์"], ["anim", "อนิเมชัน"], ["sfx", "เสียง"], ["frame", "เฟรม"], ["export", "ส่งออก"]];
+  const TOOLS = [["text", "ข้อความ"], ["style", "สไตล์ซับ"], ["split", "ภาพประกอบ"], ["sfx", "เสียง"], ["export", "ส่งออก"]];
+  const SUBS = [["style", "สีและขนาด"], ["font", "ฟอนต์"], ["anim", "อนิเมชัน"]];
+  let sub = "style";
   const COLORS = ["#FFFFFF", "#FFE14D", "#FFD400", "#FF9F1C", "#FF5A5A", "#FF8FD1", "#7CFFB2", "#4DE0FF", "#7AA7FF", "#111111", "#1B2A4A"];
   const swatches = k => `<div class="swatches" data-sw="${k}">${COLORS.map(c => `<button type="button" class="sw-c" data-c="${c}" style="background:${c}" aria-label="สี ${c}"></button>`).join("")}<input type="color" class="sw-custom" data-cc="${k}" aria-label="เลือกสีเอง"></div>`;
   const modeBtns = [["main", "ภาษาหลัก"], ["both", "สองภาษา"], ["tr", "เฉพาะคำแปล"]];
@@ -1706,6 +1807,7 @@ async function viewEditor(id) {
       <div class="stage-col" id="stageCol"></div>
       <div class="panel">
         <nav class="toolbar" id="toolbar" role="tablist">${TOOLS.map(([k, n]) => `<button type="button" role="tab" data-t="${k}" aria-selected="${k === "text"}">${n}</button>`).join("")}</nav>
+        <div class="seg subseg" id="subSeg" hidden>${SUBS.map(([k, n]) => `<button type="button" data-s="${k}" aria-pressed="${k === "style"}">${n}</button>`).join("")}</div>
 
         <section class="pane" data-p="text">
           <div class="chips" id="xChips">
@@ -1874,12 +1976,18 @@ async function viewEditor(id) {
   $("#bk").onclick = () => { if (exporting) { toast("กำลังสร้างวิดีโอ กดยกเลิกก่อน"); return; } setView(viewHome); };
 
   /* ---------- tool tabs ---------- */
+  const showPanes = () => {
+    const vis = tab === "style" ? [sub] : tab === "export" ? ["export", "frame"] : [tab];
+    $("#subSeg").hidden = tab !== "style";
+    $$(".pane[data-p]").forEach(pn => pn.hidden = !vis.includes(pn.dataset.p));
+    if (tab === "style" && sub === "anim") startFx(); else stopFx();
+    if (tab === "style" && sub === "style") { paintLooks(); renderMine(); }
+  };
+  $$("#subSeg button").forEach(b => b.onclick = () => { sub = b.dataset.s; $$("#subSeg button").forEach(x => x.setAttribute("aria-pressed", x === b)); showPanes(); });
   $$("#toolbar button").forEach(b => b.onclick = () => {
     tab = b.dataset.t;
     $$("#toolbar button").forEach(x => x.setAttribute("aria-selected", x === b));
-    $$(".pane[data-p]").forEach(pn => pn.hidden = pn.dataset.p !== tab);
-    if (tab === "anim") startFx(); else stopFx();
-    if (tab === "style") { paintLooks(); renderMine(); }
+    showPanes();
     if (tab === "export") syncExportHint();
     if (tab === "split") renderScenes();
   });
@@ -2639,11 +2747,11 @@ async function viewEditor(id) {
     runExport(ac, v, vurl, unlock);
   };
   async function runExport(ac, v, vurl, unlock) {
-    const job = { cancel: false }; exporting = job;
+    const job = { cancel: false }; exporting = job; setBusy(true);
     $("#burn").disabled = true; $("#exProg").hidden = false; $("#exRes").hidden = true; $("#exBar").style.width = "0%"; $("#exTxt").textContent = "กำลังเตรียม…";
     let wake = null; try { wake = await navigator.wakeLock.request("screen"); } catch {}
     const srcs = [], exMedia = {};
-    const finish = () => { freeMedia(exMedia); srcs.forEach(s => { try { s.stop(); } catch {} }); try { v.pause(); } catch {} try { ac.close(); } catch {} v.remove(); URL.revokeObjectURL(vurl); try { wake && wake.release(); } catch {} exporting = null; $("#burn").disabled = false; $("#exProg").hidden = true; };
+    const finish = () => { freeMedia(exMedia); srcs.forEach(s => { try { s.stop(); } catch {} }); try { v.pause(); } catch {} try { ac.close(); } catch {} v.remove(); URL.revokeObjectURL(vurl); try { wake && wake.release(); } catch {} exporting = null; setBusy(false); $("#burn").disabled = false; $("#exProg").hidden = true; };
     try {
       await unlock;
       if (v.readyState < 1) await once(v, "loadedmetadata");
@@ -2778,9 +2886,14 @@ function openSettings() {
 }
 
 /* ================= boot ================= */
-$("#goHome").onclick = () => setView(viewHome);
+$("#goHome").onclick = () => { if (BUSY) { toast("กำลังทำงานอยู่ รอให้เสร็จก่อน"); return; } setView(viewHome); };
 $("#openSettings").onclick = openSettings;
-DB.open().then(() => setView(viewHome)).catch(() => { app.innerHTML = `<div class="empty"><b>เบราว์เซอร์นี้เปิดที่เก็บข้อมูลไม่ได้</b><span class="muted">ถ้าเปิดในโหมดไม่ระบุตัวตน ให้เปิดหน้าต่างปกติแทน</span></div>`; });
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+DB.open().then(async () => {
+  const h = location.hash.slice(1), m = /^([pn])=(.+)$/.exec(h);
+  if (m) { const p = await DB.get(m[2]).catch(() => null); if (p) { setView(p.draft ? () => viewNew(p.id) : () => viewEditor(p.id)); return; } }
+  setView(viewHome);
+}).catch(() => { app.innerHTML = `<div class="empty"><b>เบราว์เซอร์นี้เปิดที่เก็บข้อมูลไม่ได้</b><span class="muted">ถ้าเปิดในโหมดไม่ระบุตัวตน ให้เปิดหน้าต่างปกติแทน</span></div>`; });
 </script>
 </body>
 </html>
