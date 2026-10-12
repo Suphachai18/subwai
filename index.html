@@ -29,17 +29,20 @@
   :root{ --bg:#F3F5F8; --surface:#FFFFFF; --raise:#ECEFF4; --line:#D9DEE6; --fg:#121821; --muted:#5A6473; --accent-text:#866200; --danger:#C93A34; --ok:#1F8A5B; color-scheme:light }
 }
 *{box-sizing:border-box}
-html,body{margin:0;overscroll-behavior:none;overscroll-behavior-y:none}
-body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased;
-  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;overscroll-behavior-y:none}
+/* the page itself never scrolls (so iPhone can't pull-to-refresh); only #scroller scrolls */
+body{position:fixed;inset:0;width:100%}
+#scroller{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.ver{display:block;margin-top:10px;text-align:center;font-size:12px;color:var(--muted)}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
-.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:0 48px}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:0 calc(48px + env(safe-area-inset-bottom,0px))}
 h1,h2,h3{font-family:var(--ui);margin:0;text-wrap:balance;line-height:1.25}
 .muted{color:var(--muted)}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 [hidden]{display:none!important}
 
-.bar{display:flex;align-items:center;gap:12px;padding-block:14px;position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin-bottom:20px}
+.bar{display:flex;align-items:center;gap:12px;padding-block:calc(14px + env(safe-area-inset-top,0px)) 14px;position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin-bottom:20px}
 .brand{display:flex;align-items:center;gap:10px;font-family:var(--ui);font-weight:700;font-size:20px;letter-spacing:.2px;margin-right:auto;cursor:pointer;background:none;border:0;padding:0}
 .brand .mark{background:var(--accent);color:var(--on-accent);font-size:13px;padding:3px 7px;border-radius:4px;line-height:1.2}
 .iconbtn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer}
@@ -333,7 +336,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div id="scroller"><div class="wrap">
   <header class="bar">
     <button class="brand" id="goHome" aria-label="หน้าแรก"><span class="mark">ซับ</span>ซับไว</button>
     <button class="iconbtn" id="openSettings" aria-label="ตั้งค่า">
@@ -341,7 +344,8 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-</div>
+  <span class="ver">ซับไว เวอร์ชัน 12 ต.ค. (2) · กันรีเฟรชหน้า + บันทึกงานอัตโนมัติ</span>
+</div></div>
 <div id="modalRoot"></div>
 
 <script>
@@ -1491,7 +1495,7 @@ window.addEventListener("beforeunload", e => { if (BUSY) { e.preventDefault(); e
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && BUSY && !wakeL) { BUSY--; setBusy(true); } });
 function route(h) { try { history.replaceState(null, "", h ? "#" + h : location.pathname + location.search); } catch {} }
 let cleanup = null;
-function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null; } window.scrollTo(0, 0); fn(); }
+function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null; } $("#scroller").scrollTo(0, 0); fn(); }
 
 /* ---------- Home ---------- */
 async function viewHome() {
@@ -2688,7 +2692,7 @@ async function viewEditor(id) {
   $("#scenes").addEventListener("click", e => {
     const b = e.target.closest("button[data-s]"); if (!b) return; const sc = scOf(b); if (!sc) return;
     const a = b.dataset.s;
-    if (a === "go") { if (!p.split.on) setSplit(true); seekTo(sc.start); draw(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    if (a === "go") { if (!p.split.on) setSplit(true); seekTo(sc.start); draw(); $("#scroller").scrollTo({ top: 0, behavior: "smooth" }); }
     else if (a === "edit") { const ed = $(".scn-ed", b.closest(".scn")); ed.hidden = !ed.hidden; }
     else if (a === "unmedia") { sc.media = null; changed(); renderScenes(); }
     else if (a === "show") { sc.show = sc.show === false; changed(); renderScenes(); seekTo(sc.start); draw(); }
