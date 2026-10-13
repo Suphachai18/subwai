@@ -344,7 +344,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 12 ต.ค. (2) · กันรีเฟรชหน้า + บันทึกงานอัตโนมัติ</span>
+  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. · แยกเสียงแบบประหยัดหน่วยความจำ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -585,7 +585,7 @@ async function resample16k(src, rate) {
 function prepareCapture(file) {
   try {
     const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC();
-    const v = document.createElement("video"); v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
+    const v = document.createElement("video"); v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "metadata";
     v.style.cssText = "position:fixed;left:-10px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
     document.body.appendChild(v);
     const url = URL.createObjectURL(file); v.src = url;
@@ -603,11 +603,13 @@ async function captureRealtime(cap, onProg) {
   const dur = v.duration;
   if (!isFinite(dur) || !dur) throw new Error("เปิดวิดีโอนี้ไม่ได้ ลองเลือกไฟล์ใหม่อีกครั้ง");
   const proc = ac.createScriptProcessor(4096, 2, 1), parts = []; let total = 0;
+  const ratio = ac.sampleRate / 16000; let acc = 0, cnt = 0, ph = 0;
   proc.onaudioprocess = e => {
     if (v.paused || v.seeking || v.ended) return;
-    const ib = e.inputBuffer, n = ib.length, ch = ib.numberOfChannels, out = new Float32Array(n);
-    for (let c = 0; c < ch; c++) { const d = ib.getChannelData(c); for (let i = 0; i < n; i++) out[i] += d[i] / ch; }
-    parts.push(out); total += n;
+    const ib = e.inputBuffer, n = ib.length, ch = ib.numberOfChannels, out = new Float32Array(Math.ceil(n / ratio) + 2); let k = 0;
+    const cs = []; for (let c = 0; c < ch; c++) cs.push(ib.getChannelData(c));
+    for (let i = 0; i < n; i++) { let m = 0; for (let c = 0; c < ch; c++) m += cs[c][i]; acc += m / ch; cnt++; if (++ph >= ratio) { out[k++] = acc / cnt; acc = 0; cnt = 0; ph -= ratio; } }
+    parts.push(out.subarray(0, k)); total += k;
   };
   src.connect(proc); proc.connect(mute);
   v.currentTime = 0; if (v.seeking) await Promise.race([once(v, "seeked"), sleep(3000)]);
@@ -623,11 +625,106 @@ async function captureRealtime(cap, onProg) {
     try { src.disconnect(proc); proc.disconnect(); } catch {}
   }
   const data = new Float32Array(total); let o = 0; for (const p of parts) { data.set(p, o); o += p.length; }
-  return { data: await resample16k(data, ac.sampleRate), duration: dur };
+  parts.length = 0;
+  return { data, duration: dur };
 }
-async function extractAudio(file, cap, onBackup) {
+/* Light-weight audio extraction for MP4 / MOV (iPhone videos).
+   Reads only the box headers, the moov box and the audio bytes (via File.slice), never the whole video
+   and never decodes anything, so memory stays tiny even for long 4K clips.
+   Returns ready-to-upload audio files (same codec, no re-encoding) split into parts of at most 10 min / 20 MB. */
+async function demuxAudio(file, maxSec = 600, maxBytes = 20e6) {
+  const rd = async (a, n) => new DataView(await file.slice(a, a + n).arrayBuffer());
+  const u32 = (v, o) => v.getUint32(o), typ = (v, o) => String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3));
+  const big = (v, o) => v.getUint32(o) * 4294967296 + v.getUint32(o + 4);
+  /* 1) walk top-level boxes */
+  let pos = 0, moovAt = -1, moovLen = 0, ftyp = null, guard = 0;
+  while (pos + 8 <= file.size && guard++ < 10000) {
+    const h = await rd(pos, 16); let len = u32(h, 0); const t = typ(h, 4); let hl = 8;
+    if (len === 1) { len = big(h, 8); hl = 16; } else if (len === 0) len = file.size - pos;
+    if (len < 8) break;
+    if (t === "ftyp" && len < 4096) ftyp = new Uint8Array(await file.slice(pos, pos + len).arrayBuffer());
+    if (t === "moov") { moovAt = pos; moovLen = len; break; }
+    pos += len;
+  }
+  if (moovAt < 0 || moovLen > 200e6) throw new Error("no moov");
+  const mv = new DataView(await file.slice(moovAt, moovAt + moovLen).arrayBuffer());
+  const kids = (s, e) => { const out = []; let p = s; while (p + 8 <= e) { let l = mv.getUint32(p); const t = typ(mv, p + 4); let hl = 8; if (l === 1) { l = big(mv, p + 8); hl = 16; } else if (l === 0) l = e - p; if (l < 8 || p + l > e) break; out.push({ t, s: p, b: p + hl, e: p + l }); p += l; } return out; };
+  const find = (box, path) => { let cur = [box]; for (const n of path) { const c = cur.length ? kids(cur[0].b, cur[0].e).filter(k => k.t === n) : []; if (!c.length) return null; cur = c; } return cur[0]; };
+  const root = { b: 8, e: moovLen };
+  let track = null;
+  for (const tr of kids(root.b, root.e).filter(k => k.t === "trak")) {
+    const hd = find(tr, ["mdia", "hdlr"]); if (!hd || typ(mv, hd.b + 8) !== "soun") continue;
+    const stbl = find(tr, ["mdia", "minf", "stbl"]); if (!stbl) continue;
+    track = { tr, stbl, mdhd: find(tr, ["mdia", "mdhd"]) }; break;
+  }
+  if (!track) throw new Error("no audio track");
+  const { stbl, mdhd } = track, sb = n => kids(stbl.b, stbl.e).find(k => k.t === n);
+  const stsd = sb("stsd"), stts = sb("stts"), stsc = sb("stsc"), stsz = sb("stsz"), stco = sb("stco") || sb("co64");
+  if (!stsd || !stts || !stsc || !stsz || !stco || !mdhd) throw new Error("bad sample table");
+  if (mv.getUint32(stsd.b + 4) !== 1) throw new Error("several audio formats");
+  const ts = mv.getUint8(mdhd.b) === 1 ? mv.getUint32(mdhd.b + 20) : mv.getUint32(mdhd.b + 12);
+  /* 2) sample sizes, durations and file offsets */
+  const uni = mv.getUint32(stsz.b + 4), N = mv.getUint32(stsz.b + 8);
+  if (!N || N > 5e6) throw new Error("no samples");
+  const size = new Uint32Array(N); for (let i = 0; i < N; i++) size[i] = uni || mv.getUint32(stsz.b + 12 + i * 4);
+  const dur = new Uint32Array(N); { const n = mv.getUint32(stts.b + 4); let k = 0; for (let j = 0; j < n && k < N; j++) { const c = mv.getUint32(stts.b + 8 + j * 8), d = mv.getUint32(stts.b + 12 + j * 8); for (let q = 0; q < c && k < N; q++) dur[k++] = d; } while (k < N) dur[k++] = dur[k - 2] || 1024; }
+  const is64 = stco.t === "co64", nC = mv.getUint32(stco.b + 4), cOff = i => is64 ? big(mv, stco.b + 8 + i * 8) : mv.getUint32(stco.b + 8 + i * 4);
+  const off = new Float64Array(N);
+  { const n = mv.getUint32(stsc.b + 4), E = []; for (let j = 0; j < n; j++) E.push([mv.getUint32(stsc.b + 8 + j * 12), mv.getUint32(stsc.b + 12 + j * 12)]);
+    let k = 0; for (let j = 0; j < E.length; j++) { const last = j + 1 < E.length ? E[j + 1][0] - 1 : nC; for (let c = E[j][0]; c <= last && k < N; c++) { let o = cOff(c - 1); for (let q = 0; q < E[j][1] && k < N; q++) { off[k] = o; o += size[k]; k++; } } }
+    if (k < N) throw new Error("bad chunk table"); }
+  for (let i = 0; i < N; i++) if (off[i] + size[i] > file.size) throw new Error("sample outside file");
+  const stsdBytes = new Uint8Array(mv.buffer, mv.byteOffset + stsd.s, stsd.e - stsd.s).slice();
+  /* 3) cut into parts and write a tiny MP4/M4A for each part */
+  const parts = []; let i0 = 0, t0 = 0;
+  while (i0 < N) {
+    let i1 = i0, bytes = 0, tt = 0;
+    while (i1 < N && (i1 === i0 || (tt + dur[i1] <= maxSec * ts && bytes + size[i1] <= maxBytes))) { bytes += size[i1]; tt += dur[i1]; i1++; }
+    parts.push({ offset: t0 / ts, blob: writeM4a(file, ftyp, stsdBytes, ts, size, dur, off, i0, i1) });
+    t0 += tt; i0 = i1;
+  }
+  return { chunks: parts, duration: t0 / ts };
+}
+function writeM4a(file, ftyp, stsdBytes, ts, size, dur, off, i0, i1) {
+  const n = i1 - i0;
+  const B = (t, ...c) => { const len = 8 + c.reduce((a, x) => a + x.length, 0), o = new Uint8Array(len), v = new DataView(o.buffer); v.setUint32(0, len); for (let k = 0; k < 4; k++) o[4 + k] = t.charCodeAt(k); let p = 8; for (const x of c) { o.set(x, p); p += x.length; } return o; };
+  const UA = w => { const o = new Uint8Array(w.length * 4), v = new DataView(o.buffer); for (let k = 0; k < w.length; k++) v.setUint32(k * 4, w[k] >>> 0); return o; };
+  const U = (...w) => UA(w);
+  const S = s => Uint8Array.from(s, ch => ch.charCodeAt(0));
+  let total = 0; for (let k = i0; k < i1; k++) total += dur[k];
+  const sttsE = []; for (let k = i0; k < i1; k++) { const L = sttsE[sttsE.length - 1]; if (L && L[1] === dur[k]) L[0]++; else sttsE.push([1, dur[k]]); }
+  const szs = []; for (let k = i0; k < i1; k++) szs.push(size[k]);
+  const ft = ftyp || B("ftyp", S("M4A "), U(0), S("M4A mp42isom"));
+  const matrix = U(0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000);
+  const build = mdatStart => {
+    const stco = B("stco", U(0, n), UA((() => { const a = []; let p = mdatStart; for (let k = i0; k < i1; k++) { a.push(p); p += size[k]; } return a; })()));
+    const stbl = B("stbl", stsdBytes, B("stts", U(0, sttsE.length), UA(sttsE.flat())), B("stsc", U(0, 1, 1, 1, 1)), B("stsz", U(0, 0, n), UA(szs)), stco);
+    const minf = B("minf", B("smhd", U(0, 0)), B("dinf", B("dref", U(0, 1), B("url ", U(1)))), stbl);
+    const mdia = B("mdia", B("mdhd", U(0, 0, 0, ts, total), new Uint8Array([0x55, 0xc4, 0, 0])), B("hdlr", U(0, 0), S("soun"), U(0, 0, 0), S("SoundHandler\0")), minf);
+    const tkhd = B("tkhd", U(3, 0, 0, 1, 0, total, 0, 0, 0), new Uint8Array([0, 0, 0, 0, 1, 0, 0, 0]), matrix, U(0, 0));
+    const mvhd = B("mvhd", U(0, 0, 0, ts, total, 0x10000), new Uint8Array([1, 0, 0, 0]), U(0, 0), matrix, U(0, 0, 0, 0, 0, 0, 2));
+    return B("moov", mvhd, B("trak", tkhd, mdia));
+  };
+  const moovLen = build(0).length, mdatStart = ft.length + moovLen + 8;
+  const moov = build(mdatStart);
+  let mdatLen = 8; for (let k = i0; k < i1; k++) mdatLen += size[k];
+  const pieces = [ft, moov, U(mdatLen), S("mdat")];
+  /* reference the original file bytes (no copy into memory); merge back-to-back samples into one slice */
+  let a = off[i0], b = off[i0] + size[i0];
+  for (let k = i0 + 1; k < i1; k++) { if (off[k] === b) b += size[k]; else { pieces.push(file.slice(a, b)); a = off[k]; b = off[k] + size[k]; } }
+  pieces.push(file.slice(a, b));
+  return new Blob(pieces, { type: "audio/mp4" });
+}
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+async function extractAudio(file, cap, onBackup, noPack) {
+  if (!noPack) {
+    try { const r = await demuxAudio(file); if (r.chunks.length && r.duration > 0.3) return { ...r, packed: true }; }
+    catch (e) { if (e && e.message === "no audio track") throw new Error("คลิปนี้ไม่มีเสียง จึงถอดเสียงไม่ได้"); }
+  }
   let r;
-  try { r = await decodeFast(file); }
+  /* decoding a whole big video at once can run iPhone out of memory and crash the page: use the slower safe path instead */
+  const tooBig = IOS ? file.size > 80e6 : file.size > 800e6;
+  try { if (tooBig) throw new Error("big"); r = await decodeFast(file); }
   catch (e) {
     if (!cap) throw new Error("แยกเสียงจากวิดีโอนี้ไม่ได้ ลองไฟล์ MP4 หรือเปิดใน Safari/Chrome รุ่นใหม่");
     if (onBackup) onBackup(0);
@@ -642,7 +739,7 @@ async function extractAudio(file, cap, onBackup) {
 }
 async function whisper(blob, { lang, prompt }) {
   const fd = new FormData();
-  fd.append("file", blob, "audio.wav");
+  fd.append("file", blob, /mp4|m4a/.test(blob.type) ? "audio.m4a" : "audio.wav");
   fd.append("model", prov().stt);
   fd.append("response_format", "verbose_json");
   fd.append("timestamp_granularities[]", "word");
@@ -1600,7 +1697,7 @@ function viewNew(resumeId) {
     $$("#npLooks .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === npStyle.look));
   };
   const paintNpLooks = async () => { for (const b of $$("#npLooks .look")) { const st = lookStyleFrom(npStyle, LOOKS.find(L => L.id === b.dataset.id)); await ensureFont(st); paintThumbG($("canvas", b), { ...st, size: 290, pos: 52, anim: "none" }, THUMB_CAP, null, npBg); } };
-  const npTick = now => { const t = (now % 3500) / 1000; paintThumbG($("#npPrev"), npStyle, NP_SAMPLE, t, npBg); npRaf = requestAnimationFrame(npTick); };
+  const npTick = now => { if (busy) { npRaf = requestAnimationFrame(npTick); return; } const t = (now % 3500) / 1000; paintThumbG($("#npPrev"), npStyle, NP_SAMPLE, t, npBg); npRaf = requestAnimationFrame(npTick); };
   npRaf = requestAnimationFrame(npTick);
   cleanup = () => cancelAnimationFrame(npRaf);
   $$("#npLooks .look").forEach(b => b.onclick = async () => { npStyle = lookStyleFrom(npStyle, LOOKS.find(L => L.id === b.dataset.id)); await ensureFont(npStyle); syncNp(); });
@@ -1623,17 +1720,19 @@ function viewNew(resumeId) {
     if (!f) return;
     if (!/^video\//.test(f.type) && !/\.(mov|mp4|m4v|webm|avi|mkv)$/i.test(f.name)) { toast("กรุณาเลือกไฟล์วิดีโอ"); return; }
     file = f; meta = null;
+    const probeP = probeVideo(f).catch(() => null);
     if (!resumed) {
       if (draft) delete draft.raw;
       draftId = draftId || uid(); route("n=" + draftId);
-      saving = DB.putVideo(draftId, f).then(() => { const m = $("#fsave"); if (m) { m.textContent = "✓ บันทึกวิดีโอไว้ในเครื่องแล้ว ถ้าหน้ารีเฟรชกลับมาทำต่อได้ ไม่ต้องอัปโหลดใหม่"; m.className = "hint savedok"; } return true; })
+      saving = probeP.then(() => DB.putVideo(draftId, f)).then(() => { const m = $("#fsave"); if (m) { m.textContent = "✓ บันทึกวิดีโอไว้ในเครื่องแล้ว ถ้าหน้ารีเฟรชกลับมาทำต่อได้ ไม่ต้องอัปโหลดใหม่"; m.className = "hint savedok"; } return true; })
         .catch(() => { const m = $("#fsave"); if (m) m.textContent = "พื้นที่เครื่องไม่พอสำหรับเก็บวิดีโอ ระหว่างทำงานอย่าปิดหรือรีเฟรชหน้านี้"; tempVideos[draftId] = f; return false; });
     } else saving = Promise.resolve(true);
     const fi = $("#finfo"); fi.hidden = false; fi.innerHTML = `<div class="fileinfo"><img id="fthumb" alt=""><div><b>${esc(f.name)}</b><span class="hint" id="fmeta">${fmtSize(f.size)} · กำลังอ่านไฟล์…</span><span class="hint" id="fsave">${resumed ? "" : "กำลังบันทึกวิดีโอไว้ในเครื่อง…"}</span></div><button class="btn small" id="chg">เปลี่ยน</button></div>`;
     $("#chg").onclick = e => { e.preventDefault(); $("#vfile").click(); };
     if (!$("#pname").value.trim()) $("#pname").value = f.name.replace(/\.[^.]+$/, "");
     try {
-      meta = await probeVideo(f);
+      meta = await probeP;
+      if (!meta) throw new Error("probe");
       $("#fthumb").src = meta.thumb || "";
       setNpShape(meta.width, meta.height);
       if (meta.thumb) { npBg = new Image(); npBg.onload = paintNpLooks; npBg.src = meta.thumb; }
@@ -1688,19 +1787,28 @@ function viewNew(resumeId) {
       if (haveRaw) { raw = draft.raw; detected = draft.detected || lang; mark("audio", "done"); mark("ai", "done"); }
       else {
       mark("audio", "doing");
-      const ex = await extractAudio(file, cap, pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`);
-      if (cap) cap.dispose();
-      const chunks = ex.chunks; duration = ex.duration;
+      const onBk = pr => $("#audLab").textContent = `แยกเสียงจากวิดีโอ (ใช้เวลาเท่าความยาวคลิป อย่าสลับแอป) ${Math.round(pr * 100)}%`;
+      let ex = await extractAudio(file, cap, onBk);
+      let chunks = ex.chunks; duration = ex.duration;
       mark("audio", "done"); stage = "ai"; mark("ai", "doing");
       raw = { words: [], segments: [] };
       for (let i = 0; i < chunks.length; i++) {
+        if (ex.packed) {
+          try { await whisper(chunks[0].blob, { lang, prompt: settings.vocab }).then(res => { chunks[0].pre = res; }); }
+          catch (e) { if (/API key|โควตา|เครดิต|เชื่อมต่อ/i.test(String(e.message))) throw e;
+            stage = "audio"; mark("ai", ""); mark("audio", "doing");
+            ex = await extractAudio(file, cap, onBk, true); chunks = ex.chunks; duration = ex.duration;
+            mark("audio", "done"); stage = "ai"; mark("ai", "doing"); }
+          ex.packed = false;
+        }
         if (chunks.length > 1) $("#aiLab").textContent = `ส่งให้ AI ถอดเสียง (ช่วงที่ ${i + 1}/${chunks.length})`;
-        const res = await whisper(chunks[i].blob, { lang, prompt: settings.vocab });
+        const res = chunks[i].pre || await whisper(chunks[i].blob, { lang, prompt: settings.vocab });
         if (lang === "auto" && res.language) { const hit = LANGS.find(l => l[2].toLowerCase() === String(res.language).toLowerCase() || l[0] === res.language); if (hit) detected = hit[0]; }
         const o = chunks[i].offset;
         (res.words || []).forEach(w => raw.words.push({ word: w.word, start: w.start + o, end: w.end + o }));
         (res.segments || []).forEach(s => raw.segments.push({ text: s.text, start: s.start + o, end: s.end + o }));
       }
+      if (cap) cap.dispose();
       if (draftId) { draft = { ...(draft || { id: draftId, draft: true, captions: [], createdAt: Date.now() }), raw, detected, lang, lang2 }; await saveDraft(); }
       }
       mark("ai", "done"); stage = "cap"; mark("cap", "doing");
@@ -2893,10 +3001,18 @@ function openSettings() {
 $("#goHome").onclick = () => { if (BUSY) { toast("กำลังทำงานอยู่ รอให้เสร็จก่อน"); return; } setView(viewHome); };
 $("#openSettings").onclick = openSettings;
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+/* crash guard: if the last visit ended without a normal close (iPhone ran out of memory and killed the page),
+   start on the home screen instead of reopening the same heavy screen again and again */
+let lastClean = true;
+try { lastClean = localStorage.getItem("subwai.clean") !== "0"; localStorage.setItem("subwai.clean", "0"); } catch {}
+const markClean = () => { try { localStorage.setItem("subwai.clean", "1"); } catch {} };
+window.addEventListener("pagehide", markClean);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") markClean(); else { try { localStorage.setItem("subwai.clean", "0"); } catch {} } });
 DB.open().then(async () => {
   const h = location.hash.slice(1), m = /^([pn])=(.+)$/.exec(h);
-  if (m) { const p = await DB.get(m[2]).catch(() => null); if (p) { setView(p.draft ? () => viewNew(p.id) : () => viewEditor(p.id)); return; } }
-  setView(viewHome);
+  if (m && lastClean) { const p = await DB.get(m[2]).catch(() => null); if (p) { setView(p.draft ? () => viewNew(p.id) : () => viewEditor(p.id)); return; } }
+  await viewHome();
+  if (m && !lastClean) toast("หน้าเว็บถูกปิดกลางคัน (มือถือหน่วยความจำไม่พอ) งานที่ทำไว้ยังอยู่ กด “ทำต่อ” หรือเปิดโปรเจกต์ได้เลย", 6000);
 }).catch(() => { app.innerHTML = `<div class="empty"><b>เบราว์เซอร์นี้เปิดที่เก็บข้อมูลไม่ได้</b><span class="muted">ถ้าเปิดในโหมดไม่ระบุตัวตน ให้เปิดหน้าต่างปกติแทน</span></div>`; });
 </script>
 </body>
