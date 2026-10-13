@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0D1117">
 <title>ซับไว</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -81,6 +81,14 @@ textarea.input{min-height:72px;resize:vertical}
 .empty .sample small{display:block;font-size:15px;color:#FFE14D;font-weight:500}
 
 .np{max-width:640px;display:grid;gap:20px}
+/* never let long names push the page wider than the phone */
+.wrap,.np,.field,.pane,.panel,.ed-grid,.stage-col,.home-head,.grid,.drafts,.dcard,.xbox,.row,.chips{min-width:0}
+.np,.field,.pane{grid-template-columns:minmax(0,1fr)}
+.wrap{overflow-wrap:anywhere}
+.np>*,.field>*,.pane>*{max-width:100%}
+input.input,select.input,textarea.input{max-width:100%}
+/* iPhone zooms in when a text box under 16px gets focus: keep them at 16px on touch screens */
+@media (pointer:coarse){ .input,select,textarea:not(.ovedit),input[type=text],input[type=search],input:not([type]){font-size:16px} }
 .back{background:none;border:0;color:var(--muted);cursor:pointer;padding:0;font-family:var(--ui);display:inline-flex;gap:6px;align-items:center;justify-self:start}
 .np h1{font-size:30px}
 .two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
@@ -90,6 +98,7 @@ textarea.input{min-height:72px;resize:vertical}
 .fileinfo{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 .fileinfo img{width:80px;height:56px;object-fit:cover;border-radius:6px;background:var(--raise)}
 .fileinfo div{min-width:0;flex:1}
+#fsave{display:block;margin-top:2px}
 .fileinfo b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
 .seg button{flex:1;min-height:42px;border:0;background:none;cursor:pointer;font-family:var(--ui);font-weight:600;font-size:14px;padding:0 6px}
@@ -230,7 +239,9 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .screen canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:pointer;display:block}
 .fs-close{display:none}
 .pctl{display:flex;align-items:center;gap:8px;width:100%;max-width:640px}
-.pctl input[type=range]{flex:1;min-width:40px;accent-color:var(--accent)}
+.pctl input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+.player,.pctl{min-width:0;max-width:100%}
+@media (max-width:389px){ .pbtn{width:38px;height:38px} .pctl{gap:6px} .ptime{font-size:11px} }
 .pbtn{width:42px;height:42px;flex:none;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;font-size:16px;display:grid;place-items:center}
 .pbtn.play{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .ptime{font-size:12px;color:var(--muted);white-space:nowrap}
@@ -2345,7 +2356,7 @@ async function viewEditor(id) {
   }
   function styleInline() {
     const ta = $("#ovEdit"), scr = $("#screen"); if (!ta || ta.hidden || !scr) return;
-    const st = p.style, px = Math.max(15, st.size * Math.min(scr.clientWidth, scr.clientHeight) / 1080);
+    const st = p.style, px = Math.max(16, st.size * Math.min(scr.clientWidth, scr.clientHeight) / 1080);
     Object.assign(ta.style, { fontFamily: `"${st.font}", "Noto Sans Thai", sans-serif`, fontWeight: st.weight, fontSize: px + "px", color: st.color,
       background: textOn(st.color) === "#111111" ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.85)", left: (st.posX == null ? 50 : st.posX) + "%", top: st.pos + "%" });
     ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px";
