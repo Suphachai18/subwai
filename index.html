@@ -361,7 +361,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. (4) · ปุ่มแปลใหม่ + จัดซับใหม่</span>
+  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. (5) · แก้ error 400 + คำสำคัญตัวใหญ่</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -783,25 +783,50 @@ async function whisper(blob, { lang, prompt }) {
   if (!r.ok) { let j = {}; try { j = await r.json(); } catch {} throw apiError(r.status, j); }
   return r.json();
 }
+/* Read JSON from an AI reply even when it is wrapped in text, has trailing commas or was cut off at the end. */
+function looseJSON(txt) {
+  if (txt == null) return null;
+  let t = String(txt).replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, "").trim();
+  const i = t.indexOf("{"); if (i < 0) return null; t = t.slice(i);
+  const tryP = x => { try { return JSON.parse(x.replace(/,\s*([}\]])/g, "$1")); } catch { return null; } };
+  let r = tryP(t); if (r) return r;
+  const j = t.lastIndexOf("}"); if (j > 0 && (r = tryP(t.slice(0, j + 1)))) return r;
+  /* cut off inside a list of strings */
+  { const q = t.lastIndexOf('",'); if (q > 0) for (const tail of ["]}", "]}}"]) { r = tryP(t.slice(0, q + 1) + tail); if (r) return r; } }
+  /* cut off mid-list: close the list after the last complete item */
+  for (let k = t.lastIndexOf("}"); k > 0; k = t.lastIndexOf("}", k - 1)) {
+    const head = t.slice(0, k + 1);
+    for (const tail of ["]}", "]}}", "}", "]}]}"]) { r = tryP(head + tail); if (r) return r; }
+    if (t.length - k > 20000) break;
+  }
+  return null;
+}
 async function chatJSON(messages, opt = {}) {
   const P = prov(), mk = "chat_" + settings.provider;
   const models = [settings[mk], ...P.chat].filter((m, i, a) => m && a.indexOf(m) === i);
   let lastErr = null;
   for (const m of models) {
-    const body = { model: m, messages, response_format: { type: "json_object" } };
-    if (m.startsWith("openai/gpt-oss")) body.reasoning_effort = opt.effort || "low";
-    const r = await apiFetch("/chat/completions", { method: "POST", headers: { ...authH(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (r.ok) {
-      const j = await r.json();
-      if (settings[mk] !== m) { settings[mk] = m; saveSettings(); }
-      const txt = String(j.choices[0].message.content || "").replace(/^```(?:json)?\s*|\s*```$/g, "");
-      try { return JSON.parse(txt); } catch { lastErr = new Error("AI ตอบกลับในรูปแบบที่อ่านไม่ได้ ลองใหม่อีกครั้ง"); continue; }
+    for (const strict of [true, false]) {
+      const body = { model: m, messages: strict ? messages : [...messages.slice(0, -1), { ...messages[messages.length - 1], content: messages[messages.length - 1].content + "\n\nReply with the JSON object only, nothing else." }], max_completion_tokens: opt.maxTok || 8000 };
+      if (strict) body.response_format = { type: "json_object" };
+      if (m.startsWith("openai/gpt-oss")) body.reasoning_effort = opt.effort || "low";
+      const r = await apiFetch("/chat/completions", { method: "POST", headers: { ...authH(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (r.ok) {
+        const j = await r.json();
+        const out = looseJSON(j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content);
+        if (out) { if (settings[mk] !== m) { settings[mk] = m; saveSettings(); } return out; }
+        lastErr = new Error("AI ตอบกลับในรูปแบบที่อ่านไม่ได้ ลองใหม่อีกครั้ง"); continue;
+      }
+      let j = {}; try { j = await r.json(); } catch {}
+      if (r.status === 401 || r.status === 429) throw apiError(r.status, j);
+      /* Groq: the model wrote almost-valid JSON; use what it wrote instead of failing */
+      const fg = j && j.error && j.error.failed_generation;
+      if (fg) { const out = looseJSON(fg); if (out) return out; }
+      lastErr = apiError(r.status, j);
+      if (!(j && j.error && (j.error.code === "json_validate_failed" || /json/i.test(j.error.message || "")))) break; // model missing: next model
     }
-    let j = {}; try { j = await r.json(); } catch {}
-    if (r.status === 401 || r.status === 429) throw apiError(r.status, j);
-    lastErr = apiError(r.status, j); // model missing or not supported: try the next one
   }
-  throw lastErr || new Error("ไม่พบโมเดล AI สำหรับแปลภาษาที่ใช้กับ key นี้ได้");
+  throw lastErr || new Error("ไม่พบโมเดล AI ที่ใช้กับ key นี้ได้");
 }
 async function translateCaptions(caps, src, tgt, onProg) {
   const SL = LEN[src] || "the spoken language", TL = LEN[tgt];
@@ -1135,6 +1160,28 @@ function drawCaption(ctx, W, H, cap, p, t) {
     });
   });
   ctx.restore();
+  /* key word pops up big above the line at the moment it is spoken (like Submagic/CapCut) */
+  if (st.kw !== false && st.kwBig !== false && cap.hl && cap.hl.length && mode !== "tr" && rows.length) {
+    for (const w of cap.hl) {
+      if (!w) continue;
+      let t0 = cap.hlT && cap.hlT[w] != null ? cap.hlT[w] : null;
+      if (t0 == null) { const at = main.text.indexOf(w); if (at < 0) continue; t0 = cap.start + (cap.end - cap.start) * vlen(main.text.slice(0, at)) / Math.max(1, vlen(main.text)); }
+      const k = t - t0, life = Math.min(1.25, Math.max(0.8, cap.end - t0));
+      if (k < 0 || k > life) continue;
+      const s = k < 0.16 ? 0.5 + 0.62 * easeOutCubic(k / 0.16) : k < 0.3 ? 1.12 - 0.12 * ((k - 0.16) / 0.14) : 1 + 0.015 * Math.sin(k * 9);
+      const a = clamp01(k / 0.08) * clamp01((life - k) / 0.18);
+      let px = main.px * 2.2; ctx.save(); ctx.font = font(px);
+      let wd = ctx.measureText(w).width; if (wd > W * 0.84) { px *= W * 0.84 / wd; ctx.font = font(px); }
+      const top = rows[0].y - rows[0].lh / 2, bot = rows[rows.length - 1].y + rows[rows.length - 1].lh / 2;
+      const by = top - px * 0.8 > px * 0.7 ? top - px * 0.72 : bot + px * 0.72;
+      ctx.globalAlpha = a; ctx.translate(cx, by); ctx.rotate(-0.035); ctx.scale(s, s);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+      ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = px * 0.25; ctx.shadowOffsetY = px * 0.06;
+      ctx.lineWidth = px * 0.17; ctx.strokeStyle = st.stroke && st.strokeColor ? st.strokeColor : "#000"; ctx.strokeText(w, 0, 0);
+      ctx.shadowColor = "transparent"; ctx.fillStyle = st.kwColor || st.hl || "#FFE14D"; ctx.fillText(w, 0, 0);
+      ctx.restore();
+    }
+  }
 }
 function captionAt(caps, t) { for (const c of caps) { if (t >= c.start && t < c.end) return c; if (c.start > t) break; } return null; }
 async function ensureFont(st) { try { await document.fonts.load(`${st.weight} 40px "${st.font}"`, "ทดสอบ Test"); } catch {} }
@@ -1588,20 +1635,23 @@ async function aiSubtitle(p, opt = {}) {
 3. text: the line in ${SL} exactly as the speaker meant it. Fix speech-recognition mistakes (misheard words, wrong spelling or tone marks, wrongly split or joined words, brand and model names) using context and the glossary.${vocab} Remove stutters, filler sounds and accidental repeats (เอ่อ, อ่า, อืม, um, uh). Write numbers and prices as digits (189,000). Do not summarise, reorder, censor or add anything that was not said; keep the speaker's slang and particles.
 ${style ? "4. " + style + " Translate the meaning of exactly this line so it stays in sync with the video; when a sentence runs over several lines, split your translation at the matching point. Keep numbers, prices and names exactly; use the glossary.\n" : ""}Video: ${brief.topic || "unknown"}. Tone: ${brief.tone || "natural"}.
 Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt ? ', "tr": "..."' : ""}}]}`;
-  const out = [], B = opt.batch || 160;
+  const out = [], B0 = opt.batch || 90; let B = B0, ceil = B0;
   let i0 = 0, guard = 0;
   while (i0 < units.length && guard++ < 400) {
     const i1 = Math.min(units.length - 1, i0 + B - 1), lastBatch = i1 === units.length - 1;
     const list = []; for (let k = i0; k <= i1; k++) list.push((k > i0 && units[k].gap > 0.5 ? "‖ " : "") + `[${k}]${units[k].t}`);
     const user = JSON.stringify({ glossary: brief.glossary, previous_lines: out.slice(-3).map(c => tgt ? { text: c.text, tr: c.tr } : c.text), first_unit: i0, last_unit: i1, units: list.join(" ") });
     let lines = null;
-    for (let a = 0; a < 2 && !lines; a++) {
-      try {
-        const j = await chatJSON([{ role: "system", content: sys }, { role: "user", content: user }], { effort: "medium" });
-        lines = fixRanges(Array.isArray(j.lines) ? j.lines : [], i0, i1);
-      } catch (e) { if (a || /API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(e.message))) throw e; }
-    }
-    if (!lines || !lines.length) throw new Error("AI จัดซับไม่สำเร็จ");
+    try {
+      const j = await chatJSON([{ role: "system", content: sys }, { role: "user", content: user }], { effort: "medium" });
+      lines = fixRanges(Array.isArray(j.lines) ? j.lines : Array.isArray(j) ? j : [], i0, i1);
+    } catch (e) { if (/API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(e.message))) throw e; }
+    if (!lines || !lines.length) {
+      if (B > 25) { ceil = Math.max(25, B - 10); B = Math.max(25, Math.floor(B / 2)); continue; } // try again with a smaller piece
+      /* still failing: keep these words as plain lines so the job finishes; they get translated below */
+      lines = []; let a = i0, len = 0;
+      for (let k = i0; k <= i1; k++) { len += vlen(units[k].t); if (len >= maxC || k === i1 || units[k + 1].gap > 0.5) { lines.push({ a, b: k, text: unitTxt(a, k), tr: "", mod: true }); a = k + 1; len = 0; } }
+    } else B = Math.min(ceil, B + 15);
     /* the last line of a batch may be a cut-off sentence: redo it as the start of the next batch */
     if (!lastBatch && lines.length > 1) lines.pop();
     for (const L of lines) {
@@ -1621,7 +1671,18 @@ Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt
     if (n && n.start - c.end < 0.25) c.end = n.start;
     if (c.end <= c.start) c.end = c.start + 0.3;
   }
-  return caps.map(c => ({ id: uid(), start: +c.start.toFixed(2), end: +c.end.toFixed(2), text: c.text, tr: c.tr }));
+  const res = caps.map(c => ({ id: uid(), start: +c.start.toFixed(2), end: +c.end.toFixed(2), text: c.text, tr: c.tr }));
+  /* any line the AI left without a translation gets one now (with its neighbours as context) */
+  if (tgt && res.some(c => !c.tr)) {
+    for (let k = 0; k < res.length; k++) {
+      if (res[k].tr) continue;
+      let e = k; while (e + 1 < res.length && !res[e + 1].tr && e - k < 40) e++;
+      const a0 = Math.max(0, k - 4), win = res.slice(a0, Math.min(res.length, e + 3)).map(x => ({ ...x }));
+      try { await translateCaptions(win, p.lang, tgt); for (let q = k; q <= e; q++) res[q].tr = win[q - a0].tr || ""; } catch (err) { if (/API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(err.message))) throw err; }
+      k = e;
+    }
+  }
+  return res;
 }
 function fixRanges(arr, i0, i1) {
   const L = arr.map(x => ({ a: Math.round(+x.a), b: Math.round(+x.b), text: x.text, tr: x.tr })).filter(x => isFinite(x.a) && isFinite(x.b)).sort((x, y) => x.a - y.a);
@@ -1669,11 +1730,11 @@ async function aiEmphasis(p, withSfx) {
   for (let i = 0; i < p.captions.length; i += B) {
     const batch = p.captions.slice(i, i + B);
     const j = await chatJSON([
-      { role: "system", content: `You pick words to emphasise in short-video subtitles, like the coloured, popping words in viral captions. For roughly 1 line in 3, choose the single most important word or short phrase: a number, price, product or brand name, key benefit, or strong emotion. Copy it exactly as it appears in the line, character for character. Skip lines with nothing worth emphasising, and never pick two neighbouring lines. For each pick also choose a sound "s" from: ${Object.entries(EMPH_SFX).map(([k, v]) => k + " (" + v + ")").join(", ")}. Reply only with JSON: {"items":[{"i": line_index, "w": "exact text", "s": "hit"}]}` },
+      { role: "system", content: `You pick words to emphasise in short-video subtitles, like the big coloured words that pop up with a sound in viral captions (Submagic, CapCut). For roughly 1 line in 3, choose the single most important word or short phrase: a number, price, product or brand name, key benefit, or strong emotion. Copy it exactly as it appears in the line, character for character. Skip lines with nothing worth emphasising, and never pick two neighbouring lines. For each pick also choose a sound "s" from: ${Object.entries(EMPH_SFX).map(([k, v]) => k + " (" + v + ")").join(", ")}. Reply only with JSON: {"items":[{"i": line_index, "w": "exact text", "s": "hit"}]}` },
       { role: "user", content: JSON.stringify({ lines: batch.map((c, k) => ({ i: k, text: c.text })) }) }
     ]);
-    batch.forEach(c => c.hl = []);
-    (j.items || []).forEach(x => { const c = batch[x.i], w = String(x.w || "").trim(); if (c && w && c.text.includes(w)) { c.hl = [w]; n++; picks.push({ c, w, s: EMPH_SFX[x.s] ? x.s : "hit" }); } });
+    batch.forEach(c => { c.hl = []; delete c.hlT; });
+    (j.items || []).forEach(x => { const c = batch[+x.i], w = String(x.w || "").trim(); if (c && w && c.text.includes(w)) { c.hl = [w]; c.hlT = { [w]: wordTime(p, c, w) }; n++; picks.push({ c, w, s: EMPH_SFX[x.s] ? x.s : "hit" }); } });
   }
   if (withSfx) {
     p.sfx = p.sfx.filter(x => x.src !== "kw");
@@ -2072,6 +2133,7 @@ async function viewEditor(id) {
             <b>ซับหรือคำแปลไม่ตรง? ให้ AI ทำใหม่ในปุ่มเดียว</b>
             <div class="aibar-row"><select class="input" id="qTr" aria-label="แปลเป็นภาษา">${langOptions(p.tr.lang, `<option value="">เลือกภาษาที่จะแปล</option>`)}</select><button class="btn primary" id="qTrGo">✨ แปลใหม่</button></div>
             <button class="btn block" id="qRe">✨ จัดซับใหม่ทั้งหมด (แก้คำผิด + แปล + จังหวะเวลา)</button>
+            <button class="btn block" id="qKw">✨ เน้นคำสำคัญตัวใหญ่ + ใส่เสียงอัตโนมัติ</button>
             <span class="hint" id="qStat">แปลใหม่ = คงข้อความไทยเดิม แปลใหม่ทั้งคลิป · จัดซับใหม่ = ทำใหม่จากเสียงพูดจริง · ไม่ชอบกด ↶</span>
           </div>
           <div class="chips" id="xChips">
@@ -2141,7 +2203,7 @@ async function viewEditor(id) {
           <div class="xbox">
             <label class="sw"><input type="checkbox" id="sKw"> เน้นคำสำคัญด้วยสี</label>
             ${swatches("kwColor")}
-            <div class="row"><label class="sw"><input type="checkbox" id="sKwPop"> คำเด้งตอนพูดถึง</label><label class="sw"><input type="checkbox" id="kwSfx" checked> ใส่เสียงตรงคำที่เน้น</label></div>
+            <div class="row"><label class="sw"><input type="checkbox" id="sKwBig"> คำสำคัญเด้งตัวใหญ่</label><label class="sw"><input type="checkbox" id="sKwPop"> คำเด้งตอนพูดถึง</label><label class="sw"><input type="checkbox" id="kwSfx" checked> ใส่เสียงตรงคำที่เน้น</label></div>
             <div class="row"><button class="btn primary small" id="kwGo">✨ ให้ AI เน้นคำสำคัญ + ใส่เสียง</button><span class="hint" id="kwStat">หรือแตะคำเองในหน้าต่างตั้งค่าบรรทัด</span></div>
           </div>
           <details class="box"><summary>ขอบ เงา และกล่องพื้นหลัง</summary><div class="in">
@@ -2640,7 +2702,11 @@ async function viewEditor(id) {
     const b = $("#reGo"), st = $("#fixStat"); b.disabled = true; setBusy(true);
     try {
       const caps = await aiSubtitle(p, { tgt: p.tr.lang, onProg: (d, t) => { st.textContent = $("#qStat").textContent = `AI กำลังจัดซับ${p.tr.lang ? "และแปล" : ""} ${Math.round(d / t * 100)}%…`; } });
-      if (caps.length) { if (sid) closeSheet(); p.captions = caps; changed(); renderList(); syncLang(); st.textContent = $("#qStat").textContent = `จัดซับใหม่เสร็จแล้ว ${caps.length} บรรทัด · ไม่ชอบกด ↶`; toast("จัดซับใหม่เสร็จแล้ว"); }
+      if (caps.length) {
+        if (sid) closeSheet(); p.captions = caps;
+        if (p.style.kw !== false) { st.textContent = $("#qStat").textContent = "AI กำลังเน้นคำสำคัญ + ใส่เสียง…"; try { await aiEmphasis(p, true); renderSfx(); } catch {} }
+        changed(); renderList(); syncLang(); st.textContent = $("#qStat").textContent = `จัดซับใหม่เสร็จแล้ว ${caps.length} บรรทัด · ไม่ชอบกด ↶`; toast("จัดซับใหม่เสร็จแล้ว");
+      }
     } catch (e) { st.textContent = ""; toast(e.message, 5000); }
     b.disabled = false; setBusy(false);
   };
@@ -2709,6 +2775,7 @@ async function viewEditor(id) {
     if (p.tr.mode === "main") p.tr.mode = "both";
     changed(); syncLang(); renderList(); runTranslate();
   };
+  $("#qKw").onclick = () => runEmphasis($("#qKw"), $("#qStat"));
   $("#qRe").onclick = () => {
     const v = $("#qTr").value;
     if (v && v !== p.lang && v !== p.tr.lang) { p.captions.forEach(c => c.tr = ""); p.tr.lang = v; if (p.tr.mode === "main") p.tr.mode = "both"; syncLang(); }
@@ -2750,7 +2817,7 @@ async function viewEditor(id) {
     const s = p.style, low = v => String(v || "").toLowerCase();
     $("#sSize").value = s.size; $("#oSize").textContent = s.size; $("#sPos").value = s.pos; $("#oPos").textContent = s.pos + "%";
     $$("[data-sw]").forEach(box => { const k = box.dataset.sw; $$(".sw-c", box).forEach(b => b.setAttribute("aria-pressed", low(b.dataset.c) === low(s[k]))); const cc = $(".sw-custom", box); if (s[k]) cc.value = s[k]; });
-    $("#sKw").checked = s.kw !== false; $("#sKwPop").checked = s.kwPop !== false;
+    $("#sKw").checked = s.kw !== false; $("#sKwPop").checked = s.kwPop !== false; $("#sKwBig").checked = s.kwBig !== false;
     $("#sStroke").value = s.stroke; $("#sStrokeC").value = s.strokeColor;
     $("#sBox").checked = s.box; $("#sBoxO").value = s.boxOpacity; $("#sBoxC").value = s.boxColor; $("#sShadow").checked = s.shadow;
     $("#sGlow").checked = !!s.glow; if (s.glow) $("#sGlowC").value = s.glow; $("#sDsh").checked = !!s.dshadow; if (s.dshadow) $("#sDshC").value = s.dshadow;
@@ -2775,10 +2842,10 @@ async function viewEditor(id) {
   });
   const bindS = (sel, key, conv = v => v, ev = "input") => $(sel).addEventListener(ev, e => {
     const el = e.target; p.style[key] = conv(el.type === "checkbox" ? el.checked : el.value);
-    if (!["size", "pos", "size2", "order", "kw", "kwPop"].includes(key)) p.style.look = "";
+    if (!["size", "pos", "size2", "order", "kw", "kwPop", "kwBig"].includes(key)) p.style.look = "";
     syncStyleUI(); changed({ typing: el.type === "range" });
   });
-  bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number); bindS("#sKw", "kw"); bindS("#sKwPop", "kwPop");
+  bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number); bindS("#sKw", "kw"); bindS("#sKwPop", "kwPop"); bindS("#sKwBig", "kwBig");
   bindS("#sStroke", "stroke", Number); bindS("#sStrokeC", "strokeColor");
   bindS("#sBox", "box"); bindS("#sBoxO", "boxOpacity", Number); bindS("#sBoxC", "boxColor"); bindS("#sShadow", "shadow");
   bindS("#sSize2", "size2", Number);
