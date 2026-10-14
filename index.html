@@ -141,6 +141,8 @@ input.input,select.input,textarea.input{max-width:100%}
 .tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 .pane{padding:14px;display:grid;gap:14px}
 .subseg{margin:12px 14px 0}
+.cloudchip{min-height:34px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+.cloudchip.ok{color:var(--ok)} .cloudchip.warn{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,var(--surface))} .cloudchip.busy{color:var(--muted)}
 .aibar{display:grid;gap:10px;padding:12px;border:1px solid var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
 .aibar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .aibar,.aibar>*{min-width:0;max-width:100%}
@@ -356,12 +358,13 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 <div id="scroller"><div class="wrap">
   <header class="bar">
     <button class="brand" id="goHome" aria-label="หน้าแรก"><span class="mark">ซับ</span>ซับไว</button>
+    <button class="cloudchip" id="cloudChip" hidden></button>
     <button class="iconbtn" id="openSettings" aria-label="ตั้งค่า">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. (7) · Gemini ฟรี ภาษาไทยแม่น</span>
+  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. (8) · ซิงก์ Google Drive</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -442,10 +445,13 @@ const DB = {
   q(r) { return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   all() { return this.q(this.st("projects", "readonly").getAll()); },
   get(id) { return this.q(this.st("projects", "readonly").get(id)); },
-  put(p) { return this.q(this.st("projects", "readwrite").put(p)); },
+  putRaw(p) { return this.q(this.st("projects", "readwrite").put(p)); },
+  put(p) { const r = this.putRaw(p); try { Cloud.schedule(p); } catch {} return r; },
   putVideo(id, b) { return this.q(this.st("videos", "readwrite").put(b, id)); },
   getVideo(id) { return this.q(this.st("videos", "readonly").get(id)); },
-  async del(id) { await this.q(this.st("projects", "readwrite").delete(id)); await this.q(this.st("videos", "readwrite").delete(id)); },
+  async del(id) {
+    try { const c = Cloud.meta(id); if (c.fileId && Cloud.enabled() && Cloud.valid()) { Cloud.trash(c.fileId); Cloud.trash(c.videoId); Object.values(c.media || {}).forEach(x => Cloud.trash(x)); } } catch {}
+    await this.q(this.st("projects", "readwrite").delete(id)); await this.q(this.st("videos", "readwrite").delete(id)); },
   sfxAll() { return this.q(this.st("sfx", "readonly").getAll()); },
   sfxPut(x) { return this.q(this.st("sfx", "readwrite").put(x)); },
   sfxDel(id) { return this.q(this.st("sfx", "readwrite").delete(id)); },
@@ -1572,7 +1578,7 @@ Reply only with JSON: {"scenes":[{"start":0,"show":true,"type":"big","icon":"car
 async function loadMediaEls(p, cache) {
   for (const sc of (p.split && p.split.scenes) || []) {
     if (!sc.media || cache[sc.media.id]) continue;
-    const rec = await DB.mediaGet(sc.media.id); if (!rec) continue;
+    const rec = (await DB.mediaGet(sc.media.id)) || (await Cloud.getMedia(sc.media, p)); if (!rec) continue;
     const url = URL.createObjectURL(rec.blob); let el;
     if (rec.kind === "video") {
       el = document.createElement("video"); el.muted = true; el.playsInline = true; el.setAttribute("playsinline", ""); el.preload = "auto"; el.loop = true; el.src = url;
@@ -1803,9 +1809,275 @@ function route(h) { try { history.replaceState(null, "", h ? "#" + h : location.
 let cleanup = null;
 function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null; } $("#scroller").scrollTo(0, 0); fn(); }
 
+/* ================= Google Drive sync =================
+   Everything still lives in this browser first (fast, works offline). When Google Drive is connected,
+   each project (subtitles, translation, style, sounds, scenes), your own photos/clips, the settings and
+   the original video are copied to a "ซับไว (Subwai)" folder in the user's own Google Drive, so another
+   phone or computer can open the same work. Scope drive.file: the app only sees files it created. */
+const CLOUD_CLIENT_ID = "";
+const DRV = "https://www.googleapis.com/drive/v3/files", UPL = "https://www.googleapis.com/upload/drive/v3/files";
+const Cloud = {
+  tok: null, exp: 0, state: "off", msg: "", queue: new Set(), timer: 0, folder: null, flushing: false, vUp: new Map(), down: new Map(), pulledAt: 0,
+  cid() { return String(settings.gClientId || CLOUD_CLIENT_ID || "").trim(); },
+  meta(pid, upd) {
+    let all = {}; try { all = JSON.parse(localStorage.getItem("subwai.cloud") || "{}"); } catch {}
+    if (upd) { all[pid] = { ...(all[pid] || {}), ...upd }; try { localStorage.setItem("subwai.cloud", JSON.stringify(all)); } catch {} }
+    return all[pid] || {};
+  },
+  enabled() { return !!(this.cid() && settings.cloudOn); },
+  init() {
+    try { const t = JSON.parse(localStorage.getItem("subwai.gtok") || "null"); if (t && t.exp > Date.now() + 60000) { this.tok = t.tok; this.exp = t.exp; } } catch {}
+    if (this.cid()) this.gis().catch(() => {});
+    this.state = this.enabled() ? (this.valid() ? "ok" : "auth") : "off"; this.paint();
+  },
+  valid() { return !!this.tok && this.exp > Date.now() + 60000; },
+  gis() {
+    if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+    if (this._gis) return this._gis;
+    return this._gis = new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true; s.onload = res; s.onerror = () => { this._gis = null; rej(new Error("โหลดระบบล็อกอิน Google ไม่ได้ ตรวจอินเทอร์เน็ต")); }; document.head.appendChild(s); });
+  },
+  /* must be called straight from a tap (Safari blocks the Google popup otherwise) */
+  connect() {
+    if (!this.cid()) return Promise.reject(new Error("ยังไม่ได้ใส่ Google Client ID ในหน้าตั้งค่า"));
+    if (!(window.google && google.accounts && google.accounts.oauth2)) { this.gis().catch(() => {}); return Promise.reject(new Error("กำลังเตรียมระบบล็อกอิน Google แตะอีกครั้ง")); }
+    return new Promise((res, rej) => {
+      const c = google.accounts.oauth2.initTokenClient({
+        client_id: this.cid(), scope: "https://www.googleapis.com/auth/drive.file",
+        callback: r => {
+          if (!r || r.error || !r.access_token) { rej(new Error(r && r.error === "access_denied" ? "ไม่ได้อนุญาตให้ใช้ Google Drive" : "ล็อกอิน Google ไม่สำเร็จ")); return; }
+          this.tok = r.access_token; this.exp = Date.now() + (Number(r.expires_in) || 3600) * 1000;
+          try { localStorage.setItem("subwai.gtok", JSON.stringify({ tok: this.tok, exp: this.exp })); } catch {}
+          this.setState("ok"); res();
+        },
+        error_callback: e => rej(new Error(e && e.type === "popup_closed" ? "ปิดหน้าต่างล็อกอินก่อนเสร็จ ลองอีกครั้ง" : e && e.type === "popup_failed_to_open" ? "เบราว์เซอร์บล็อกหน้าต่างล็อกอิน อนุญาต pop-up แล้วลองอีกครั้ง" : "ล็อกอิน Google ไม่สำเร็จ"))
+      });
+      c.requestAccessToken({ prompt: settings.cloudOn ? "" : "consent" });
+    });
+  },
+  disconnect() {
+    try { if (this.tok && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(this.tok, () => {}); } catch {}
+    this.tok = null; this.exp = 0; try { localStorage.removeItem("subwai.gtok"); } catch {}
+    settings.cloudOn = false; saveSettings(); this.setState("off");
+  },
+  setState(s, msg) { this.state = s; this.msg = msg || ""; this.paint(); },
+  paint() {
+    const b = $("#cloudChip"); if (!b) return;
+    b.hidden = !this.enabled();
+    let t = "☁ ซิงก์แล้ว", cls = "ok";
+    const up = [...this.vUp.values()], dn = [...this.down.values()];
+    if (this.state === "auth") { t = "☁ แตะเพื่อซิงก์"; cls = "warn"; }
+    else if (up.length) { t = `☁ อัปโหลดวิดีโอ ${Math.round(Math.min(...up) * 100)}%`; cls = "busy"; }
+    else if (dn.length) { t = `☁ ดาวน์โหลด ${Math.round(Math.min(...dn) * 100)}%`; cls = "busy"; }
+    else if (this.flushing || this.state === "sync") { t = "☁ กำลังซิงก์…"; cls = "busy"; }
+    else if (this.state === "err") { t = "☁ ซิงก์ไม่สำเร็จ"; cls = "warn"; }
+    b.textContent = t; b.className = "cloudchip " + cls;
+  },
+  async api(url, opt = {}) {
+    if (!this.valid()) { this.setState("auth"); throw new Error("AUTH"); }
+    let r;
+    try { r = await fetch(url, { ...opt, headers: { ...(opt.headers || {}), Authorization: "Bearer " + this.tok } }); }
+    catch { throw new Error("เชื่อมต่อ Google Drive ไม่ได้ ตรวจอินเทอร์เน็ต"); }
+    if (r.status === 401) { this.tok = null; this.setState("auth"); throw new Error("AUTH"); }
+    return r;
+  },
+  async j(url, opt) {
+    const r = await this.api(url, opt);
+    if (!r.ok) { let m = ""; try { const e = await r.json(); m = (e.error && e.error.message) || ""; } catch {} throw new Error(`Google Drive แจ้งข้อผิดพลาด (${r.status}) ${m}`.trim()); }
+    return r.status === 204 ? null : r.json();
+  },
+  async find(props) {
+    const q = Object.entries(props).map(([k, v]) => `appProperties has { key='${k}' and value='${String(v).replace(/'/g, "")}' }`).join(" and ") + " and trashed=false";
+    const out = []; let pt = "";
+    do {
+      const r = await this.j(`${DRV}?pageSize=1000&spaces=drive&fields=nextPageToken,files(id,name,modifiedTime,appProperties,size)&q=${encodeURIComponent(q)}${pt ? "&pageToken=" + pt : ""}`);
+      out.push(...(r.files || [])); pt = r.nextPageToken || "";
+    } while (pt);
+    return out;
+  },
+  async root() {
+    if (this.folder) return this.folder;
+    const f = await this.find({ subwai: "root" });
+    if (f[0]) return this.folder = f[0].id;
+    const r = await this.j(DRV + "?fields=id", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "ซับไว (Subwai)", mimeType: "application/vnd.google-apps.folder", appProperties: { subwai: "root" } }) });
+    return this.folder = r.id;
+  },
+  async putJSON(id, name, props, data) {
+    const meta = { name, appProperties: props };
+    if (!id) { meta.parents = [await this.root()]; meta.mimeType = "application/json"; }
+    const b = "subwai" + Math.random().toString(36).slice(2);
+    const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(data)}\r\n--${b}--`;
+    const r = await this.j(`${UPL}${id ? "/" + id : ""}?uploadType=multipart&fields=id`, { method: id ? "PATCH" : "POST", headers: { "Content-Type": "multipart/related; boundary=" + b }, body });
+    return r.id;
+  },
+  getJSON(id) { return this.j(`${DRV}/${id}?alt=media`); },
+  /* big files: resumable upload in 8 MB pieces read straight from the file (no copy in memory), resumes after a reload */
+  async upload(blob, name, props, onProg, key) {
+    const size = blob.size, CH = 8 * 1024 * 1024, sk = "subwai.up." + (key || name);
+    let loc = null, off = 0;
+    try { const s = JSON.parse(localStorage.getItem(sk) || "null"); if (s && s.size === size && s.t > Date.now() - 6 * 864e5) loc = s.loc; } catch {}
+    if (loc) {
+      try {
+        const r = await fetch(loc, { method: "PUT", headers: { "Content-Range": `bytes */${size}` } });
+        if (r.ok) { try { localStorage.removeItem(sk); } catch {} return (await r.json()).id; }
+        const rg = r.status === 308 && r.headers.get("Range");
+        if (r.status === 308) off = rg ? +rg.split("-")[1] + 1 : 0; else loc = null;
+      } catch { loc = null; }
+    }
+    if (!loc) {
+      const init = await this.api(`${UPL}?uploadType=resumable&fields=id`, { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": blob.type || "application/octet-stream", "X-Upload-Content-Length": String(size) }, body: JSON.stringify({ name, parents: [await this.root()], appProperties: props }) });
+      if (!init.ok) throw new Error(`เริ่มอัปโหลดไม่ได้ (${init.status})`);
+      loc = init.headers.get("Location"); if (!loc) throw new Error("Google Drive ไม่ตอบที่อยู่สำหรับอัปโหลด");
+      off = 0; try { localStorage.setItem(sk, JSON.stringify({ loc, size, t: Date.now() })); } catch {}
+    }
+    while (true) {
+      const end = Math.min(size, off + CH); let r = null;
+      for (let a = 0; a < 5 && !r; a++) {
+        try { r = await fetch(loc, { method: "PUT", headers: { "Content-Range": size ? `bytes ${off}-${end - 1}/${size}` : "bytes */0" }, body: blob.slice(off, end) }); }
+        catch { await sleep(2000 * (a + 1)); }
+      }
+      if (!r) throw new Error("อินเทอร์เน็ตหลุดระหว่างอัปโหลด จะลองต่อให้อัตโนมัติ");
+      if (r.ok) { try { localStorage.removeItem(sk); } catch {} if (onProg) onProg(1); return (await r.json()).id; }
+      if (r.status !== 308) { if (r.status === 404 || r.status === 410) try { localStorage.removeItem(sk); } catch {} throw new Error(`อัปโหลดไม่สำเร็จ (${r.status})`); }
+      const rg = r.headers.get("Range"); off = rg ? +rg.split("-")[1] + 1 : end;
+      if (onProg) onProg(off / Math.max(1, size));
+    }
+  },
+  async download(id, onProg) {
+    const r = await this.api(`${DRV}/${id}?alt=media`);
+    if (!r.ok) throw new Error(`ดาวน์โหลดจาก Google Drive ไม่ได้ (${r.status})`);
+    const total = +r.headers.get("Content-Length") || 0, type = r.headers.get("Content-Type") || "application/octet-stream";
+    if (!r.body || !r.body.getReader) return r.blob();
+    const rd = r.body.getReader(); let parts = [], acc = [], accN = 0, got = 0;
+    for (;;) {
+      const { done, value } = await rd.read(); if (done) break;
+      acc.push(value); accN += value.length; got += value.length;
+      if (accN > 32 * 1024 * 1024) { parts.push(new Blob(acc)); acc = []; accN = 0; } // let the browser keep finished parts on disk
+      if (onProg && total) onProg(got / total);
+    }
+    if (acc.length) parts.push(new Blob(acc));
+    return new Blob(parts, { type });
+  },
+  trash(id) { if (id) return this.api(`${DRV}/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) }).catch(() => {}); },
+
+  /* ---- projects ---- */
+  schedule(p) {
+    if (!this.enabled() || !p || p.draft) return;
+    this.queue.add(p.id); clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.flush(), 2500);
+  },
+  async flush() {
+    if (this.flushing || !this.enabled()) return;
+    if (!this.valid()) { this.setState("auth"); return; }
+    this.flushing = true; this.paint();
+    try {
+      for (const id of [...this.queue]) { this.queue.delete(id); const p = await DB.get(id); if (p && !p.draft) await this.pushProject(p); }
+      this.setState("ok");
+    } catch (e) { if (e.message !== "AUTH") this.setState("err", e.message); }
+    finally { this.flushing = false; this.paint(); if (this.queue.size && this.valid()) this.timer = setTimeout(() => this.flush(), 4000); }
+  },
+  async pushProject(p) {
+    const c = { ...this.meta(p.id) }; c.media = { ...(c.media || {}) };
+    for (const sc of (p.split && p.split.scenes) || []) {
+      const m = sc.media; if (!m || !m.id || c.media[m.id]) continue;
+      const rec = await DB.mediaGet(m.id).catch(() => null); if (!rec || !rec.blob) continue;
+      const have = await this.find({ subwai: "media", mid: m.id });
+      c.media[m.id] = have[0] ? have[0].id : await this.upload(rec.blob, `media-${m.id}`, { subwai: "media", mid: m.id }, null, "m" + m.id);
+    }
+    const data = { ...p, cloud: { videoId: c.videoId || "", media: c.media } };
+    if (c.pushedU && c.pushedU >= (p.updatedAt || 0) && c.fileId && !c.dirty) { if (!c.videoId) this.uploadVideo(p.id); return; }
+    delete data.videoSaved;
+    c.fileId = await this.putJSON(c.fileId, `project-${p.id}.json`, { subwai: "project", pid: p.id, u: String(p.updatedAt || 0) }, data);
+    c.pushedU = p.updatedAt || 0; c.dirty = false; this.meta(p.id, c);
+    if (!c.videoId) this.uploadVideo(p.id);
+  },
+  async uploadVideo(pid) {
+    if (this.vUp.has(pid) || !this.valid()) return;
+    const blob = (await DB.getVideo(pid).catch(() => null)) || tempVideos[pid]; if (!blob) return;
+    this.vUp.set(pid, 0); this.paint(); setBusy(true);
+    try {
+      const have = await this.find({ subwai: "video", pid });
+      let id = have.find(f => +f.size === blob.size);
+      id = id ? id.id : await this.upload(blob, `video-${pid}.${/quicktime/.test(blob.type) ? "mov" : /webm/.test(blob.type) ? "webm" : "mp4"}`, { subwai: "video", pid }, pr => { this.vUp.set(pid, pr); this.paint(); }, "v" + pid);
+      const p = await DB.get(pid);
+      this.meta(pid, { videoId: id, dirty: true });
+      if (p) { this.queue.add(pid); this.timer = setTimeout(() => this.flush(), 500); }
+    } catch (e) { if (e.message !== "AUTH") this.setState("err", "อัปโหลดวิดีโอยังไม่เสร็จ: " + e.message); }
+    finally { this.vUp.delete(pid); setBusy(false); this.paint(); }
+  },
+  async pull(force) {
+    if (!this.enabled() || !this.valid()) return 0;
+    if (!force && Date.now() - this.pulledAt < 15000) return 0;
+    this.pulledAt = Date.now(); this.setState("sync");
+    let n = 0;
+    try {
+      const files = await this.find({ subwai: "project" });
+      const locals = new Map((await DB.all()).map(p => [p.id, p]));
+      const seen = new Set();
+      for (const f of files.sort((a, b) => (+b.appProperties.u || 0) - (+a.appProperties.u || 0))) {
+        const pid = f.appProperties && f.appProperties.pid; if (!pid || seen.has(pid)) continue; seen.add(pid);
+        const lp = locals.get(pid), u = +f.appProperties.u || 0;
+        if (lp && !lp.draft && (lp.updatedAt || 0) >= u) { if (this.meta(pid).fileId !== f.id) this.meta(pid, { fileId: f.id }); if ((lp.updatedAt || 0) > u) this.queue.add(pid); continue; }
+        const data = await this.getJSON(f.id);
+        if (!data || !data.id) continue;
+        this.meta(pid, { fileId: f.id, videoId: (data.cloud && data.cloud.videoId) || this.meta(pid).videoId || "", media: (data.cloud && data.cloud.media) || {}, pushedU: u, dirty: false });
+        delete data.cloud;
+        data.videoSaved = !!(lp && lp.videoSaved);
+        await DB.putRaw(data); n++;
+      }
+      for (const [id, p] of locals) if (!p.draft && !seen.has(id)) this.queue.add(id);
+      if (this.queue.size) this.timer = setTimeout(() => this.flush(), 800);
+      this.setState("ok");
+    } catch (e) { if (e.message !== "AUTH") this.setState("err", e.message); }
+    return n;
+  },
+  async getVideo(p, onProg) {
+    let vid = this.meta(p.id).videoId;
+    if (!vid) { const f = await this.find({ subwai: "video", pid: p.id }); vid = f[0] && f[0].id; }
+    if (!vid) return null;
+    this.down.set(p.id, 0); this.paint(); setBusy(true);
+    try { return await this.download(vid, pr => { this.down.set(p.id, pr); this.paint(); if (onProg) onProg(pr); }); }
+    finally { this.down.delete(p.id); setBusy(false); this.paint(); }
+  },
+  async getMedia(m, p) {
+    if (!this.enabled() || !this.valid() || !m) return null;
+    try {
+      let fid = p && (this.meta(p.id).media || {})[m.id];
+      if (!fid) { const f = await this.find({ subwai: "media", mid: m.id }); fid = f[0] && f[0].id; }
+      if (!fid) return null;
+      const blob = await this.download(fid); const rec = { id: m.id, blob, kind: m.kind, name: m.name };
+      await DB.mediaPut(rec); return rec;
+    } catch { return null; }
+  },
+  /* ---- settings (API keys, chosen AI, vocabulary, default style) ---- */
+  SKEYS: ["groqKey", "apiKey", "geminiKey", "textAI", "vocab", "style", "lang", "lang2", "maxChars"],
+  async pushSettings() {
+    if (!this.enabled() || !this.valid()) return;
+    try {
+      const data = Object.fromEntries(this.SKEYS.map(k => [k, settings[k]]));
+      const f = await this.find({ subwai: "settings" });
+      await this.putJSON(f[0] && f[0].id, "settings.json", { subwai: "settings" }, data);
+    } catch {}
+  },
+  async pullSettings() {
+    try {
+      const f = await this.find({ subwai: "settings" }); if (!f[0]) return false;
+      const d = await this.getJSON(f[0].id); if (!d) return false;
+      for (const k of this.SKEYS) if (d[k] != null && d[k] !== "" && (settings[k] == null || settings[k] === "")) settings[k] = d[k];
+      saveSettings(); return true;
+    } catch { return false; }
+  },
+  async start() { // after connecting
+    settings.cloudOn = true; saveSettings();
+    await this.pullSettings(); await this.pushSettings();
+    const n = await this.pull(true);
+    return n;
+  }
+};
+
 /* ---------- Home ---------- */
 async function viewHome() {
   route("");
+  if (Cloud.enabled() && Cloud.valid() && Date.now() - Cloud.pulledAt > 15000) Cloud.pull().then(n => { if (n && $(".home-head")) { viewHome(); toast(`ดึงงานจาก Google Drive แล้ว ${n} โปรเจกต์`); } });
   const all = (await DB.all()).sort((a, b) => b.createdAt - a.createdAt);
   const drafts = all.filter(p => p.draft), projects = all.filter(p => !p.draft);
   app.innerHTML = `
@@ -2035,7 +2307,7 @@ function viewNew(resumeId) {
       if (draftId && saving && await saving) p.videoSaved = true;
       else { try { await DB.putVideo(id, file); p.videoSaved = true; } catch { tempVideos[id] = file; } }
       if (draft && draft.createdAt) p.createdAt = draft.createdAt;
-      await DB.put(p); draft = null;
+      p.updatedAt = Date.now(); await DB.put(p); draft = null;
       let subDone = false;
       if (autoFix || p.tr.lang) {
         stage = "fix"; $('li[data-s="fix"]', steps).hidden = false; mark("fix", "doing");
@@ -2044,29 +2316,29 @@ function viewNew(resumeId) {
         try {
           const caps = await aiSubtitle(p, { tgt: p.tr.lang, keepText: !autoFix, onProg: (d, t) => $("#fixLab").textContent = `AI ${what} ${Math.round(d / t * 100)}%` });
           if (caps.length) { p.captions = caps; subDone = true; }
-          mark("fix", "done"); if (p.tr.lang) { $('li[data-s="tr"]', steps).hidden = true; } await DB.put(p);
+          mark("fix", "done"); if (p.tr.lang) { $('li[data-s="tr"]', steps).hidden = true; } p.updatedAt = Date.now(); await DB.put(p);
         } catch (e) { mark("fix", "fail"); toast("ใช้วิธีสำรอง: " + e.message, 4000); }
       }
       if (autoFix && !subDone) {
         stage = "fix"; mark("fix", "doing");
-        try { const n = await aiProofread(p, (d, t) => $("#fixLab").textContent = `AI ตรวจคำผิด (${d}/${t})`); $("#fixLab").textContent = `AI ตรวจคำผิด · แก้ ${n} บรรทัด`; mark("fix", "done"); await DB.put(p); }
+        try { const n = await aiProofread(p, (d, t) => $("#fixLab").textContent = `AI ตรวจคำผิด (${d}/${t})`); $("#fixLab").textContent = `AI ตรวจคำผิด · แก้ ${n} บรรทัด`; mark("fix", "done"); p.updatedAt = Date.now(); await DB.put(p); }
         catch (e) { mark("fix", "fail"); toast("ข้ามการตรวจคำผิด: " + e.message, 4000); }
       }
       if (p.tr.lang && !subDone) {
         stage = "tr"; mark("tr", "doing");
         try {
           await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trLab").textContent = `แปลเป็นภาษา${LNAME[p.tr.lang]} (${d}/${t})`);
-          mark("tr", "done"); await DB.put(p);
+          mark("tr", "done"); p.updatedAt = Date.now(); await DB.put(p);
         } catch (e) { mark("tr", "fail"); toast("ซับพร้อมแล้ว แต่แปลไม่สำเร็จ: " + e.message + " กดแปลใหม่ได้ในหน้าแก้ไข", 6000); await sleep(1500); }
       }
       if (autoKw) {
         stage = "kw"; mark("kw", "doing");
-        try { await aiEmphasis(p, true); mark("kw", "done"); await DB.put(p); }
+        try { await aiEmphasis(p, true); mark("kw", "done"); p.updatedAt = Date.now(); await DB.put(p); }
         catch (e) { mark("kw", "fail"); }
       }
       if (autoSfx) {
         stage = "sfx"; mark("sfx", "doing");
-        try { await aiSuggestSfx(p); mark("sfx", "done"); await DB.put(p); }
+        try { await aiSuggestSfx(p); mark("sfx", "done"); p.updatedAt = Date.now(); await DB.put(p); }
         catch (e) { mark("sfx", "fail"); toast("ซับพร้อมแล้ว แต่ใส่เอฟเฟกต์ไม่สำเร็จ กดให้ AI ใส่ใหม่ได้ในแท็บเสียง", 5000); await sleep(1200); }
       }
       if (autoSplit) {
@@ -2075,7 +2347,7 @@ function viewNew(resumeId) {
         catch (e) { p.split.scenes = plainScenes(p); toast("AI สร้างฉากไม่สำเร็จ ใช้ฉากจากซับแทน กดสร้างใหม่ได้ในแท็บ Split", 5000); }
         { const [m, a] = [npOrient.split(":")[0], npOrient.slice(npOrient.indexOf(":") + 1)]; p.split.mode = m; if (m === "card") p.split.card = a; if (m === "split") p.split.orient = a; }
         p.split.on = true; p.split.prevPos = p.style.pos; p.style.pos = p.split.mode === "split" ? (p.split.orient === "h" ? 86 : 50) : 84;
-        mark("split", "done"); await DB.put(p);
+        mark("split", "done"); p.updatedAt = Date.now(); await DB.put(p);
       }
       await sleep(300);
       busy = false; setBusy(false);
@@ -2337,6 +2609,26 @@ async function viewEditor(id) {
   if (p.thumb) { thumbImg = new Image(); thumbImg.onload = () => { draw(); paintLooks(); }; thumbImg.src = p.thumb; }
   function buildStage() {
     const col = $("#stageCol");
+    if (!blob && Cloud.enabled() && (Cloud.meta(p.id).videoId || Cloud.meta(p.id).fileId)) {
+      col.innerHTML = `<div class="missing"><b>กำลังดาวน์โหลดวิดีโอจาก Google Drive</b><div class="prog" style="width:100%"><i id="dlBar"></i></div><span class="hint" id="dlTxt">เริ่มดาวน์โหลด…</span><button class="btn small" id="dlGo" hidden>แตะเพื่อเชื่อม Google แล้วดาวน์โหลด</button><label class="btn small" for="rpick">หรือเลือกไฟล์จากเครื่อง</label><input type="file" id="rpick" accept="video/*" hidden></div>`;
+      $("#rpick").onchange = async e => { const f = e.target.files[0]; if (!f) return; blob = f; try { await DB.putVideo(id, f); p.videoSaved = true; save(); } catch { tempVideos[id] = f; } buildStage(); };
+      const go = async () => {
+        $("#dlGo").hidden = true;
+        try {
+          const b = await Cloud.getVideo(p, pr => { const bar = $("#dlBar"); if (bar) bar.style.width = (pr * 100).toFixed(1) + "%"; const tx = $("#dlTxt"); if (tx) tx.textContent = `ดาวน์โหลดแล้ว ${Math.round(pr * 100)}% เปิดหน้านี้ค้างไว้`; });
+          if (!b) { $("#dlTxt").textContent = "ยังไม่มีวิดีโอใน Drive (เครื่องที่สร้างโปรเจกต์อาจยังอัปโหลดไม่เสร็จ) ลองใหม่ภายหลัง หรือเลือกไฟล์จากเครื่อง"; $("#dlGo").hidden = false; $("#dlGo").textContent = "ลองดาวน์โหลดอีกครั้ง"; return; }
+          blob = b; try { await DB.putVideo(id, b); p.videoSaved = true; save(); } catch { tempVideos[id] = b; }
+          buildStage(); toast("ดาวน์โหลดวิดีโอเสร็จแล้ว");
+        } catch (e) {
+          const tx = $("#dlTxt"); if (!tx) return;
+          if (e.message === "AUTH") { tx.textContent = "ต้องเชื่อม Google อีกครั้งก่อนดาวน์โหลด"; $("#dlGo").hidden = false; $("#dlGo").textContent = "แตะเพื่อเชื่อม Google แล้วดาวน์โหลด"; }
+          else { tx.textContent = e.message; $("#dlGo").hidden = false; $("#dlGo").textContent = "ลองดาวน์โหลดอีกครั้ง"; }
+        }
+      };
+      $("#dlGo").onclick = () => { if (Cloud.valid()) go(); else Cloud.connect().then(go).catch(e => toast(e.message, 4000)); };
+      go();
+      return;
+    }
     if (!blob) {
       col.innerHTML = `<div class="missing"><b>ไม่พบไฟล์วิดีโอในเครื่องนี้</b><span class="hint">เลือกไฟล์ “${esc(p.fileName || "")}” อีกครั้งเพื่อดูตัวอย่างและส่งออก</span><label class="btn small" for="rpick">เลือกไฟล์วิดีโอ</label><input type="file" id="rpick" accept="video/*" hidden></div>`;
       $("#rpick").onchange = async e => { const f = e.target.files[0]; if (!f) return; blob = f; try { await DB.putVideo(id, f); p.videoSaved = true; save(); } catch { tempVideos[id] = f; } buildStage(); };
@@ -3242,7 +3534,12 @@ function openSettings() {
     <div class="field"><span class="lab">AI ที่ใช้จัดซับ แก้คำผิด และแปล</span>
       <div class="seg" id="taiSeg"><button type="button" data-v="gemini">Gemini ★</button><button type="button" data-v="groq">Groq</button><button type="button" data-v="openai">OpenAI</button></div>
       <span class="hint" id="taiNote"></span></div>
-    <span class="hint">key เก็บไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น และส่งตรงไปที่ผู้ให้บริการ AI นั้นเท่านั้น</span>
+    <div class="field"><span class="lab">ทำงานต่อได้ทุกเครื่อง (Google Drive)</span>
+      <span class="hint" id="gStat"></span>
+      <div class="row"><button class="btn primary small" id="gConn">เชื่อม Google Drive</button><button class="btn small" id="gOff" hidden>ตัดการเชื่อมต่อ</button></div>
+      <details class="box" id="gBox"><summary>Google Client ID (ตั้งครั้งเดียว)</summary><div class="in"><input class="input" id="gCid" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"><span class="hint">ได้จาก console.cloud.google.com → Clients</span></div></details>
+    </div>
+    <span class="hint">key เก็บไว้ในเบราว์เซอร์เครื่องนี้ (และใน Google Drive ของคุณถ้าเชื่อมไว้) ส่งตรงไปที่ผู้ให้บริการ AI นั้นเท่านั้น</span>
     <div class="row"><button class="btn primary" id="kSave" style="margin-left:auto">บันทึก</button><button class="btn" id="kClose">ปิด</button></div>
   </div></div>`;
   $("#k_groq").value = settings.groqKey || ""; $("#k_openai").value = settings.apiKey || ""; $("#k_gemini").value = settings.geminiKey || "";
@@ -3256,6 +3553,23 @@ function openSettings() {
       : "ใช้ Groq ฟรีทั้งหมด ถ้าคำแปลยังไม่ดีพอ แนะนำเปลี่ยนเป็น Gemini";
   };
   $$("#taiSeg button").forEach(b => b.onclick = () => { tai = b.dataset.v; paint(); });
+  $("#gCid").value = settings.gClientId || CLOUD_CLIENT_ID || "";
+  $("#gBox").open = !Cloud.cid();
+  const gPaint = () => {
+    const on = Cloud.enabled();
+    $("#gStat").textContent = on ? (Cloud.valid() ? "✓ เชื่อมแล้ว งานซิงก์กับ Google Drive อัตโนมัติ เปิดเว็บนี้ในเครื่องไหนก็ทำต่อได้" : "เชื่อมไว้แล้ว แต่ต้องแตะเชื่อมอีกครั้ง (Google ให้ล็อกอินใหม่ทุกชั่วโมงในโหมดทดสอบ)") : "งานเก็บอยู่ในเครื่องนี้เท่านั้น เชื่อม Google Drive เพื่อเปิดทำต่อในคอมหรือมือถือเครื่องอื่น (ฟรี)";
+    $("#gConn").textContent = on && Cloud.valid() ? "ซิงก์ตอนนี้" : "เชื่อม Google Drive"; $("#gOff").hidden = !on;
+  };
+  $("#gCid").oninput = () => { const v = $("#gCid").value.trim(); if (/apps\.googleusercontent\.com$/.test(v)) { settings.gClientId = v; saveSettings(); Cloud.gis().catch(() => {}); } };
+  $("#gConn").onclick = () => {
+    const v = $("#gCid").value.trim(); if (v) { settings.gClientId = v; saveSettings(); }
+    if (!Cloud.cid()) { toast("ใส่ Google Client ID ก่อน"); $("#gBox").open = true; return; }
+    const run = () => Cloud.start().then(n => { gPaint(); toast(n ? `เชื่อมแล้ว ดึงงานมา ${n} โปรเจกต์` : "เชื่อม Google Drive แล้ว", 3500); if ($(".home-head")) viewHome(); });
+    if (Cloud.valid() && Cloud.enabled()) { run(); return; }
+    Cloud.connect().then(() => { $("#gStat").textContent = "กำลังซิงก์…"; return run(); }).catch(e => { toast(e.message, 4500); gPaint(); });
+  };
+  $("#gOff").onclick = () => { if (!confirm("หยุดซิงก์กับ Google Drive? งานในเครื่องนี้ยังอยู่ครบ และไฟล์ใน Drive ไม่ถูกลบ")) return; Cloud.disconnect(); gPaint(); };
+  gPaint();
   $("#k_openai").oninput = paint; $("#k_groq").oninput = paint; $("#k_gemini").oninput = paint; paint();
   const close = () => { root.innerHTML = ""; };
   $("#mdl").onclick = e => { if (e.target.id === "mdl") close(); };
@@ -3276,7 +3590,7 @@ function openSettings() {
     if (!keyOf(PROVIDERS[tai])) { toast(`ใส่ ${PROVIDERS[tai].n} API key ก่อน หรือเลือก AI ตัวอื่น`); return; }
     if (!settings.groqKey && !settings.apiKey) { toast("ต้องมี Groq API key สำหรับถอดเสียง (ฟรี)"); return; }
     if (settings.textAI !== tai) { delete settings.chat_openai; delete settings.chat_gemini; }
-    settings.textAI = tai; settings.provider = settings.groqKey ? "groq" : "openai"; saveSettings(); close();
+    settings.textAI = tai; settings.provider = settings.groqKey ? "groq" : "openai"; saveSettings(); close(); Cloud.pushSettings();
     toast(!hasKey() ? "บันทึกแล้ว แต่ยังไม่ได้ใส่ key" : `บันทึกแล้ว · ถอดเสียง: ${sttProv().n} · จัดซับ/แปล: ${chatProv().n}`, 3500);
     if ($(".home-head")) viewHome(); else { const g = $("#go"); if (g && !g.disabled) g.textContent = hasKey() ? "เริ่มสร้างซับ" : "ใส่ API key แล้วเริ่มสร้างซับ"; }
   };
@@ -3285,6 +3599,12 @@ function openSettings() {
 /* ================= boot ================= */
 $("#goHome").onclick = () => { if (BUSY) { toast("กำลังทำงานอยู่ รอให้เสร็จก่อน"); return; } setView(viewHome); };
 $("#openSettings").onclick = openSettings;
+$("#cloudChip").onclick = () => {
+  if (Cloud.state === "auth" || !Cloud.valid()) { Cloud.connect().then(() => Cloud.pull(true)).then(n => { toast(n ? `ซิงก์แล้ว ดึงงานมา ${n} โปรเจกต์` : "ซิงก์แล้ว"); if ($(".home-head")) viewHome(); }).catch(e => toast(e.message, 4000)); return; }
+  if (Cloud.state === "err") { toast(Cloud.msg || "ซิงก์ไม่สำเร็จ", 4000); }
+  Cloud.pull(true).then(n => { if (n && $(".home-head")) viewHome(); }); Cloud.flush();
+};
+Cloud.init();
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
 /* crash guard: if the last visit ended without a normal close (iPhone ran out of memory and killed the page),
    start on the home screen instead of reopening the same heavy screen again and again */
