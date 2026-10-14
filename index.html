@@ -355,7 +355,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. · แยกเสียงแบบประหยัดหน่วยความจำ</span>
+  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. (3) · AI จัดซับ+แปลตามจังหวะพูดจริง</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -555,7 +555,7 @@ async function apiFetch(path, opts) {
     let r;
     try { r = await fetch(prov().base + path, opts); }
     catch { throw new Error(`เชื่อมต่อ ${prov().n} ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่`); }
-    if (r.status !== 429 || attempt >= 3) return r;
+    if (r.status !== 429 || attempt >= 6) return r;
     let j = {}; try { j = await r.clone().json(); } catch {}
     if (j.error && j.error.code === "insufficient_quota") return r;
     const ra = parseFloat(r.headers.get("retry-after"));
@@ -674,6 +674,21 @@ async function demuxAudio(file, maxSec = 600, maxBytes = 20e6) {
   if (!stsd || !stts || !stsc || !stsz || !stco || !mdhd) throw new Error("bad sample table");
   if (mv.getUint32(stsd.b + 4) !== 1) throw new Error("several audio formats");
   const ts = mv.getUint8(mdhd.b) === 1 ? mv.getUint32(mdhd.b + 20) : mv.getUint32(mdhd.b + 12);
+  /* edit list: audio that starts late (empty edit) or skips encoder priming samples, so word times match the video exactly */
+  let shift = 0;
+  try {
+    const mvhd = kids(root.b, root.e).find(k => k.t === "mvhd"), mts = mvhd ? (mv.getUint8(mvhd.b) === 1 ? mv.getUint32(mvhd.b + 20) : mv.getUint32(mvhd.b + 12)) : ts;
+    const el = find(track.tr, ["edts", "elst"]);
+    if (el) {
+      const v1 = mv.getUint8(el.b) === 1, n = mv.getUint32(el.b + 4); let p = el.b + 8;
+      for (let k = 0; k < n; k++) {
+        const segD = v1 ? big(mv, p) : mv.getUint32(p), mt = v1 ? mv.getInt32(p + 8) * 4294967296 + mv.getUint32(p + 12) : mv.getInt32(p + 4); p += v1 ? 20 : 12;
+        if (mt === -1) { shift += segD / mts; continue; }
+        shift -= mt / ts; break;
+      }
+    }
+    if (!isFinite(shift) || Math.abs(shift) > 10) shift = 0;
+  } catch { shift = 0; }
   /* 2) sample sizes, durations and file offsets */
   const uni = mv.getUint32(stsz.b + 4), N = mv.getUint32(stsz.b + 8);
   if (!N || N > 5e6) throw new Error("no samples");
@@ -691,7 +706,7 @@ async function demuxAudio(file, maxSec = 600, maxBytes = 20e6) {
   while (i0 < N) {
     let i1 = i0, bytes = 0, tt = 0;
     while (i1 < N && (i1 === i0 || (tt + dur[i1] <= maxSec * ts && bytes + size[i1] <= maxBytes))) { bytes += size[i1]; tt += dur[i1]; i1++; }
-    parts.push({ offset: t0 / ts, blob: writeM4a(file, ftyp, stsdBytes, ts, size, dur, off, i0, i1) });
+    parts.push({ offset: t0 / ts + shift, blob: writeM4a(file, ftyp, stsdBytes, ts, size, dur, off, i0, i1) });
     t0 += tt; i0 = i1;
   }
   return { chunks: parts, duration: t0 / ts };
@@ -1514,6 +1529,109 @@ function mediaFor(cache, sc, t, playing) {
 function freeMedia(cache) { for (const k in cache) { const m = cache[k]; try { if (m.kind === "video") { m.el.pause(); m.el.remove(); } URL.revokeObjectURL(m.url); } catch {} delete cache[k]; } }
 
 /* ================= AI proofreading and keyword emphasis ================= */
+/* ================= AI subtitle editor =================
+   One pass that does what a human subtitler does: reads the timed words from speech recognition,
+   decides where each line starts and ends, fixes misheard words and writes the translation for that same line.
+   Timing always comes from the real word timestamps of the words in the line, so the source line and its
+   translation appear and disappear exactly while those words are spoken. */
+function speechUnits(raw, lang) {
+  const ws = ((raw && raw.words) || []).filter(w => String(w.word || "").trim() && isFinite(w.start) && isFinite(w.end));
+  if (!ws.length) return [];
+  let text = ""; const owner = [];
+  ws.forEach((w, i) => {
+    const t = String(w.word).trim(), prev = ws[i - 1];
+    const sp = text && (isLatin(text.slice(-1)) || isLatin(t[0]) || (prev && w.start - prev.end > 0.3));
+    if (sp) { text += " "; owner.push(-1); }
+    text += t; for (let k = 0; k < t.length; k++) owner.push(i);
+  });
+  const S = seg(lang), parts = S ? [...S.segment(text)].map(x => ({ s: x.segment, i: x.index })) : text.split(/(\s+)/).reduce((a, s) => { a.push({ s, i: a.length ? a[a.length - 1].i + a[a.length - 1].s.length : 0 }); return a; }, []);
+  const units = [];
+  for (const pt of parts) {
+    if (!pt.s.trim()) continue;
+    const o = owner.slice(pt.i, pt.i + pt.s.length).filter(x => x >= 0); if (!o.length) continue;
+    const a = ws[o[0]], b = ws[o[o.length - 1]], last = units[units.length - 1];
+    /* a word glued to a non-space neighbour that came from the same timed piece: keep the earliest start */
+    units.push({ t: pt.s, s: a.start, e: Math.max(a.start, b.end), gap: last ? Math.max(0, a.start - last.e) : 0 });
+  }
+  for (let k = 1; k < units.length; k++) if (units[k].s < units[k - 1].s) units[k].s = units[k - 1].s;
+  return units;
+}
+async function aiSubtitle(p, opt = {}) {
+  const units = speechUnits(p.raw, p.lang);
+  if (units.length < 2) throw new Error("ไม่มีข้อมูลเวลาของคำจากการถอดเสียง");
+  const SL = LEN[p.lang] || "the spoken language", tgt = opt.tgt || "", TL = tgt ? LEN[tgt] : "";
+  const maxC = p.maxChars || 22, vocab = settings.vocab ? ` Names, brands and models that appear, spelled correctly: ${settings.vocab}.` : "";
+  const unitTxt = (a, b) => { let s = ""; for (let k = a; k <= b; k++) s = joinTok(s, units[k].t); return s; };
+  /* the whole script once: topic, tone and glossary keep every batch consistent */
+  let brief = { topic: "", tone: "", glossary: [] };
+  try {
+    const j = await chatJSON([
+      { role: "system", content: `You prepare subtitles for a video. The text is raw automatic speech recognition in ${SL} and may contain misheard words. Reply only JSON: {"topic": "one sentence: what the video is about", "tone": "e.g. friendly product review", "glossary": [{"heard": "term as it appears", "correct": "correct spelling in ${SL}"${tgt ? `, "tr": "how to write it in ${TL}"` : ""}}]}. Glossary: names, brands, models, products, places, units and technical terms (max 30), including likely misheard versions of them.${vocab}` },
+      { role: "user", content: unitTxt(0, units.length - 1).slice(0, 14000) }
+    ], { effort: "medium" });
+    if (j && typeof j === "object") brief = { topic: String(j.topic || ""), tone: String(j.tone || ""), glossary: Array.isArray(j.glossary) ? j.glossary.slice(0, 30) : [] };
+  } catch (e) { if (/API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(e.message))) throw e; }
+  const style = !tgt ? "" : tgt === "th"
+    ? "tr: natural spoken Thai like a professional Thai subtitler (smooth everyday wording, not word-for-word, not formal written Thai; English brand and model names stay in English)."
+    : tgt === "en"
+    ? "tr: natural, idiomatic conversational English like a professional Netflix/YouTube subtitler (sentence case, contractions where natural; never translate Thai particles like ครับ ค่ะ นะ เลย literally)."
+    : `tr: natural, idiomatic ${TL} like a professional subtitler, not word-for-word.`;
+  const sys = `You are a senior subtitle editor for social-media videos (TikTok, Reels, YouTube). You receive the speech-recognition output of a video in ${SL} as numbered word units in spoken order. "‖" marks a pause. Produce broadcast-quality subtitle lines.
+1. Lines: each line is a contiguous range of units from "a" to "b" (inclusive). Cover every unit given exactly once, in order: the first line starts at the first unit, each next line starts right after the previous one ends, the last line ends at the last unit. No gaps, no overlaps.
+2. Line breaks: about ${maxC} characters per line (max ${maxC + 8}). Each line should be one natural phrase or short sentence that reads well on its own. Break at sentence ends and pauses (‖) and between phrases. Never break inside a word, name, model, number or price. Avoid tiny 1-word lines unless that word is said on its own.
+3. text: the line in ${SL} exactly as the speaker meant it. Fix speech-recognition mistakes (misheard words, wrong spelling or tone marks, wrongly split or joined words, brand and model names) using context and the glossary.${vocab} Remove stutters, filler sounds and accidental repeats (เอ่อ, อ่า, อืม, um, uh). Write numbers and prices as digits (189,000). Do not summarise, reorder, censor or add anything that was not said; keep the speaker's slang and particles.
+${style ? "4. " + style + " Translate the meaning of exactly this line so it stays in sync with the video; when a sentence runs over several lines, split your translation at the matching point. Keep numbers, prices and names exactly; use the glossary.\n" : ""}Video: ${brief.topic || "unknown"}. Tone: ${brief.tone || "natural"}.
+Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt ? ', "tr": "..."' : ""}}]}`;
+  const out = [], B = opt.batch || 160;
+  let i0 = 0, guard = 0;
+  while (i0 < units.length && guard++ < 400) {
+    const i1 = Math.min(units.length - 1, i0 + B - 1), lastBatch = i1 === units.length - 1;
+    const list = []; for (let k = i0; k <= i1; k++) list.push((k > i0 && units[k].gap > 0.5 ? "‖ " : "") + `[${k}]${units[k].t}`);
+    const user = JSON.stringify({ glossary: brief.glossary, previous_lines: out.slice(-3).map(c => tgt ? { text: c.text, tr: c.tr } : c.text), first_unit: i0, last_unit: i1, units: list.join(" ") });
+    let lines = null;
+    for (let a = 0; a < 2 && !lines; a++) {
+      try {
+        const j = await chatJSON([{ role: "system", content: sys }, { role: "user", content: user }], { effort: "medium" });
+        lines = fixRanges(Array.isArray(j.lines) ? j.lines : [], i0, i1);
+      } catch (e) { if (a || /API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(e.message))) throw e; }
+    }
+    if (!lines || !lines.length) throw new Error("AI จัดซับไม่สำเร็จ");
+    /* the last line of a batch may be a cut-off sentence: redo it as the start of the next batch */
+    if (!lastBatch && lines.length > 1) lines.pop();
+    for (const L of lines) {
+      const orig = unitTxt(L.a, L.b); let text = L.mod || opt.keepText ? orig : String(L.text || "").trim();
+      const r = vlen(text) / Math.max(1, vlen(orig));
+      if (!text || r < 0.4 || r > 1.9 + 6 / Math.max(1, vlen(orig))) text = orig; // AI rewrote too much: keep what was said
+      out.push({ a: L.a, b: L.b, text, tr: tgt ? String(L.tr || "").replace(/^["“”'«»]+|["“”'«»]+$/g, "").trim() : "" });
+    }
+    i0 = lines[lines.length - 1].b + 1;
+    if (opt.onProg) opt.onProg(Math.min(units.length, i0), units.length);
+  }
+  /* timing from the real words; let short lines stay readable without overlapping the next one */
+  const caps = out.map(L => ({ start: units[L.a].s, end: units[L.b].e, text: L.text, tr: L.tr }));
+  for (let k = 0; k < caps.length; k++) {
+    const c = caps[k], n = caps[k + 1], room = n ? n.start : c.end + 1.5;
+    c.end = Math.min(room, Math.max(c.end + 0.25, c.start + 0.9));
+    if (n && n.start - c.end < 0.25) c.end = n.start;
+    if (c.end <= c.start) c.end = c.start + 0.3;
+  }
+  return caps.map(c => ({ id: uid(), start: +c.start.toFixed(2), end: +c.end.toFixed(2), text: c.text, tr: c.tr }));
+}
+function fixRanges(arr, i0, i1) {
+  const L = arr.map(x => ({ a: Math.round(+x.a), b: Math.round(+x.b), text: x.text, tr: x.tr })).filter(x => isFinite(x.a) && isFinite(x.b)).sort((x, y) => x.a - y.a);
+  const out = []; let next = i0;
+  for (const x of L) {
+    if (x.b < next || x.a > i1) continue;
+    if (x.a > next) { if (out.length && x.a - next <= 2) { out[out.length - 1].b = x.a - 1; out[out.length - 1].mod = true; } else { x.a = next; x.mod = true; } } // small gap: give it to a neighbour
+    if (x.a < next) { x.a = next; x.mod = true; }
+    if (x.b > i1) x.b = i1;
+    if (x.b < x.a) continue;
+    out.push(x); next = x.b + 1;
+  }
+  if (!out.length) return null;
+  return out; // if the AI stopped early, the rest is simply sent again in the next round
+}
+
 async function aiProofread(p, onProg) {
   const B = 40, L = LEN[p.lang] || "the spoken language";
   const vocab = settings.vocab ? ` Names that may appear, spelled correctly: ${settings.vocab}.` : "";
@@ -1838,12 +1956,23 @@ function viewNew(resumeId) {
       else { try { await DB.putVideo(id, file); p.videoSaved = true; } catch { tempVideos[id] = file; } }
       if (draft && draft.createdAt) p.createdAt = draft.createdAt;
       await DB.put(p); draft = null;
-      if (autoFix) {
+      let subDone = false;
+      if (autoFix || p.tr.lang) {
+        stage = "fix"; $('li[data-s="fix"]', steps).hidden = false; mark("fix", "doing");
+        const what = (autoFix ? "จัดบรรทัด แก้คำผิด" : "จัดบรรทัด") + (p.tr.lang ? " และแปล" + LNAME[p.tr.lang] : "");
+        $("#fixLab").textContent = "AI " + what;
+        try {
+          const caps = await aiSubtitle(p, { tgt: p.tr.lang, keepText: !autoFix, onProg: (d, t) => $("#fixLab").textContent = `AI ${what} ${Math.round(d / t * 100)}%` });
+          if (caps.length) { p.captions = caps; subDone = true; }
+          mark("fix", "done"); if (p.tr.lang) { $('li[data-s="tr"]', steps).hidden = true; } await DB.put(p);
+        } catch (e) { mark("fix", "fail"); toast("ใช้วิธีสำรอง: " + e.message, 4000); }
+      }
+      if (autoFix && !subDone) {
         stage = "fix"; mark("fix", "doing");
         try { const n = await aiProofread(p, (d, t) => $("#fixLab").textContent = `AI ตรวจคำผิด (${d}/${t})`); $("#fixLab").textContent = `AI ตรวจคำผิด · แก้ ${n} บรรทัด`; mark("fix", "done"); await DB.put(p); }
         catch (e) { mark("fix", "fail"); toast("ข้ามการตรวจคำผิด: " + e.message, 4000); }
       }
-      if (p.tr.lang) {
+      if (p.tr.lang && !subDone) {
         stage = "tr"; mark("tr", "doing");
         try {
           await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trLab").textContent = `แปลเป็นภาษา${LNAME[p.tr.lang]} (${d}/${t})`);
@@ -1934,7 +2063,7 @@ async function viewEditor(id) {
 
         <section class="pane" data-p="text">
           <div class="chips" id="xChips">
-            <button type="button" class="chip2" data-x="fix">✨ AI ตรวจคำผิด</button>
+            <button type="button" class="chip2" data-x="fix">✨ AI จัดซับ / แก้คำผิด</button>
             <button type="button" class="chip2" data-x="find">ค้นหา/แทนที่</button>
             <button type="button" class="chip2" data-x="lang">ภาษา / แปล</button>
             <button type="button" class="chip2" data-x="split">จัดบรรทัดใหม่</button>
@@ -1942,7 +2071,9 @@ async function viewEditor(id) {
           <div class="xbox" data-xb="fix" hidden>
             <p class="hint" style="margin:0">AI อ่านซับทั้งคลิป แล้วแก้คำที่ถอดเสียงผิด สะกดผิด วรรณยุกต์ผิด หรือชื่อสินค้าผิด โดยไม่เปลี่ยนความหมาย ถ้าไม่ชอบผลลัพธ์ กด ↶ ด้านบนเพื่อย้อนกลับ</p>
             <div class="field"><label for="fxVocab" class="hint">คำเฉพาะ ชื่อแบรนด์ ชื่อรุ่น (ช่วยให้แม่นขึ้น)</label><input class="input" id="fxVocab" placeholder="เช่น DENAGO, Rover XL 4, Club Car"></div>
-            <div class="row"><button class="btn primary small" id="fixGo">ตรวจและแก้คำผิดทั้งคลิป</button><span class="hint" id="fixStat"></span></div>
+            <button class="btn primary block" id="reGo">✨ AI จัดซับใหม่ทั้งคลิป: จัดบรรทัด + แก้คำ + แปล + จังหวะเวลา</button>
+            <span class="hint" style="margin-top:-6px">ทำใหม่จากเสียงพูดจริง แม่นที่สุด ใช้เมื่อซับเพี้ยนหลายบรรทัด (บรรทัดที่แก้เองจะถูกแทนที่ กด ↶ ย้อนได้)</span>
+            <div class="row"><button class="btn small" id="fixGo">แค่ตรวจคำผิด (คงบรรทัดเดิม)</button><span class="hint" id="fixStat"></span></div>
           </div>
           <div class="xbox" data-xb="find" hidden>
             <div class="row"><input class="input" id="fFind" placeholder="คำที่ผิด"><input class="input" id="fRep" placeholder="แก้เป็น"></div>
@@ -2479,6 +2610,18 @@ async function viewEditor(id) {
     $$("[data-xb]").forEach(x => x.hidden = !(open && x.dataset.xb === b.dataset.x));
   });
   $("#fxVocab").value = settings.vocab || "";
+  $("#reGo").onclick = async () => {
+    if (!hasKey()) { openSettings(); return; }
+    if (!p.raw || !p.raw.words || !p.raw.words.length) { toast("โปรเจกต์นี้ไม่มีข้อมูลเวลาของคำ สร้างโปรเจกต์ใหม่จากวิดีโอนี้แทน", 5000); return; }
+    if (!confirm("AI จะจัดซับใหม่ทั้งคลิปจากเสียงพูด" + (p.tr.lang ? " พร้อมแปล" + LNAME[p.tr.lang] : "") + " บรรทัดที่แก้เองไว้จะถูกแทนที่ (กด ↶ เพื่อย้อนกลับได้)")) return;
+    settings.vocab = $("#fxVocab").value.trim(); saveSettings();
+    const b = $("#reGo"), st = $("#fixStat"); b.disabled = true; setBusy(true);
+    try {
+      const caps = await aiSubtitle(p, { tgt: p.tr.lang, onProg: (d, t) => st.textContent = `AI กำลังจัดซับ ${Math.round(d / t * 100)}%…` });
+      if (caps.length) { if (sid) closeSheet(); p.captions = caps; changed(); renderList(); st.textContent = `เสร็จแล้ว ${caps.length} บรรทัด`; toast("จัดซับใหม่เสร็จแล้ว"); }
+    } catch (e) { st.textContent = ""; toast(e.message, 5000); }
+    b.disabled = false; setBusy(false);
+  };
   $("#fixGo").onclick = async () => {
     if (!hasKey()) { openSettings(); return; }
     settings.vocab = $("#fxVocab").value.trim(); saveSettings();
