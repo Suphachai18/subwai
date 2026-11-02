@@ -368,7 +368,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (18) · ✂️ ตัดต่ออัตโนมัติ</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (19) · แก้ Gemini 404 + ตัดต่ออัตโนมัติ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -594,7 +594,7 @@ function buildCaptions(raw, maxChars, lang) {
 const PROVIDERS = {
   groq: { n: "Groq", tag: "ฟรี", base: "https://api.groq.com/openai/v1", stt: "whisper-large-v3", chat: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b"], keyField: "groqKey", ph: "gsk_..." },
   openai: { n: "OpenAI", tag: "เสียเงิน", base: "https://api.openai.com/v1", stt: "whisper-1", chat: ["gpt-4.1", "gpt-4o", "gpt-4.1-mini", "gpt-4o-mini"], keyField: "apiKey", ph: "sk-..." },
-  gemini: { n: "Google Gemini", tag: "ฟรี", base: "https://generativelanguage.googleapis.com/v1beta/openai", stt: "", chat: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"], keyField: "geminiKey", ph: "AIza..." }
+  gemini: { n: "Google Gemini", tag: "ฟรี", base: "https://generativelanguage.googleapis.com/v1beta/openai", stt: "", chat: ["gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-2.5-flash"], keyField: "geminiKey", ph: "AIza..." }
 };
 /* Two keys can work together: Groq (free) transcribes, OpenAI (paid, more accurate) writes and translates the subtitles. */
 const keyOf = P => (settings[P.keyField] || "").trim();
@@ -865,9 +865,31 @@ function looseJSON(txt) {
   }
   return null;
 }
+/* ask the provider which models this key can use (model names get retired over time) */
+async function discoverChatModels(P) {
+  try {
+    const r = await apiFetch("/models", { headers: authH(P) }, P); if (!r.ok) return [];
+    const ids = ((await r.json()).data || []).map(m => String(m.id || "").replace(/^models\//, ""));
+    const ok = ids.filter(id => P === PROVIDERS.gemini ? /gemini/.test(id) && /flash|pro/.test(id) && !/image|tts|audio|live|embed|vision|exp|think|computer|robot/.test(id) : /gpt|llama|oss|qwen|kimi/.test(id) && !/whisper|tts|guard|embed/.test(id));
+    const ver = id => { const m = id.match(/(\d+(?:\.\d+)?)/); return m ? +m[1] : 0; };
+    return ok.sort((a, b) => (/latest/.test(b) - /latest/.test(a)) || (ver(b) - ver(a)) || (/pro/.test(a) - /pro/.test(b)) || (/preview/.test(a) - /preview/.test(b)) || (/lite/.test(a) - /lite/.test(b))).slice(0, 4);
+  } catch { return []; }
+}
 async function chatJSON(messages, opt = {}) {
-  const P = chatProv(), mk = "chat_" + provKey(P);
-  const models = [settings[mk], ...P.chat].filter((m, i, a) => m && a.indexOf(m) === i);
+  const first = chatProv(), order = [first, ...["gemini", "groq", "openai"].map(k => PROVIDERS[k]).filter(P => P !== first && keyOf(P))];
+  let err = null;
+  for (const P of order) {
+    try { return await chatJSONWith(P, messages, opt); }
+    catch (e) {
+      err = e; if (e && e.hard) throw e;
+      if (P === PROVIDERS.gemini) { const found = await discoverChatModels(P); if (found.length) { try { return await chatJSONWith(P, messages, opt, found); } catch (e2) { err = e2; } } }
+    }
+  }
+  throw err || new Error("ไม่พบโมเดล AI ที่ใช้กับ key นี้ได้");
+}
+async function chatJSONWith(P, messages, opt = {}, only) {
+  const mk = "chat_" + provKey(P);
+  const models = (only || [settings[mk], ...P.chat]).filter((m, i, a) => m && a.indexOf(m) === i);
   let lastErr = null;
   for (const m of models) {
     for (const strict of [true, false]) {
@@ -884,7 +906,7 @@ async function chatJSON(messages, opt = {}) {
         lastErr = new Error("AI ตอบกลับในรูปแบบที่อ่านไม่ได้ ลองใหม่อีกครั้ง"); continue;
       }
       let j = {}; try { j = await r.json(); } catch {}
-      if (r.status === 401 || r.status === 429) throw apiError(r.status, j, P);
+      if (r.status === 401 || r.status === 429) { const e = apiError(r.status, j, P); e.hard = r.status === 401 && P === chatProv() && !Object.values(PROVIDERS).some(Q => Q !== P && keyOf(Q)); throw e; }
       /* Groq: the model wrote almost-valid JSON; use what it wrote instead of failing */
       const fg = j && j.error && j.error.failed_generation;
       if (fg) { const out = looseJSON(fg); if (out) return out; }
@@ -2647,7 +2669,9 @@ Decide which lines to REMOVE so the final video plays as one clean, natural take
 Never drop content just because it is short. When unsure, keep it.
 Also pick "emph": up to 20% of the kept lines that carry the key point (the question, the answer, the punchline) for a punch-in zoom.
 Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
-    const out = await chatJSON([{ role: "system", content: sys }, { role: "user", content: JSON.stringify({ lines }) }], { maxTok: 4000 });
+    let out = {};
+    try { out = await chatJSON([{ role: "system", content: sys }, { role: "user", content: JSON.stringify({ lines }) }], { maxTok: 4000 }); }
+    catch (e) { opt.aiError = e.message; }
     const ok = new Set(["retake", "offscript", "filler"]);
     drop = (Array.isArray(out.drop) ? out.drop : []).filter(d => d && Number.isInteger(d.i) && caps[d.i]).map(d => ({ i: d.i, why: ok.has(d.why) ? d.why : "offscript" }));
     emph = (Array.isArray(out.emph) ? out.emph : []).filter(i => Number.isInteger(i) && caps[i] && !drop.some(d => d.i === i));
@@ -2688,7 +2712,7 @@ Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
   if (dur - t > 0.05) cuts.push([+t.toFixed(3), +dur.toFixed(3)]);
   p.edit = { on: true, zoom: p.edit ? p.edit.zoom !== false : true, cx: p.edit && p.edit.cx != null ? p.edit.cx : 50, cy: p.edit && p.edit.cy != null ? p.edit.cy : 36, cuts,
     emph: emph.map(i => [caps[i].start, caps[i].end]), dropped: drop.map(d => ({ id: caps[d.i].id, why: d.why })), at: Date.now() };
-  return { cuts: cuts.length, removed: drop.length, before: dur, after: keptDuration(p) };
+  return { cuts: cuts.length, removed: drop.length, before: dur, after: keptDuration(p), aiError: opt.aiError || "" };
 }
 /* bring one removed line back */
 function restoreRange(p, s, e) { const E = p.edit; if (!E) return; const out = [];
@@ -4107,7 +4131,8 @@ async function viewEditor(id) {
   async function runCut(btn) {
     if (!hasKey()) { openSettings(); return; }
     btn.disabled = true; const st = $("#qCutStat"); st.textContent = "AI กำลังดูทั้งคลิป หาช่วงเงียบ เทคซ้ำ และคำพูดนอกบท…";
-    try { const r = await aiAutoEdit(p, { blob }); changed(); renderList(); syncCut(); video && video.pause(); seekTo(0); draw(); toast(`ตัดแล้ว เหลือ ${fmtDur(r.after)} จาก ${fmtDur(r.before)} กดเล่นดูได้เลย`, 4000); }
+    try { const r = await aiAutoEdit(p, { blob }); changed(); renderList(); syncCut(); video && video.pause(); seekTo(0); draw();
+      toast(r.aiError ? `ตัดช่วงเงียบแล้ว เหลือ ${fmtDur(r.after)} แต่ AI ตรวจเทคซ้ำไม่ได้: ${r.aiError}` : `ตัดแล้ว เหลือ ${fmtDur(r.after)} จาก ${fmtDur(r.before)} กดเล่นดูได้เลย`, r.aiError ? 7000 : 4000); }
     catch (e) { st.textContent = ""; toast(e.message, 5000); syncCut(); }
     btn.disabled = false;
   }
