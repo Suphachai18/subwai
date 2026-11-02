@@ -255,7 +255,9 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .pbtn{width:42px;height:42px;flex:none;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;font-size:16px;display:grid;place-items:center}
 .pbtn.play{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .ptime{font-size:12px;color:var(--muted);white-space:nowrap}
-.player.fs{position:fixed;inset:0;z-index:60;background:#000;padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px}
+.player.fs{position:fixed;inset:0;z-index:60;background:#000;padding:env(safe-area-inset-top,0px) 0 calc(6px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px}
+html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsmode .bar{visibility:hidden} html.fsmode body{overflow:hidden}
+.player.fs .pctl{padding:0 10px}
 .player.fs .screen{border-radius:0}
 .player.fs .pctl{max-width:720px}
 .player.fs .pbtn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#fff}
@@ -366,7 +368,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (11) · เปลี่ยนฉากลื่นขึ้น + ตัวอักษรตรงกลางบน iPhone</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (12) · ลากซับง่ายขึ้น + เต็มจอจริง</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -3539,11 +3541,13 @@ async function viewEditor(id) {
     setupInline();
     /* tap = play/pause, tap on a caption = type into it, drag a caption = move it anywhere */
     let pd = null;
+    const stopTouch = e => { if (e.cancelable) e.preventDefault(); };
+    cv.addEventListener("touchstart", stopTouch, { passive: false }); cv.addEventListener("touchmove", stopTouch, { passive: false });
     cv.addEventListener("pointerdown", e => {
       if (edId) endInline();
       const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * 100, x = (e.clientX - r.left) / r.width * 100;
       const c = captionAt(p.captions, video.currentTime), px = p.style.posX == null ? 50 : p.style.posX;
-      pd = { x0: e.clientX, y0: e.clientY, pos: p.style.pos, posX: px, w: r.width, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 16 && Math.abs(x - px) < 46 };
+      pd = { x0: e.clientX, y0: e.clientY, pos: p.style.pos, posX: px, w: r.width, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 22 && Math.abs(x - px) < 50 };
       if (!pd.onCap && p.split.on && p.split.mode === "split") { const { vid } = splitRects(p, r.width, r.height), lx = e.clientX - r.left, ly = e.clientY - r.top; if (lx >= vid.x && lx < vid.x + vid.w && ly >= vid.y && ly < vid.y + vid.h) Object.assign(pd, { pan: true, fx: p.split.fx, fy: p.split.fy, vw: vid.w, vh: vid.h }); }
       try { cv.setPointerCapture(e.pointerId); } catch {}
     });
@@ -3571,7 +3575,7 @@ async function viewEditor(id) {
   function stopLive() { live.forEach(s => { try { s.stop(); } catch {} }); live = []; sched = new Set(); }
   function setFs(on) {
     const pl = $("#player"); if (!pl) return;
-    pl.classList.toggle("fs", on); document.documentElement.style.overflow = on ? "hidden" : "";
+    pl.classList.toggle("fs", on); document.documentElement.style.overflow = on ? "hidden" : ""; document.documentElement.classList.toggle("fsmode", on);
     try { if (on && pl.requestFullscreen && !document.fullscreenElement) pl.requestFullscreen().catch(() => {}); if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch {}
     $("#pFs").setAttribute("aria-label", on ? "ออกจากเต็มจอ" : "เต็มจอ");
     requestAnimationFrame(sizeStage);
@@ -3584,8 +3588,9 @@ async function viewEditor(id) {
     const scr = $("#screen"); if (!scr || !cv) return;
     const { W, H } = frameDims(p, video && video.videoWidth, video && video.videoHeight), ratio = W / H;
     const fs = $("#player").classList.contains("fs");
-    const aw = fs ? window.innerWidth - 24 : $("#stageCol").clientWidth;
-    const ah = fs ? window.innerHeight - 96 : window.innerHeight * (window.innerWidth >= 900 ? 0.66 : 0.4);
+    const vv = window.visualViewport, vw = vv ? vv.width : window.innerWidth, vh = vv ? vv.height : window.innerHeight;
+    const aw = fs ? vw : $("#stageCol").clientWidth;
+    const ah = fs ? vh - 70 : window.innerHeight * (window.innerWidth >= 900 ? 0.66 : 0.4);
     const w = Math.min(aw, ah * ratio), h = w / ratio;
     scr.style.width = w + "px"; scr.style.height = h + "px";
     const dpr = Math.min(2, window.devicePixelRatio || 1);
