@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (21) · ตัดเนียน + เอ็มม่าในเอฟเฟกต์</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (22) · AI ฟังเสียงซ้ำแก้คำผิด</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -881,7 +881,7 @@ async function discoverChatModels(P) {
   } catch { return []; }
 }
 async function chatJSON(messages, opt = {}) {
-  const first = chatProv(), order = [first, ...["gemini", "groq", "openai"].map(k => PROVIDERS[k]).filter(P => P !== first && keyOf(P))];
+  const first = opt.audio && keyOf(PROVIDERS.gemini) ? PROVIDERS.gemini : chatProv(), order = [first, ...["gemini", "groq", "openai"].map(k => PROVIDERS[k]).filter(P => P !== first && keyOf(P))];
   let err = null;
   for (const P of order) {
     try { return await chatJSONWith(P, messages, opt); }
@@ -893,12 +893,14 @@ async function chatJSON(messages, opt = {}) {
   throw err || new Error("ไม่พบโมเดล AI ที่ใช้กับ key นี้ได้");
 }
 async function chatJSONWith(P, messages, opt = {}, only) {
+  const textOf = c => Array.isArray(c) ? c.filter(x => x.type === "text").map(x => x.text).join("\n") : c;
+  if (P !== PROVIDERS.gemini) messages = messages.map(m => ({ ...m, content: textOf(m.content) }));
   const mk = "chat_" + provKey(P);
   const models = (only || [settings[mk], ...P.chat]).filter((m, i, a) => m && a.indexOf(m) === i);
   let lastErr = null;
   for (const m of models) {
     for (const strict of [true, false]) {
-      const body = { model: m, messages: strict ? messages : [...messages.slice(0, -1), { ...messages[messages.length - 1], content: messages[messages.length - 1].content + "\n\nReply with the JSON object only, nothing else." }] };
+      const body = { model: m, messages: strict ? messages : [...messages.slice(0, -1), { ...messages[messages.length - 1], content: Array.isArray(messages[messages.length - 1].content) ? [...messages[messages.length - 1].content, { type: "text", text: "Reply with the JSON object only, nothing else." }] : messages[messages.length - 1].content + "\n\nReply with the JSON object only, nothing else." }] };
       if (P === PROVIDERS.gemini) body.max_tokens = opt.maxTok || 8000; else body.max_completion_tokens = opt.maxTok || 8000;
       if (strict) body.response_format = { type: "json_object" };
       if (m.startsWith("openai/gpt-oss")) body.reasoning_effort = opt.effort || "low";
@@ -2548,7 +2550,9 @@ async function aiSubtitle(p, opt = {}) {
 3. text: the line in ${SL} exactly as the speaker meant it. Fix speech-recognition mistakes (misheard words, wrong spelling or tone marks, wrongly split or joined words, brand and model names) using context and the glossary.${vocab} Remove stutters, filler sounds and accidental repeats (เอ่อ, อ่า, อืม, um, uh). Write numbers and prices as digits (189,000). Do not summarise, reorder, censor or add anything that was not said; keep the speaker's slang and particles.
 ${style ? "4. " + style + " Translate the meaning of exactly this line so it stays in sync with the video; when a sentence runs over several lines, split your translation at the matching point. Keep numbers, prices and names exactly; use the glossary.\n" : ""}Video: ${brief.topic || "unknown"}. Tone: ${brief.tone || "natural"}.
 Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt ? ', "tr": "..."' : ""}}]}`;
-  const out = [], B0 = opt.batch || 90; let B = B0, ceil = B0;
+  let pcm = null; if (opt.blob && keyOf(PROVIDERS.gemini) && !opt.keepText) { try { pcm = await decodePCM(opt.blob); } catch {} }
+  const hearSys = pcm ? `\nYou also HEAR the audio of exactly this part of the video. The speech recognition often mishears ${SL}: trust what you hear over the recognised words when writing "text" (correct words, spelling, tone marks, names; ${SL === "Thai" ? "write Thai the way it is normally spelled, " : ""}numbers as Arabic digits). Keep the unit ranges a/b based on the numbered units; only the text changes.` : "";
+  const out = [], B0 = opt.batch || (pcm ? 70 : 90); let B = B0, ceil = B0;
   let i0 = 0, guard = 0;
   while (i0 < units.length && guard++ < 400) {
     const i1 = Math.min(units.length - 1, i0 + B - 1), lastBatch = i1 === units.length - 1;
@@ -2556,7 +2560,8 @@ Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt
     const user = JSON.stringify({ glossary: brief.glossary, previous_lines: out.slice(-3).map(c => tgt ? { text: c.text, tr: c.tr } : c.text), first_unit: i0, last_unit: i1, units: list.join(" ") });
     let lines = null;
     try {
-      const j = await chatJSON([{ role: "system", content: sys }, { role: "user", content: user }], { effort: "medium" });
+      const aud = pcm ? await audioPart(pcm, units[i0].s - 0.25, units[i1].e + 0.35) : null;
+      const j = await chatJSON([{ role: "system", content: sys + hearSys }, { role: "user", content: aud ? [{ type: "text", text: user }, aud] : user }], { effort: "medium", audio: !!aud });
       lines = fixRanges(Array.isArray(j.lines) ? j.lines : Array.isArray(j) ? j : [], i0, i1);
     } catch (e) { if (/API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(e.message))) throw e; }
     if (!lines || !lines.length) {
@@ -2570,7 +2575,7 @@ Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt
     for (const L of lines) {
       const orig = unitTxt(L.a, L.b); let text = L.mod || opt.keepText ? orig : String(L.text || "").trim();
       const r = vlen(text) / Math.max(1, vlen(orig));
-      if (!text || r < 0.4 || r > 1.9 + 6 / Math.max(1, vlen(orig))) text = orig; // AI rewrote too much: keep what was said
+      if (!text || r < (pcm ? 0.3 : 0.4) || r > (pcm ? 2.6 : 1.9) + 6 / Math.max(1, vlen(orig))) text = orig; // AI rewrote too much: keep what was said
       out.push({ a: L.a, b: L.b, text, tr: tgt ? String(L.tr || "").replace(/^["“”'«»]+|["“”'«»]+$/g, "").trim() : "" });
     }
     i0 = lines[lines.length - 1].b + 1;
@@ -3375,6 +3380,22 @@ function zoomAt(p, t) {
   if (z <= 1.001) return null;
   return { z, cx: (E && E.cx != null ? E.cx : 50) / 100, cy: (E && E.cy != null ? E.cy : 36) / 100 };
 }
+/* the clip's sound as 16 kHz mono samples, so the AI can listen while it fixes the subtitles */
+const pcmCache = new WeakMap();
+async function decodePCM(blob) {
+  if (!blob || blob.size > (IOS ? 350e6 : 900e6)) return null;
+  if (pcmCache.has(blob)) return pcmCache.get(blob);
+  const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!AC) return null;
+  const ab = await blob.arrayBuffer(), ctx = new AC(1, 16000, 16000);
+  const buf = await new Promise((res, rej) => { const pr = ctx.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); });
+  const out = { data: buf.getChannelData(0), rate: buf.sampleRate }; pcmCache.set(blob, out); return out;
+}
+async function audioPart(pcm, t0, t1) {
+  const a = Math.max(0, Math.floor(t0 * pcm.rate)), b = Math.min(pcm.data.length, Math.ceil(t1 * pcm.rate)); if (b - a < pcm.rate * 0.3) return null;
+  const u = new Uint8Array(await encodeWav(pcm.data.subarray(a, b), pcm.rate).arrayBuffer()); let s = "";
+  for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768));
+  return { type: "input_audio", input_audio: { data: btoa(s), format: "wav" } };
+}
 /* loudness every 20 ms, to find real pauses (word timestamps from speech engines are often stretched) */
 async function audioEnvelope(blob) {
   if (!blob || blob.size > 600e6) return null;
@@ -3915,7 +3936,7 @@ function viewNew(resumeId) {
         <div class="field"><label for="npAnim">อนิเมชัน</label><select class="input" id="npAnim">${Object.entries(ANIMS).map(([k, a]) => `<option value="${k}">${a.n}</option>`).join("")}</select></div>
       </div>
       <div class="field"><span class="lab">ให้ AI ช่วย</span>
-        <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
+        <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด: AI ฟังเสียงจริงซ้ำอีกรอบ (แม่นขึ้นมาก ต้องมี Gemini key · แนะนำ)</label>
         <label class="sw"><input type="checkbox" id="npCut"> ✂️ ตัดต่ออัตโนมัติ: ตัดช่วงเงียบ เทคที่พูดซ้ำ คำพูดนอกบท + ซูมนุ่มๆ ตอนเปลี่ยนช็อต</label>
         <label class="sw"><input type="checkbox" id="npFx"> ✨ ใส่เอฟเฟกต์อัตโนมัติ: AI เลือกป้าย พาดหัว เช็กลิสต์ ควร/ไม่ควร ตัวเลข ซูม REC ตามอารมณ์ของเนื้อหา</label>
         <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญ (สี + เด้ง) พร้อมเสียงตรงจังหวะคำนั้น</label>
@@ -4133,7 +4154,7 @@ function viewNew(resumeId) {
         const what = (autoFix ? "จัดบรรทัด แก้คำผิด" : "จัดบรรทัด") + (p.tr.lang ? " และแปล" + LNAME[p.tr.lang] : "");
         $("#fixLab").textContent = "AI " + what;
         try {
-          const caps = await aiSubtitle(p, { tgt: p.tr.lang, keepText: !autoFix, onProg: (d, t) => $("#fixLab").textContent = `AI ${what} ${Math.round(d / t * 100)}%` });
+          const caps = await aiSubtitle(p, { tgt: p.tr.lang, keepText: !autoFix, blob: file, onProg: (d, t) => $("#fixLab").textContent = `AI ${what} ${Math.round(d / t * 100)}%` });
           if (caps.length) { p.captions = caps; subDone = true; }
           mark("fix", "done"); if (p.tr.lang) { $('li[data-s="tr"]', steps).hidden = true; } p.updatedAt = Date.now(); await DB.put(p);
         } catch (e) { mark("fix", "fail"); toast("ใช้วิธีสำรอง: " + e.message, 4000); }
@@ -4871,7 +4892,7 @@ async function viewEditor(id) {
     settings.vocab = $("#fxVocab").value.trim(); saveSettings();
     const b = $("#reGo"), st = $("#fixStat"); b.disabled = true; setBusy(true);
     try {
-      const caps = await aiSubtitle(p, { tgt: p.tr.lang, onProg: (d, t) => { st.textContent = $("#qStat").textContent = `AI กำลังจัดซับ${p.tr.lang ? "และแปล" : ""} ${Math.round(d / t * 100)}%…`; } });
+      const caps = await aiSubtitle(p, { tgt: p.tr.lang, blob, onProg: (d, t) => { st.textContent = $("#qStat").textContent = `AI กำลังจัดซับ${p.tr.lang ? "และแปล" : ""} ${Math.round(d / t * 100)}%…`; } });
       if (caps.length) {
         if (sid) closeSheet(); p.captions = caps;
         if (p.style.kw !== false) { st.textContent = $("#qStat").textContent = "AI กำลังเน้นคำสำคัญ + ใส่เสียง…"; try { await aiEmphasis(p, true); renderSfx(); } catch {} }
