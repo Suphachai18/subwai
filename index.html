@@ -365,7 +365,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. · ตรวจระบบ + Gemini รุ่นล่าสุด</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (2) · ภาพประกอบเคลื่อนไหวแบบมืออาชีพ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1245,8 +1245,7 @@ function renderFrame(ctx, W, H, v, p, t, media) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     const { vis, vid } = splitRects(p, W, H);
     try { if (v && v.videoWidth) drawFramed(ctx, v, vid, sp.fx, sp.fy, sp.zoom); } catch {}
-    const sc = sceneAt(p, t);
-    if (sc) { try { drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, t - sc.start, media ? media(sc, t) : null, sp.theme, v); } catch (e) { console.error(e); } }
+    try { drawSplitVis(ctx, vis, p, t, media, v); } catch (e) { console.error(e); }
   } else {
     try { drawVideo(ctx, W, H, v, p, null); } catch {}
     if (sp && sp.on) { try { drawSceneLayer(ctx, p, W, H, t, media, v); } catch (e) { console.error(e); } }
@@ -1371,14 +1370,29 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   }
   const bg0 = glassOk ? T.bg[0] : (T.glass ? "#101521" : T.bg[0]), bg1 = glassOk ? T.bg[1] : (T.glass ? "#1A2132" : T.bg[1]);
   const g = ctx.createLinearGradient(0, 0, W * 0.3, H); g.addColorStop(0, bg0); g.addColorStop(1, bg1); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const drift = Math.sin(e * 0.4 + hashStr(sc.id) % 9) * 0.08;
-  const rg = ctx.createRadialGradient(W * (0.78 + drift), H * 0.12, 0, W * (0.78 + drift), H * 0.12, Math.max(W, H) * 0.75);
-  rg.addColorStop(0, T.accent + "22"); rg.addColorStop(1, T.accent + "00"); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+  /* two slow light pools that drift like studio lights, never static */
+  const hs = hashStr(sc.id), now = e + (hs % 97);
+  const pool = (cx, cy, r, col, a) => { const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r); rg.addColorStop(0, col + a); rg.addColorStop(1, col + "00"); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H); };
+  pool(W * (0.82 + 0.1 * Math.sin(now * 0.23)), H * (0.14 + 0.08 * Math.cos(now * 0.19)), Math.max(W, H) * 0.7, T.accent, T.glass || T.fg === "#FFFFFF" ? "2E" : "1F");
+  pool(W * (0.1 + 0.08 * Math.cos(now * 0.17)), H * (0.92 + 0.05 * Math.sin(now * 0.21)), Math.max(W, H) * 0.6, T.fg === "#FFFFFF" ? "#6E8BFF" : T.accent, "18");
+  /* fine dot grid, slowly sliding: reads as "designed", not a flat fill */
+  { const step = 5.2 * u, off = (e * 0.9 * u) % step; ctx.save(); ctx.globalAlpha = T.fg === "#FFFFFF" ? 0.07 : 0.08; ctx.fillStyle = T.fg;
+    for (let yy = -step + off; yy < H + step; yy += step) for (let xx = (hs % 7) * 0.3 * u; xx < W; xx += step) ctx.fillRect(xx, yy, 0.32 * u, 0.32 * u); ctx.restore(); }
+  /* vignette */
+  { const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.78); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, T.fg === "#FFFFFF" ? "rgba(0,0,0,.38)" : "rgba(0,0,0,.10)"); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
   const pat = grainPattern(ctx); if (pat) { ctx.save(); ctx.globalAlpha = T.grain; ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H); ctx.restore(); }
   ctx.fillStyle = T.line; ctx.fillRect(0, H - 0.7 * u, W, 0.7 * u);
   ctx.fillStyle = T.accent; ctx.fillRect(0, H - 0.7 * u, W * clamp01(e / dur), 0.7 * u);
+  /* big outline icon as a quiet watermark that draws itself in and slowly turns */
+  if (ICONS[sc.icon] && sc.type !== "vs") {
+    const isz = Math.min(W, H) * 0.62, ik = xOut((e - 0.1) / 1.4);
+    ctx.save(); ctx.globalAlpha = (T.fg === "#FFFFFF" ? 0.09 : 0.08) * ik; ctx.translate(W * (land ? 0.86 : 0.8), H * (land ? 0.62 : 0.8)); ctx.rotate(-0.12 + 0.03 * Math.sin(e * 0.5));
+    drawIcon(ctx, sc.icon, 0, 0, isz, T.fg, ik); ctx.restore();
+  }
   /* gentle exit */
   ctx.globalAlpha = clamp01((dur - e) / 0.22);
+  /* slow push-in camera on the content (Ken Burns), so every scene keeps moving */
+  ctx.save(); { const cz = 1 + 0.045 * eOut(e / Math.max(2, dur)), px = Math.sin(hs) * 1.2 * u * clamp01(e / dur); ctx.translate(W / 2 + px, H / 2); ctx.scale(cz, cz); ctx.translate(-W / 2, -H / 2); }
   ctx.textBaseline = "middle";
   const ls = v => { try { if ("letterSpacing" in ctx) ctx.letterSpacing = v; } catch {} };
   /* text that rises from behind its own line, with an optional marker sweep behind one word */
@@ -1395,6 +1409,34 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
       if (mk > 0) { ctx.save(); ctx.beginPath(); ctx.rect(mx - size * 0.12, yy - size * 0.6, (mw + size * 0.24) * mk, size * 1.2); ctx.clip(); ctx.fillStyle = T.ink; ctx.fillText(mark, mx, yy); ctx.restore(); }
     } else { ctx.textAlign = "left"; ctx.fillStyle = color; ctx.fillText(text, x0, yy); }
     ctx.restore();
+  };
+  const spring = x => { x = Math.max(0, x); return x >= 1.6 ? 1 : 1 - Math.exp(-6.5 * x) * Math.cos(9.5 * x); };
+  const kinetic = (text, x, y, maxW, px, weight, color, maxLines, delay, align, mark, gap = 1.18) => {
+    if (!text) return 0; const f = fitText(ctx, text, maxW, px, weight, maxLines), lh = f.size * gap, y0 = y - (f.lines.length - 1) * lh / 2;
+    ctx.font = SFONT(weight, f.size); ctx.textAlign = "left";
+    const toks = f.lines.map(l => tokens(l, "th").map(s => ({ s, w: ctx.measureText(s).width })));
+    const nW = toks.reduce((a, l) => a + l.filter(t => t.s.trim()).length, 0) || 1, step = Math.max(0.05, Math.min(0.14, (Math.min(dur, 6) * 0.35) / nW));
+    let wi = 0;
+    toks.forEach((line, li) => {
+      const lw = line.reduce((a, t) => a + t.w, 0), yy = y0 + li * lh; let xx = align === "left" ? x : x - lw / 2;
+      const full = f.lines[li], mi = mark ? full.indexOf(mark) : -1, mStart = mi >= 0 ? xx + ctx.measureText(full.slice(0, mi)).width : 0, mW = mi >= 0 ? ctx.measureText(mark).width : 0;
+      let lastT = delay;
+      line.forEach(t => {
+        if (!t.s.trim()) { xx += t.w; return; }
+        const ti = delay + wi * step; wi++; lastT = ti;
+        const k = spring((e - ti) / 0.55), a = clamp01((e - ti) / 0.16);
+        if (a > 0) { ctx.save(); ctx.globalAlpha *= a; ctx.translate(xx + t.w / 2, yy + (1 - k) * f.size * 0.55); ctx.scale(0.9 + 0.1 * k, 0.9 + 0.1 * k); ctx.fillStyle = color; ctx.fillText(t.s, -t.w / 2, 0); ctx.restore(); }
+        xx += t.w;
+      });
+      if (mi >= 0) { /* marker sweep behind the key phrase once it has been said */
+        const mk = xOut((e - lastT - 0.1) / 0.45);
+        if (mk > 0) {
+          ctx.save(); ctx.fillStyle = T.accent; ctx.globalAlpha *= 0.95; ctx.beginPath(); ctx.rect(mStart - f.size * 0.12, yy - f.size * 0.6, (mW + f.size * 0.24) * mk, f.size * 1.16); ctx.fill(); ctx.clip();
+          ctx.globalAlpha = 1; ctx.fillStyle = T.ink; ctx.fillText(mark, mStart, yy); ctx.restore();
+        }
+      }
+    });
+    return f.lines.length * lh;
   };
   const block = (text, x, y, maxW, px, weight, color, maxLines, delay, align, mark, gap = 1.22) => {
     if (!text) return 0; const f = fitText(ctx, text, maxW, px, weight, maxLines), lh = f.size * gap, y0 = y - (f.lines.length - 1) * lh / 2;
@@ -1418,27 +1460,18 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   const hasIcon = !!(ICONS[sc.icon] || sc.emoji), type = SCENE_TYPES[sc.type] ? sc.type : "big";
   const P = 8 * u, cw = W - P * 2;
   if (type === "big") {
-    if (land) {
-      const tx = hasIcon ? W * 0.38 : P * 1.4, tw = W - tx - P * 1.2;
-      if (hasIcon) icon(W * 0.2, H * 0.5, Math.min(H * 0.2, W * 0.1), 0.05);
-      const hh = fitText(ctx, sc.title || "", tw, 9.5 * u, 800, 2); const th = hh.lines.length * hh.size * 1.22;
-      kicker(sc.kicker, tx, H * 0.5 - th / 2 - 5 * u, "left", 0.05);
-      block(sc.title, tx, H * 0.5, tw, 9.5 * u, 800, T.fg, 2, 0.12, "left", sc.mark);
-      block(sc.label, tx, H * 0.5 + th / 2 + 5 * u, tw, 4.6 * u, 400, T.sub, 2, 0.45, "left", null, 1.35);
-    } else {
-      if (hasIcon) icon(W / 2, H * 0.27, Math.min(W * 0.13, H * 0.11), 0.05);
-      const y = H * (hasIcon ? 0.56 : 0.46);
-      const hh = fitText(ctx, sc.title || "", cw, 9.5 * u, 800, 3); const th = hh.lines.length * hh.size * 1.22;
-      kicker(sc.kicker, W / 2, y - th / 2 - 5 * u, "center", 0.05);
-      block(sc.title, W / 2, y, cw, 9.5 * u, 800, T.fg, 3, 0.12, "center", sc.mark);
-      block(sc.label, W / 2, y + th / 2 + 6.5 * u, cw * 0.9, 4.6 * u, 400, T.sub, 2, 0.45, "center", null, 1.35);
-    }
+    const al = land ? "left" : "center", tx = land ? P * 1.5 : W / 2, tw = land ? W * 0.66 : cw, y = H * (land ? 0.5 : 0.47);
+    const hh = fitText(ctx, sc.title || "", tw, (land ? 10.5 : 11) * u, 800, 3), th = hh.lines.length * hh.size * 1.18;
+    kicker(sc.kicker, tx, y - th / 2 - 5.5 * u, al, 0.02);
+    const used = kinetic(sc.title, tx, y, tw, (land ? 10.5 : 11) * u, 800, T.fg, 3, 0.1, al, sc.mark);
+    const rk = xOut((e - 0.35) / 0.8); /* rule that draws under the headline */
+    if (rk > 0) { ctx.save(); ctx.fillStyle = T.accent; const rw = 14 * u * rk; ctx.fillRect(land ? tx : W / 2 - rw / 2, y + used / 2 + 2.6 * u, rw, 0.7 * u); ctx.restore(); }
+    block(sc.label, tx, y + used / 2 + 8 * u, tw * 0.95, 4.6 * u, 400, T.sub, 2, 0.6, al, null, 1.35);
   } else if (type === "number") {
     const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/), t0 = sc.valueT != null && isFinite(sc.valueT) ? Math.max(0, sc.valueT - sc.start) : 0.25;
     let shown = raw;
     if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * xOut((e - t0) / 1.1)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
     const align = land ? "left" : "center", x = land ? P * 1.4 : W / 2, maxW = land ? W * 0.62 : cw;
-    if (land && hasIcon) icon(W * 0.82, H * 0.5, Math.min(H * 0.18, W * 0.09), 0.1);
     kicker(sc.kicker || sc.title, x, H * 0.28, align, 0.05);
     const f = fitText(ctx, raw, maxW, (land ? 15 : 17) * u, 800, 1), k = xOut((e - t0 + 0.2) / 0.5);
     if (k > 0) { ctx.save(); ctx.font = SFONT(800, f.size); ctx.fillStyle = T.accent; ctx.textAlign = align; ctx.beginPath(); ctx.rect(0, H * 0.48 - f.size * 0.85, W, f.size * 1.7); ctx.clip(); ctx.fillText(shown, x, H * 0.48 + (1 - k) * f.size); ctx.restore(); }
@@ -1495,26 +1528,112 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
     });
   } else if (type === "quote") {
     const k = xOut(e / 0.6); ctx.save(); ctx.globalAlpha *= k; ctx.font = SFONT(800, 22 * u); ctx.fillStyle = T.accent; ctx.textAlign = "left"; ctx.fillText("“", P * (land ? 1.4 : 1), H * 0.26); ctx.restore();
-    block(sc.title, land ? P * 1.4 : W / 2, H * 0.5, land ? W - P * 2.8 : cw, 8.5 * u, 700, T.fg, 3, 0.2, land ? "left" : "center", sc.mark, 1.3);
+    kinetic(sc.title, land ? P * 1.4 : W / 2, H * 0.5, land ? W - P * 2.8 : cw, 8.5 * u, 700, T.fg, 3, 0.2, land ? "left" : "center", sc.mark, 1.3);
     if (sc.label) kicker(sc.label, land ? P * 1.4 : W / 2, H * 0.82, land ? "left" : "center", 0.8);
   }
+  ctx.restore(); // camera
   ctx.restore();
 }
-/* one call for card / full-screen modes: container motion, shadow and rounded corners */
+/* ---- transitions between scenes (and between your face and a graphic) ---- */
+const TRANS = { auto: "อัตโนมัติ (สลับหลายแบบ)", push: "สไลด์ผลัก", wipe: "กวาดแถบสี", zoom: "ซูมทะลุ", iris: "วงกลมเปิด", flash: "แฟลช", fade: "เฟดนุ่ม" };
+const TR_D = 0.45;
+function transOf(p, sc) { const s = (p.split && p.split.tr) || "auto"; if (s !== "auto" && TRANS[s]) return s; const L = ["push", "wipe", "zoom", "push", "iris", "wipe"]; return L[hashStr(sc.id) % L.length]; }
+const easeIO = x => { x = clamp01(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+function drawTrans(ctx, r, k, style, A, B, accent) {
+  const e = easeIO(k), clip = () => { ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); };
+  if (style === "push") {
+    ctx.save(); clip(); ctx.translate(-r.w * e, 0); A(); ctx.restore();
+    ctx.save(); clip(); ctx.translate(r.w * (1 - e), 0); B(); ctx.restore();
+    const s = Math.sin(Math.PI * k); if (s > 0.05) { ctx.save(); clip(); ctx.globalAlpha = 0.35 * s; ctx.fillStyle = accent; for (let i = 0; i < 6; i++) { const yy = r.y + r.h * ((i * 0.37 + 0.11) % 1), len = r.w * (0.25 + 0.3 * ((i * 0.53) % 1)); ctx.fillRect(r.x + r.w * (1 - e) - len * 0.5, yy, len, Math.max(1, r.h * 0.004)); } ctx.restore(); }
+  } else if (style === "wipe") {
+    A();
+    const sk = r.w * 0.28, edge = r.x - sk + (r.w + sk * 2) * e;
+    ctx.save(); ctx.beginPath(); ctx.moveTo(r.x - sk, r.y); ctx.lineTo(edge + sk * 0.5, r.y); ctx.lineTo(edge - sk * 0.5, r.y + r.h); ctx.lineTo(r.x - sk, r.y + r.h); ctx.closePath(); ctx.clip(); B(); ctx.restore();
+    if (k < 0.98) { const bw = r.w * 0.045; ctx.save(); clip(); ctx.fillStyle = accent; ctx.beginPath(); ctx.moveTo(edge + sk * 0.5, r.y); ctx.lineTo(edge + sk * 0.5 + bw, r.y); ctx.lineTo(edge - sk * 0.5 + bw, r.y + r.h); ctx.lineTo(edge - sk * 0.5, r.y + r.h); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  } else if (style === "zoom") {
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    ctx.save(); clip(); ctx.globalAlpha *= 1 - e; ctx.translate(cx, cy); ctx.scale(1 + 0.4 * e, 1 + 0.4 * e); ctx.translate(-cx, -cy); A(); ctx.restore();
+    ctx.save(); clip(); ctx.globalAlpha *= e; ctx.translate(cx, cy); ctx.scale(0.86 + 0.14 * e, 0.86 + 0.14 * e); ctx.translate(-cx, -cy); B(); ctx.restore();
+  } else if (style === "iris") {
+    A();
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, R = Math.hypot(r.w, r.h) / 2 * e;
+    ctx.save(); clip(); ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.1, R), 0, Math.PI * 2); ctx.clip(); B(); ctx.restore();
+    if (k < 0.98) { ctx.save(); clip(); ctx.strokeStyle = accent; ctx.lineWidth = Math.min(r.w, r.h) * 0.018; ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.1, R), 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+  } else if (style === "flash") {
+    if (k < 0.5) A(); else B();
+    ctx.save(); clip(); ctx.globalAlpha = 0.85 * (1 - Math.abs(2 * k - 1)); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.restore();
+  } else {
+    ctx.save(); ctx.globalAlpha *= 1 - e; A(); ctx.restore(); ctx.save(); ctx.globalAlpha *= e; B(); ctx.restore();
+  }
+}
+/* which scenes are on screen at time t, and how far into the change we are */
+function addTransSfx(p) {
+  p.sfx = (p.sfx || []).filter(x => x.src !== "tr");
+  if (!p.split || !p.split.on || p.split.trSfx === false) return 0;
+  const L = p.split.scenes || [], split = p.split.mode === "split"; let n = 0;
+  L.forEach((sc, i) => {
+    const prev = L[i - 1], on = sc.show !== false, prevOn = prev && prev.show !== false;
+    if (!(split ? i > 0 : on !== !!prevOn || (on && prevOn))) return;
+    const t = Math.max(0, sc.start - 0.12);
+    if (p.sfx.some(x => Math.abs(x.t - t) < 0.7)) return;
+    p.sfx.push({ id: uid(), key: "b:" + (n % 3 === 2 ? "whoosh" : "swish"), t: +t.toFixed(2), vol: 0.42, src: "tr" }); n++;
+  });
+  p.sfx.sort((a, b) => a.t - b.t);
+  return n;
+}
+function sceneMix(p, t) {
+  const list = (p.split && p.split.scenes) || [], i = list.findIndex(s => t >= s.start && t < s.end);
+  if (i < 0) return null;
+  const sc = list[i], prev = i > 0 && Math.abs(list[i - 1].end - sc.start) < 0.05 ? list[i - 1] : null, e = t - sc.start;
+  return { sc, prev, k: e < TR_D ? e / TR_D : 1 };
+}
+const holdT = (sc, t) => Math.min(t - sc.start, sc.end - sc.start - 0.26) ; // outgoing scene stays fully built during the change
+/* split mode: the graphic half */
+function drawSplitVis(ctx, r, p, t, mediaCb, bgSrc) {
+  const m = sceneMix(p, t); if (!m) return false;
+  const T = SCENE_THEMES[p.split.theme] || SCENE_THEMES.glass;
+  const one = (sc, tt) => drawScene(ctx, r.x, r.y, r.w, r.h, sc, tt, mediaCb ? mediaCb(sc, sc.start + tt) : null, p.split.theme, bgSrc);
+  if (m.prev && m.k < 1) drawTrans(ctx, r, m.k, transOf(p, m.sc), () => one(m.prev, holdT(m.prev, t)), () => one(m.sc, t - m.sc.start), T.accent);
+  else one(m.sc, t - m.sc.start);
+  return true;
+}
+/* card / full-screen modes: graphic over your video, with shadow and rounded corners for the card */
 function drawSceneLayer(ctx, p, W, H, t, mediaCb, bgSrc) {
-  const sc = sceneAt(p, t); if (!sc || sc.show === false) return;
-  const r = cardRect(p, W, H), e = t - sc.start, dur = sc.end - sc.start;
-  const k = xOut(e / 0.5), out = clamp01((dur - e) / 0.3), a = Math.min(k, out); if (a <= 0) return;
-  const full = p.split.mode === "full";
-  ctx.save();
-  if (!full) { ctx.fillStyle = `rgba(0,0,0,${0.22 * a})`; ctx.fillRect(0, 0, W, H); }
-  ctx.globalAlpha = a;
-  const s = full ? 1 : 0.94 + 0.06 * k, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-  ctx.translate(cx, cy + (full ? 0 : (1 - k) * r.h * 0.04)); ctx.scale(s, s); ctx.translate(-cx, -cy);
-  if (!full) { ctx.save(); ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = r.w * 0.06; ctx.shadowOffsetY = r.w * 0.015; ctx.fillStyle = "#000"; rrect(ctx, r.x, r.y, r.w, r.h, r.r); ctx.fill(); ctx.restore(); }
-  ctx.save(); rrect(ctx, r.x, r.y, r.w, r.h, r.r); ctx.clip();
-  drawScene(ctx, r.x, r.y, r.w, r.h, sc, e, mediaCb ? mediaCb(sc, t) : null, p.split.theme, bgSrc);
-  ctx.restore(); ctx.restore();
+  const m = sceneMix(p, t); if (!m) return;
+  const { sc } = m, prevOn = m.prev && m.prev.show !== false, curOn = sc.show !== false;
+  if (!curOn && !(prevOn && m.k < 1)) return;
+  const r = cardRect(p, W, H), full = p.split.mode === "full", T = SCENE_THEMES[p.split.theme] || SCENE_THEMES.glass;
+  const card = (s, tt, a = 1) => {
+    ctx.save(); ctx.globalAlpha *= a;
+    if (!full) { ctx.save(); ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = r.w * 0.06; ctx.shadowOffsetY = r.w * 0.015; ctx.fillStyle = "#000"; rrect(ctx, r.x, r.y, r.w, r.h, r.r); ctx.fill(); ctx.restore(); }
+    ctx.save(); rrect(ctx, r.x, r.y, r.w, r.h, r.r); ctx.clip();
+    drawScene(ctx, r.x, r.y, r.w, r.h, s, tt, mediaCb ? mediaCb(s, s.start + tt) : null, p.split.theme, bgSrc);
+    ctx.restore(); ctx.restore();
+  };
+  const e = t - sc.start, dur = sc.end - sc.start;
+  /* leaving to your face at the end of the last shown scene */
+  const nextOff = (() => { const L = p.split.scenes, i = L.indexOf(sc), n = L[i + 1]; return !n || n.show === false || Math.abs(n.start - sc.end) > 0.05; })();
+  if (!full) { const dim = curOn ? Math.min(1, prevOn ? 1 : m.k * 1.5) * (nextOff ? clamp01((dur - e) / 0.3) : 1) : (1 - m.k); if (dim > 0) { ctx.fillStyle = `rgba(0,0,0,${0.22 * dim})`; ctx.fillRect(0, 0, W, H); } }
+  if (m.k < 1 && (prevOn || curOn)) {
+    const style = transOf(p, sc);
+    if (!full && !(prevOn && curOn)) { /* a floating card pops in or out with a spring, it does not wipe */
+      const kk = curOn ? m.k : 1 - m.k, s0 = curOn ? sc : m.prev, tt = curOn ? e : holdT(m.prev, t);
+      const sp = curOn ? 1 - Math.exp(-6 * kk) * Math.cos(8 * kk) : kk, cx = r.x + r.w / 2, cy = r.y + r.h / 2, sc2 = 0.82 + 0.18 * sp;
+      ctx.save(); ctx.translate(cx, cy + (1 - kk) * r.h * 0.06); ctx.scale(sc2, sc2); ctx.translate(-cx, -cy); card(s0, tt, clamp01(kk * 1.6)); ctx.restore();
+      return;
+    }
+    drawTrans(ctx, full ? { x: 0, y: 0, w: W, h: H } : r, m.k, style, () => { if (prevOn) card(m.prev, holdT(m.prev, t)); }, () => { if (curOn) card(sc, e); }, T.accent);
+    return;
+  }
+  if (!curOn) return;
+  /* exit back to your face: same style in reverse for full screen, spring-out for the card */
+  if (nextOff && dur - e < TR_D) {
+    const k = 1 - (dur - e) / TR_D;
+    if (full) { drawTrans(ctx, { x: 0, y: 0, w: W, h: H }, k, transOf(p, sc), () => card(sc, holdT(sc, t)), () => {}, T.accent); return; }
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, s2 = 1 - 0.12 * eOut(k);
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(s2, s2); ctx.translate(-cx, -cy); card(sc, holdT(sc, t), 1 - eOut(k)); ctx.restore(); return;
+  }
+  card(sc, e);
 }
 function normalizeScenes(list, dur) {
   list.sort((a, b) => a.start - b.start);
@@ -2350,6 +2469,7 @@ function viewNew(resumeId) {
         catch (e) { p.split.scenes = plainScenes(p); toast("AI สร้างฉากไม่สำเร็จ ใช้ฉากจากซับแทน กดสร้างใหม่ได้ในแท็บ Split", 5000); }
         { const [m, a] = [npOrient.split(":")[0], npOrient.slice(npOrient.indexOf(":") + 1)]; p.split.mode = m; if (m === "card") p.split.card = a; if (m === "split") p.split.orient = a; }
         p.split.on = true; p.split.prevPos = p.style.pos; p.style.pos = p.split.mode === "split" ? (p.split.orient === "h" ? 86 : 50) : 84;
+        if (autoSfx || autoKw) addTransSfx(p);
         mark("split", "done"); p.updatedAt = Date.now(); await DB.put(p);
       }
       await sleep(300);
@@ -2476,6 +2596,8 @@ async function viewEditor(id) {
             <div class="ctl"><label for="spFx">ซ้าย-ขวา</label><input type="range" id="spFx" min="0" max="100" step="1"><output id="oFx"></output></div>
             <div class="ctl"><label for="spFy">บน-ล่าง</label><input type="range" id="spFy" min="0" max="100" step="1"><output id="oFy"></output></div>
             <button class="btn small" id="spCenter">จัดกึ่งกลางอัตโนมัติ</button></div>
+          <div class="field"><span class="lab">การเปลี่ยนฉาก</span><div class="chips" id="spTr">${Object.entries(TRANS).map(([k, n]) => `<button type="button" class="chip2" data-v="${k}">${n}</button>`).join("")}</div>
+            <label class="sw"><input type="checkbox" id="spTrSfx"> เสียงวูชเบา ๆ ตอนเปลี่ยนฉาก</label></div>
           <div class="field"><span class="lab">โทนภาพประกอบ</span><div class="chips" id="spTheme">${Object.entries(SCENE_THEMES).map(([k, T]) => `<button type="button" class="chip2 thm" data-v="${k}"><i style="background:linear-gradient(135deg,${T.glass ? "#6b7280" : T.bg[1]} 55%,${T.accent} 55%)"></i>${T.n}</button>`).join("")}</div></div>
           <div class="row"><label class="btn small" for="spAdd">＋ ใส่รูป/คลิปของคุณ ณ ตำแหน่งนี้</label><input type="file" id="spAdd" accept="image/*,video/*" hidden><button class="btn small" id="spPlain">สร้างฉากจากซับ (ไม่ใช้ AI)</button></div>
           <ol class="scenes" id="scenes"></ol>
@@ -2791,9 +2913,8 @@ async function viewEditor(id) {
     const sv = $("#scv"); if (!sv || sv.hidden) return;
     const g = sv.getContext("2d"), playing = !!video && !video.paused;
     if (p.split.mode !== "split") { g.clearRect(0, 0, sv.width, sv.height); try { drawSceneLayer(g, p, sv.width, sv.height, t, (sc, tt) => mediaFor(pvMedia, sc, tt, playing), thumbImg); } catch (e) { console.error(e); } return; }
-    const sc = sceneAt(p, t);
-    if (!sc) { g.fillStyle = "#14161c"; g.fillRect(0, 0, sv.width, sv.height); return; }
-    try { drawScene(g, 0, 0, sv.width, sv.height, sc, t - sc.start, mediaFor(pvMedia, sc, t, playing), p.split.theme, thumbImg); } catch (e) { console.error(e); }
+    let ok = false; try { ok = drawSplitVis(g, { x: 0, y: 0, w: sv.width, h: sv.height }, p, t, (sc, tt) => mediaFor(pvMedia, sc, tt, playing), thumbImg); } catch (e) { console.error(e); }
+    if (!ok) { g.fillStyle = "#14161c"; g.fillRect(0, 0, sv.width, sv.height); }
   }
   function hookMedia() { for (const k in pvMedia) { const m = pvMedia[k]; if (m.kind === "video" && !m.hooked) { m.hooked = true; m.el.addEventListener("loadeddata", () => { draw(); paintSceneThumbs(); }); m.el.addEventListener("seeked", () => { if (video && video.paused) draw(); }); } } draw(); }
   const seekTo = t => { if (video) { playUntil = null; video.currentTime = t + 0.01; } };
@@ -3268,6 +3389,8 @@ async function viewEditor(id) {
     $("#spZoom").value = Math.round(sp.zoom * 100); $("#oZoom").textContent = Math.round(sp.zoom * 100) + "%";
     $("#spFx").value = sp.fx; $("#oFx").textContent = sp.fx; $("#spFy").value = sp.fy; $("#oFy").textContent = sp.fy;
     $$("#spTheme button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.theme));
+    $$("#spTr button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === (sp.tr || "auto")));
+    $("#spTrSfx").checked = sp.trSfx !== false && (p.sfx || []).some(x => x.src === "tr");
     $("#spRatio").value = Math.round(sp.ratio * 100); $("#oRatio").textContent = Math.round(sp.ratio * 100) + "%";
     $$("#spMode button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.mode));
     $$("#spCard button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.card));
@@ -3285,6 +3408,8 @@ async function viewEditor(id) {
   }
   $("#spOn").onchange = e => setSplit(e.target.checked);
   $$("#spTheme button").forEach(b => b.onclick = () => { p.split.theme = b.dataset.v; syncSplitUI(); renderScenes(); changed(); });
+  $("#spTrSfx").onchange = e => { p.split.trSfx = e.target.checked; const n = e.target.checked ? addTransSfx(p) : (p.sfx = p.sfx.filter(x => x.src !== "tr"), 0); renderSfx(); changed(); toast(e.target.checked ? `ใส่เสียงตอนเปลี่ยนฉาก ${n} จุด` : "เอาเสียงตอนเปลี่ยนฉากออกแล้ว", 1800); };
+  $$("#spTr button").forEach(b => b.onclick = () => { p.split.tr = b.dataset.v; syncSplitUI(); changed(); const sc = sceneMix(p, video ? video.currentTime : 0); if (sc && video) { video.currentTime = Math.max(0, sc.sc.start - 0.05); video.play().catch(() => {}); } });
   $$("#spTop button").forEach(b => b.onclick = () => { p.split.top = b.dataset.v; syncSplitUI(); sizeStage(); renderScenes(); changed(); });
   $$("#spMode button").forEach(b => b.onclick = () => {
     const sp = p.split; if (sp.mode === b.dataset.v) return; sp.mode = b.dataset.v; if (sp.on) p.style.pos = capPosFor(sp);
@@ -3309,7 +3434,7 @@ async function viewEditor(id) {
     const b = $("#spAi"), st = $("#spStat"); b.disabled = true; st.textContent = "AI กำลังอ่านสคริปต์และออกแบบฉาก…";
     try {
       const sc = await aiScenes(p); p.split.scenes = sc; if (!p.split.on) setSplit(true);
-      changed(); renderScenes(); sizeStage(); st.textContent = `สร้างแล้ว ${sc.length} ฉาก กดเล่นวิดีโอเพื่อดู แก้ข้อความหรือใส่รูป/คลิปเองได้ทุกฉาก`;
+      addTransSfx(p); renderSfx(); changed(); renderScenes(); sizeStage(); st.textContent = `สร้างแล้ว ${sc.length} ฉาก กดเล่นวิดีโอเพื่อดู แก้ข้อความหรือใส่รูป/คลิปเองได้ทุกฉาก`;
     } catch (e) { st.textContent = ""; toast(e.message, 5000); }
     b.disabled = false;
   };
