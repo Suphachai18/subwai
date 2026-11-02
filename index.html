@@ -364,7 +364,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (4) · รูปภาพจริงประกอบ + ขึ้นตรงคำพูด</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (5) · ภาพแอนิเมชันประกอบ 22 แบบ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1307,6 +1307,313 @@ function drawIcon(ctx, name, cx, cy, size, color, k) {
   ctx.setLineDash([140, 140]); ctx.lineDashOffset = 140 * (1 - clamp01(k));
   ctx.beginPath(); ic[1](ctx); ctx.stroke(); ctx.restore();
 }
+/* ================= animated spot illustrations =================
+   Full-colour flat illustrations with soft gradients, highlights and ground shadows, animated in code
+   (springs, loops, particles). Drawn in a 100-unit box centred on 0,0. k = entrance progress 0..1, t = seconds. */
+const hexRgb = h => { h = String(h || "#888").replace("#", ""); if (h.length === 3) h = h.split("").map(x => x + x).join(""); const n = parseInt(h.slice(0, 6), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const tint = (h, amt) => { const [r, g, b] = hexRgb(h), f = v => Math.round(amt >= 0 ? v + (255 - v) * amt : v * (1 + amt)); return `rgb(${f(r)},${f(g)},${f(b)})`; };
+const rgba = (h, a) => { const [r, g, b] = hexRgb(h); return `rgba(${r},${g},${b},${a})`; };
+const lg = (c, x0, y0, x1, y1, a, b) => { const g = c.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, a); g.addColorStop(1, b); return g; };
+const sprg = x => { x = Math.max(0, x); return x >= 1.8 ? 1 : 1 - Math.exp(-6 * x) * Math.cos(8.5 * x); };
+const ground = (c, y, rx, a = 0.22) => { c.save(); const g = c.createRadialGradient(0, y, 0, 0, y, rx); g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.scale(1, 0.22); c.beginPath(); c.arc(0, y / 0.22, rx, 0, Math.PI * 2); c.fill(); c.restore(); };
+const pop = (c, k, fn) => { const s = sprg(k * 1.6); if (s <= 0.001) return; c.save(); c.scale(s, s); fn(); c.restore(); };
+const starPath = (c, x, y, r, n = 5, ir = 0.45) => { c.beginPath(); for (let i = 0; i < n * 2; i++) { const rr = i % 2 ? r * ir : r, a = -Math.PI / 2 + i * Math.PI / n; i ? c.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a)) : c.moveTo(x + rr * Math.cos(a), y + rr * Math.sin(a)); } c.closePath(); };
+const sparkle = (c, x, y, r, col) => { c.save(); c.fillStyle = col; c.beginPath(); c.moveTo(x, y - r); c.quadraticCurveTo(x, y, x + r, y); c.quadraticCurveTo(x, y, x, y + r); c.quadraticCurveTo(x, y, x - r, y); c.quadraticCurveTo(x, y, x, y - r); c.fill(); c.restore(); };
+const confetti = (c, t0, t, cols, n = 14, spread = 46) => {
+  const e = t - t0; if (e < 0 || e > 1.6) return;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + i, v = spread * (0.6 + ((i * 37) % 10) / 25), x = Math.cos(a) * v * Math.min(1, e * 2.2), y = Math.sin(a) * v * Math.min(1, e * 2.2) + 30 * e * e;
+    c.save(); c.globalAlpha *= Math.max(0, 1 - e / 1.6); c.translate(x, y); c.rotate(e * 6 + i); c.fillStyle = cols[i % cols.length]; c.fillRect(-2.4, -1.2, 4.8, 2.4); c.restore();
+  }
+};
+const PAL = { n: "#1D2B4F", d: "#0F1626", w: "#FFFFFF", l: "#E9EEF6", g: "#2FBF71", y: "#FFC93C", r: "#FF5A5F", s: "#6EC1FF", o: "#FF9F43" };
+const ART = {
+  cart: ["รถกอล์ฟ/รถไฟฟ้า/ยานพาหนะ", (c, k, t, A) => {
+    const x = (1 - xOut(k)) * -95, moving = k < 0.98, bob = moving ? Math.sin(t * 22) * 0.8 : Math.sin(t * 2.5) * 0.4;
+    ground(c, 30, 48);
+    c.save(); c.translate(x, bob);
+    if (moving) { c.save(); c.globalAlpha = (1 - k) * 0.8; c.fillStyle = A; [[-62, -6, 22], [-70, 4, 30], [-60, 14, 18]].forEach(([a, b, w]) => c.fillRect(a, b, w, 2.2)); c.restore(); }
+    c.fillStyle = lg(c, 0, -36, 0, -28, tint(A, 0.15), tint(A, -0.15)); rrect(c, -33, -37, 62, 7, 3.5); c.fill();
+    c.fillStyle = PAL.n; c.fillRect(-26, -31, 3.2, 31); c.fillRect(19, -31, 3.2, 31);
+    c.fillStyle = "rgba(110,193,255,.55)"; c.beginPath(); c.moveTo(16, -30); c.lineTo(22, -30); c.lineTo(29, -4); c.lineTo(22, -4); c.closePath(); c.fill();
+    c.fillStyle = lg(c, 0, -6, 0, 16, "#FFFFFF", "#D5DDEA"); rrect(c, -36, -6, 72, 21, 7); c.fill();
+    c.fillStyle = A; c.fillRect(-36, 5, 72, 4);
+    c.fillStyle = PAL.n; rrect(c, -18, -15, 24, 9, 3); c.fill(); rrect(c, -20, -24, 6, 18, 2.5); c.fill();
+    c.fillStyle = "rgba(255,255,255,.7)"; c.fillRect(-30, -3, 40, 2);
+    const ang = (x * 0.22) + t * (moving ? 18 : 0);
+    for (const wx of [-21, 23]) {
+      c.save(); c.translate(wx, 17); c.fillStyle = PAL.d; c.beginPath(); c.arc(0, 0, 9.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#C9D2E0"; c.beginPath(); c.arc(0, 0, 4.8, 0, Math.PI * 2); c.fill();
+      c.rotate(ang); c.strokeStyle = PAL.n; c.lineWidth = 1.2; c.beginPath(); for (let i = 0; i < 3; i++) { c.moveTo(0, 0); c.lineTo(4.6 * Math.cos(i * 2.1), 4.6 * Math.sin(i * 2.1)); } c.stroke(); c.restore();
+    }
+    const hl = 0.6 + 0.4 * Math.sin(t * 3); c.fillStyle = `rgba(255,236,150,${hl})`; c.beginPath(); c.arc(35, 2, 2.6, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }],
+  coins: ["เหรียญ/ราคา/ประหยัด/คุ้มค่า", (c, k, t, A) => {
+    ground(c, 34, 36);
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const d = i * 0.16, kk = sprg((k * 1.6 - d) * 1.4), y = 26 - i * 9.5, yy = y - (1 - Math.min(1, kk)) * 90;
+      if (k * 1.6 - d <= 0) continue;
+      c.save(); c.translate(i % 2 ? 1.5 : -1, yy);
+      c.fillStyle = "#C98A0B"; c.beginPath(); c.ellipse(0, 3, 24, 7.5, 0, 0, Math.PI * 2); c.fill(); c.fillRect(-24, -1, 48, 4);
+      c.fillStyle = lg(c, -24, 0, 24, 0, "#FFE58A", "#F5B301"); c.beginPath(); c.ellipse(0, -1, 24, 7.5, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = "rgba(201,138,11,.6)"; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, -1, 17, 5, 0, 0, Math.PI * 2); c.stroke();
+      c.restore();
+    }
+    const tw = k > 0.95 ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
+    if (tw > 0) { sparkle(c, 22, -30, 6 * tw + 2, "#FFFFFF"); sparkle(c, -26, -14, 4 * (1 - tw) + 1.5, "#FFF3C4"); }
+  }],
+  money: ["ธนบัตร/เงิน/รายได้/ผ่อน", (c, k, t, A) => {
+    ground(c, 32, 44);
+    for (let i = 2; i >= 0; i--) {
+      const a = (i - 1) * 0.28 * xOut(k * 1.4 - i * 0.12), lift = Math.sin(t * 2 + i) * 0.8;
+      c.save(); c.translate(0, 8 + lift); c.rotate(a);
+      c.fillStyle = lg(c, -34, -18, 34, 18, "#5ED39A", "#1E9E5E"); rrect(c, -34, -19, 68, 38, 4); c.fill();
+      c.strokeStyle = "rgba(255,255,255,.45)"; c.lineWidth = 1.4; rrect(c, -29, -14, 58, 28, 2.5); c.stroke();
+      c.fillStyle = "rgba(255,255,255,.85)"; c.beginPath(); c.arc(0, 0, 8, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#1E9E5E"; c.font = "800 11px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("฿", 0, 0.5);
+      c.restore();
+    }
+    if (k > 0.9) { const tw = 0.5 + 0.5 * Math.sin(t * 4); sparkle(c, 30, -26, 3 + 3 * tw, "#FFFFFF"); sparkle(c, -32, -20, 5 - 2 * tw, "#B8F5D2"); }
+  }],
+  battery: ["แบตเตอรี่/ชาร์จ/พลังงาน", (c, k, t, A) => {
+    ground(c, 30, 40);
+    pop(c, k, () => {
+      c.fillStyle = lg(c, 0, -22, 0, 22, "#2C3B63", PAL.d); rrect(c, -34, -21, 62, 42, 9); c.fill();
+      c.fillStyle = "#2C3B63"; rrect(c, 28, -8, 7, 16, 3); c.fill();
+      const lvl = Math.min(1, xOut(k * 1.1)) * (0.92 + 0.03 * Math.sin(t * 2)), iw = 54 * lvl;
+      c.save(); rrect(c, -30, -17, 54, 34, 6); c.clip();
+      c.fillStyle = lg(c, -30, 0, 24, 0, "#3BD58A", "#1FA968"); c.fillRect(-30, -17, iw, 34);
+      c.fillStyle = "rgba(255,255,255,.18)"; c.fillRect(-30, -17, iw, 9);
+      c.restore();
+      const s = 1 + 0.08 * Math.sin(t * 6);
+      c.save(); c.translate(-3, 0); c.scale(s, s); c.fillStyle = "#FFFFFF"; c.beginPath(); c.moveTo(2, -13); c.lineTo(-8, 2); c.lineTo(-1, 2); c.lineTo(-3, 13); c.lineTo(8, -3); c.lineTo(1, -3); c.closePath(); c.fill(); c.restore();
+    });
+  }],
+  bolt: ["ไฟฟ้า/พลัง/เร็ว/แรง", (c, k, t, A) => {
+    const glow = 0.5 + 0.5 * Math.sin(t * 4);
+    pop(c, k, () => {
+      const g = c.createRadialGradient(0, 0, 10, 0, 0, 52); g.addColorStop(0, rgba(A, 0.35 * glow)); g.addColorStop(1, rgba(A, 0)); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 52, 0, Math.PI * 2); c.fill();
+      c.fillStyle = lg(c, 0, -34, 0, 34, tint(A, 0.25), tint(A, -0.2)); c.beginPath(); c.arc(0, 0, 33, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "rgba(255,255,255,.25)"; c.beginPath(); c.ellipse(-8, -14, 18, 10, -0.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#FFFFFF"; c.beginPath(); c.moveTo(5, -24); c.lineTo(-13, 3); c.lineTo(-1, 3); c.lineTo(-5, 24); c.lineTo(14, -5); c.lineTo(2, -5); c.closePath(); c.fill();
+    });
+  }],
+  chart: ["กราฟ/เติบโต/ยอดขาย/สถิติ", (c, k, t, A) => {
+    ground(c, 32, 46, 0.16);
+    c.fillStyle = "rgba(255,255,255,.9)"; c.fillRect(-40, 28, 80, 2.4);
+    const hs = [16, 28, 22, 42], tops = [];
+    hs.forEach((h, i) => {
+      const kk = xOut(k * 1.6 - i * 0.15), hh = h * kk, x = -34 + i * 19;
+      c.fillStyle = lg(c, 0, 28 - hh, 0, 28, tint(A, 0.2), tint(A, -0.25)); rrect(c, x, 28 - hh, 13, Math.max(0.1, hh), 3); c.fill();
+      c.fillStyle = "rgba(255,255,255,.25)"; c.fillRect(x, 28 - hh, 4, Math.max(0, hh));
+      tops.push([x + 6.5, 28 - hh - 8]);
+    });
+    const lk = clamp01(k * 1.6 - 0.75) / 1;
+    if (lk > 0) {
+      c.save(); c.strokeStyle = "#FFFFFF"; c.lineWidth = 3; c.lineCap = "round"; c.lineJoin = "round"; c.setLineDash([140, 140]); c.lineDashOffset = 140 * (1 - Math.min(1, lk * 1.4));
+      c.beginPath(); tops.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.lineTo(42, -40); c.stroke(); c.restore();
+      if (lk > 0.65) { c.save(); c.translate(42, -40); c.rotate(-0.95); c.fillStyle = "#FFFFFF"; c.beginPath(); c.moveTo(0, -6); c.lineTo(9, 0); c.lineTo(0, 6); c.closePath(); c.fill(); c.restore(); }
+    }
+  }],
+  rocket: ["เติบโตเร็ว/เปิดตัว/พุ่งขึ้น", (c, k, t, A) => {
+    for (let i = 0; i < 6; i++) { const y = ((t * 60 + i * 23) % 120) - 60, x = ((i * 37) % 80) - 40; c.fillStyle = "rgba(255,255,255,.5)"; c.fillRect(x, y, 1.4, 6); }
+    const y = (1 - xOut(k)) * 70 + Math.sin(t * 3) * 1.5;
+    c.save(); c.translate(0, y); c.rotate(0.6);
+    const fl = 10 + 4 * Math.sin(t * 25);
+    c.fillStyle = "#FF9F43"; c.beginPath(); c.moveTo(-6, 26); c.quadraticCurveTo(0, 26 + fl * 2, 6, 26); c.closePath(); c.fill();
+    c.fillStyle = "#FFE08A"; c.beginPath(); c.moveTo(-3, 26); c.quadraticCurveTo(0, 26 + fl, 3, 26); c.closePath(); c.fill();
+    c.fillStyle = A; c.beginPath(); c.moveTo(-10, 14); c.lineTo(-20, 28); c.lineTo(-9, 26); c.closePath(); c.fill(); c.beginPath(); c.moveTo(10, 14); c.lineTo(20, 28); c.lineTo(9, 26); c.closePath(); c.fill();
+    c.fillStyle = lg(c, -11, 0, 11, 0, "#FFFFFF", "#CBD5E3"); c.beginPath(); c.moveTo(0, -34); c.bezierCurveTo(14, -20, 12, 10, 9, 27); c.lineTo(-9, 27); c.bezierCurveTo(-12, 10, -14, -20, 0, -34); c.fill();
+    c.fillStyle = A; c.beginPath(); c.moveTo(0, -34); c.bezierCurveTo(7, -28, 9, -22, 10, -18); c.lineTo(-10, -18); c.bezierCurveTo(-9, -22, -7, -28, 0, -34); c.fill();
+    c.fillStyle = PAL.n; c.beginPath(); c.arc(0, -5, 6, 0, Math.PI * 2); c.fill(); c.fillStyle = "#6EC1FF"; c.beginPath(); c.arc(0, -5, 4, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }],
+  shield: ["รับประกัน/ปลอดภัย/มั่นใจ", (c, k, t, A) => {
+    ground(c, 38, 34);
+    pop(c, k, () => {
+      const path = () => { c.beginPath(); c.moveTo(0, -38); c.lineTo(30, -27); c.lineTo(30, -2); c.bezierCurveTo(30, 18, 16, 31, 0, 38); c.bezierCurveTo(-16, 31, -30, 18, -30, -2); c.lineTo(-30, -27); c.closePath(); };
+      c.fillStyle = lg(c, 0, -38, 0, 38, "#34477A", PAL.d); path(); c.fill();
+      c.save(); c.scale(0.8, 0.8); c.fillStyle = lg(c, 0, -38, 0, 38, tint(A, 0.2), tint(A, -0.2)); path(); c.fill(); c.restore();
+      c.save(); path(); c.clip(); const sx = ((t * 0.6) % 1.6) * 110 - 70; c.fillStyle = "rgba(255,255,255,.25)"; c.beginPath(); c.moveTo(sx, -40); c.lineTo(sx + 14, -40); c.lineTo(sx - 16, 40); c.lineTo(sx - 30, 40); c.closePath(); c.fill(); c.restore();
+      const ck = clamp01(k * 1.6 - 0.5);
+      c.save(); c.strokeStyle = "#FFFFFF"; c.lineWidth = 6; c.lineCap = "round"; c.lineJoin = "round"; c.setLineDash([60, 60]); c.lineDashOffset = 60 * (1 - xOut(ck * 1.5)); c.beginPath(); c.moveTo(-11, 0); c.lineTo(-3, 9); c.lineTo(13, -9); c.stroke(); c.restore();
+    });
+  }],
+  clock: ["เวลา/รวดเร็ว/ประหยัดเวลา", (c, k, t, A) => {
+    ground(c, 40, 32);
+    pop(c, k, () => {
+      c.fillStyle = lg(c, 0, -36, 0, 36, tint(A, 0.15), tint(A, -0.25)); c.beginPath(); c.arc(0, 0, 36, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#FFFFFF"; c.beginPath(); c.arc(0, 0, 29, 0, Math.PI * 2); c.fill();
+      c.fillStyle = PAL.n; for (let i = 0; i < 12; i++) { c.save(); c.rotate(i * Math.PI / 6); c.fillRect(-1, -26, 2, i % 3 ? 3 : 6); c.restore(); }
+      const m = t * 2.4, h = t * 0.2;
+      c.strokeStyle = PAL.n; c.lineCap = "round"; c.lineWidth = 3.5; c.beginPath(); c.moveTo(0, 0); c.lineTo(13 * Math.sin(h + 1), -13 * Math.cos(h + 1)); c.stroke();
+      c.strokeStyle = A; c.lineWidth = 2.5; c.beginPath(); c.moveTo(0, 0); c.lineTo(21 * Math.sin(m), -21 * Math.cos(m)); c.stroke();
+      c.fillStyle = PAL.n; c.beginPath(); c.arc(0, 0, 3.2, 0, Math.PI * 2); c.fill();
+      c.fillStyle = tint(A, -0.1); rrect(c, -6, -44, 12, 7, 2); c.fill();
+    });
+  }],
+  calendar: ["วันที่/นัดหมาย/ระยะเวลา/ผ่อนชำระ", (c, k, t, A) => {
+    ground(c, 38, 38);
+    pop(c, k, () => {
+      c.fillStyle = "#FFFFFF"; rrect(c, -32, -30, 64, 64, 8); c.fill();
+      c.fillStyle = lg(c, 0, -30, 0, -12, tint(A, 0.1), tint(A, -0.2)); c.beginPath(); c.moveTo(-32, -12); c.lineTo(-32, -22); c.quadraticCurveTo(-32, -30, -24, -30); c.lineTo(24, -30); c.quadraticCurveTo(32, -30, 32, -22); c.lineTo(32, -12); c.closePath(); c.fill();
+      c.fillStyle = PAL.n; rrect(c, -19, -37, 5, 12, 2.5); c.fill(); rrect(c, 14, -37, 5, 12, 2.5); c.fill();
+      for (let r = 0; r < 3; r++) for (let q = 0; q < 4; q++) { c.fillStyle = "#D6DEEA"; rrect(c, -24 + q * 13, -5 + r * 12, 8, 7, 2); c.fill(); }
+      const ck = sprg((k * 1.6 - 0.6) * 1.5); if (ck > 0) { c.save(); c.translate(-24 + 2 * 13 + 4, -5 + 12 + 3.5); c.scale(ck, ck); c.strokeStyle = PAL.r; c.lineWidth = 2.6; c.beginPath(); c.arc(0, 0, 8, 0, Math.PI * 2); c.stroke(); c.restore(); }
+      const fl = clamp01(1 - k * 2); if (fl > 0) { c.save(); c.translate(0, -12); c.scale(1, fl); c.fillStyle = "#EEF2F8"; c.fillRect(-32, 0, 64, 46); c.restore(); }
+    });
+  }],
+  phone: ["มือถือ/แชท/ติดต่อ/แอป/รีวิว", (c, k, t, A) => {
+    ground(c, 44, 30);
+    pop(c, k, () => {
+      c.fillStyle = PAL.d; rrect(c, -22, -42, 44, 84, 9); c.fill();
+      c.fillStyle = lg(c, 0, -38, 0, 38, "#F4F7FC", "#DCE4F0"); rrect(c, -19, -38, 38, 76, 6); c.fill();
+      c.fillStyle = PAL.d; rrect(c, -7, -38, 14, 4, 2); c.fill();
+      const bub = (i, left, w, col, txtc) => { const kk = sprg((k * 1.6 - 0.35 - i * 0.28) * 1.6); if (kk <= 0) return; const y = -24 + i * 17, x = left ? -15 : 15 - w; c.save(); c.translate(left ? x : x + w, y + 5); c.scale(kk, kk); c.translate(-(left ? x : x + w), -(y + 5)); c.fillStyle = col; rrect(c, x, y, w, 11, 5); c.fill(); c.fillStyle = txtc; c.fillRect(x + 4, y + 4, w - 10, 1.6); c.fillRect(x + 4, y + 7, (w - 10) * 0.6, 1.6); c.restore(); };
+      bub(0, true, 24, "#FFFFFF", "#9AA6B8"); bub(1, false, 22, A, "rgba(255,255,255,.8)"); bub(2, true, 26, "#FFFFFF", "#9AA6B8");
+      if (k > 0.95) { c.fillStyle = A; rrect(c, -3, 27, 18, 9, 4.5); c.fill(); for (let i = 0; i < 3; i++) { const b = Math.max(0, Math.sin(t * 7 - i)); c.fillStyle = "#FFFFFF"; c.beginPath(); c.arc(1 + i * 5, 31.5 - b * 1.5, 1.3, 0, Math.PI * 2); c.fill(); } }
+    });
+  }],
+  pin: ["สถานที่/สาขา/จัดส่ง/แผนที่", (c, k, t, A) => {
+    c.save(); c.translate(0, 22); c.scale(1, 0.42);
+    c.fillStyle = "#CDEBD9"; c.beginPath(); c.arc(0, 0, 44, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "#FFFFFF"; c.lineWidth = 5; c.beginPath(); c.moveTo(-44, -8); c.lineTo(44, 12); c.moveTo(-10, -44); c.lineTo(12, 44); c.stroke();
+    const rp = (t * 0.9) % 1; if (k > 0.9) { c.strokeStyle = rgba(A, 1 - rp); c.lineWidth = 3; c.beginPath(); c.arc(0, 0, 8 + rp * 30, 0, Math.PI * 2); c.stroke(); }
+    c.restore();
+    const d = sprg(k * 1.5), y = (1 - Math.min(1, d)) * -70 + (d > 1 ? (d - 1) * -10 : 0);
+    c.save(); c.translate(0, y);
+    c.fillStyle = lg(c, 0, -40, 0, 20, tint(A, 0.15), tint(A, -0.25)); c.beginPath(); c.moveTo(0, 22); c.bezierCurveTo(-8, 8, -20, -2, -20, -18); c.arc(0, -18, 20, Math.PI, 0); c.bezierCurveTo(20, -2, 8, 8, 0, 22); c.fill();
+    c.fillStyle = "#FFFFFF"; c.beginPath(); c.arc(0, -18, 8, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }],
+  gift: ["ของแถม/โปรโมชัน/ของขวัญ", (c, k, t, A) => {
+    ground(c, 36, 36);
+    const lift = Math.max(0, sprg((k * 1.6 - 0.5) * 1.4)) * 16, tilt = lift / 16 * -0.25;
+    c.fillStyle = lg(c, 0, -8, 0, 32, tint(A, 0.1), tint(A, -0.25)); rrect(c, -27, -8, 54, 40, 4); c.fill();
+    c.fillStyle = "#FFFFFF"; c.fillRect(-4.5, -8, 9, 40);
+    c.save(); c.translate(0, -8 - lift); c.rotate(tilt);
+    c.fillStyle = lg(c, 0, -10, 0, 0, tint(A, 0.25), tint(A, -0.05)); rrect(c, -31, -11, 62, 12, 3); c.fill(); c.fillStyle = "#FFFFFF"; c.fillRect(-4.5, -11, 9, 12);
+    c.fillStyle = "#FFFFFF"; c.beginPath(); c.ellipse(-8, -15, 9, 5, -0.4, 0, Math.PI * 2); c.ellipse(8, -15, 9, 5, 0.4, 0, Math.PI * 2); c.fill();
+    c.restore();
+    confetti(c, 0.75, t, [PAL.y, PAL.s, PAL.r, "#FFFFFF"], 14, 44);
+    if (k > 0.99) { const tw = 0.5 + 0.5 * Math.sin(t * 4); sparkle(c, -20, -38, 3 + 3 * tw, PAL.y); sparkle(c, 22, -42, 5 - 2 * tw, "#FFFFFF"); }
+  }],
+  star: ["รีวิว/คุณภาพ/คะแนน/ความพึงพอใจ", (c, k, t, A) => {
+    for (let i = 0; i < 5; i++) {
+      const kk = sprg((k * 1.6 - i * 0.14) * 1.6); const x = -44 + i * 22;
+      c.save(); c.translate(x, 0);
+      c.fillStyle = "rgba(255,255,255,.18)"; starPath(c, 0, 0, 11); c.fill();
+      if (kk > 0) { c.scale(kk, kk); c.fillStyle = lg(c, 0, -11, 0, 11, "#FFE27A", "#F5A300"); starPath(c, 0, 0, 11); c.fill(); c.fillStyle = "rgba(255,255,255,.4)"; starPath(c, -2, -2.5, 3.5); c.fill(); }
+      c.restore();
+    }
+    if (k > 0.99) { const tw = (t * 0.7) % 1; sparkle(c, -40 + Math.floor(t * 0.7 % 5) * 20 + 7, -10, 4 * Math.sin(Math.PI * tw), "#FFFFFF"); }
+  }],
+  bulb: ["ไอเดีย/เคล็ดลับ/วิธี/ความรู้", (c, k, t, A) => {
+    const on = clamp01(k * 1.6 - 0.4), gl = on * (0.75 + 0.25 * Math.sin(t * 3));
+    if (on > 0) { const g = c.createRadialGradient(0, -10, 5, 0, -10, 54); g.addColorStop(0, `rgba(255,214,90,${0.45 * gl})`); g.addColorStop(1, "rgba(255,214,90,0)"); c.fillStyle = g; c.beginPath(); c.arc(0, -10, 54, 0, Math.PI * 2); c.fill();
+      c.save(); c.translate(0, -10); c.rotate(t * 0.3); c.strokeStyle = `rgba(255,214,90,${0.8 * on})`; c.lineWidth = 2.6; c.lineCap = "round"; for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; c.beginPath(); c.moveTo(34 * Math.cos(a), 34 * Math.sin(a)); c.lineTo(41 * Math.cos(a), 41 * Math.sin(a)); c.stroke(); } c.restore(); }
+    pop(c, k, () => {
+      c.fillStyle = on > 0 ? lg(c, 0, -36, 0, 10, "#FFF4C2", "#FFC93C") : "#E7ECF3"; c.beginPath(); c.arc(0, -12, 22, Math.PI * 0.8, Math.PI * 2.2); c.lineTo(9, 14); c.lineTo(-9, 14); c.closePath(); c.fill();
+      c.fillStyle = "rgba(255,255,255,.55)"; c.beginPath(); c.ellipse(-8, -20, 6, 9, -0.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = PAL.n; rrect(c, -10, 14, 20, 6, 2); c.fill(); rrect(c, -9, 21, 18, 5, 2); c.fill(); rrect(c, -6, 27, 12, 4, 2); c.fill();
+    });
+  }],
+  heart: ["ชอบ/ใส่ใจ/ความรู้สึก/ความรัก", (c, k, t, A) => {
+    const beat = 1 + 0.07 * Math.max(0, Math.sin(t * 6)) * (k > 0.9 ? 1 : 0);
+    const hp = (s) => { c.beginPath(); c.moveTo(0, 26 * s); c.bezierCurveTo(-40 * s, 0, -30 * s, -34 * s, 0, -16 * s); c.bezierCurveTo(30 * s, -34 * s, 40 * s, 0, 0, 26 * s); c.closePath(); };
+    ground(c, 36, 30);
+    pop(c, k, () => { c.save(); c.scale(beat, beat); c.fillStyle = lg(c, 0, -30, 0, 26, "#FF8A8E", "#E23B42"); hp(1); c.fill(); c.fillStyle = "rgba(255,255,255,.35)"; c.beginPath(); c.ellipse(-13, -12, 7, 4.5, -0.6, 0, Math.PI * 2); c.fill(); c.restore(); });
+    for (let i = 0; i < 3; i++) { const f = ((t * 0.5 + i / 3) % 1); if (k < 0.9) break; c.save(); c.globalAlpha = 1 - f; c.translate(-26 + i * 26, -20 - f * 30); c.scale(0.22, 0.22); c.fillStyle = "#FF8A8E"; hp(1); c.fill(); c.restore(); }
+  }],
+  home: ["บ้าน/รีสอร์ต/หมู่บ้าน/ที่พัก", (c, k, t, A) => {
+    ground(c, 34, 44);
+    pop(c, k, () => {
+      c.fillStyle = "#B9C4D6"; c.fillRect(14, -36, 8, 16);
+      c.fillStyle = lg(c, 0, -4, 0, 32, "#FFFFFF", "#DDE4EF"); c.fillRect(-28, -4, 56, 36);
+      c.fillStyle = lg(c, 0, -34, 0, 0, tint(A, 0.15), tint(A, -0.25)); c.beginPath(); c.moveTo(-36, 0); c.lineTo(0, -32); c.lineTo(36, 0); c.closePath(); c.fill();
+      c.fillStyle = PAL.n; rrect(c, -7, 12, 14, 20, 2); c.fill();
+      const lit = clamp01(k * 1.6 - 0.6); c.fillStyle = lit > 0 ? `rgba(255,201,60,${0.4 + 0.6 * lit})` : "#9FB0C8"; c.fillRect(-22, 6, 10, 9); c.fillRect(12, 6, 10, 9);
+    });
+    if (k > 0.9) for (let i = 0; i < 3; i++) { const f = (t * 0.4 + i / 3) % 1; c.save(); c.globalAlpha = 0.5 * (1 - f); c.fillStyle = "#FFFFFF"; c.beginPath(); c.arc(18 + f * 8, -40 - f * 26, 3 + f * 5, 0, Math.PI * 2); c.fill(); c.restore(); }
+  }],
+  gauge: ["สมรรถนะ/ความเร็ว/แรงม้า/ประสิทธิภาพ", (c, k, t, A) => {
+    pop(c, k, () => {
+      c.fillStyle = PAL.d; c.beginPath(); c.arc(0, 10, 40, Math.PI, 0); c.closePath(); c.fill();
+      const segs = [["#2FBF71", Math.PI, Math.PI * 1.4], ["#FFC93C", Math.PI * 1.4, Math.PI * 1.72], ["#FF5A5F", Math.PI * 1.72, Math.PI * 2]];
+      c.lineWidth = 7; segs.forEach(([col, a0, a1]) => { c.strokeStyle = col; c.beginPath(); c.arc(0, 10, 32, a0, a1); c.stroke(); });
+      c.fillStyle = "#FFFFFF"; for (let i = 0; i <= 8; i++) { const a = Math.PI + i * Math.PI / 8; c.fillRect(24 * Math.cos(a) - 1, 10 + 24 * Math.sin(a) - 1, 2, 2); }
+      const v = sprg(k * 1.3) * 0.78 + 0.015 * Math.sin(t * 9) * (k > 0.95 ? 1 : 0), a = Math.PI + Math.PI * Math.min(1, v);
+      c.strokeStyle = "#FFFFFF"; c.lineWidth = 3.4; c.lineCap = "round"; c.beginPath(); c.moveTo(0, 10); c.lineTo(28 * Math.cos(a), 10 + 28 * Math.sin(a)); c.stroke();
+      c.fillStyle = A; c.beginPath(); c.arc(0, 10, 5, 0, Math.PI * 2); c.fill();
+    });
+  }],
+  plant: ["รักษ์โลก/ประหยัด/เติบโต/ธรรมชาติ", (c, k, t, A) => {
+    ground(c, 36, 30);
+    const g = xOut(k * 1.3), sway = Math.sin(t * 1.6) * 0.05;
+    c.save(); c.translate(0, 8); c.rotate(sway);
+    c.strokeStyle = "#2F9E5B"; c.lineWidth = 3.4; c.lineCap = "round"; c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(-3, -18 * g, 0, -38 * g); c.stroke();
+    const leaf = (y, dir, d) => { const s = sprg((k * 1.6 - d) * 1.6); if (s <= 0) return; c.save(); c.translate(0, y * g); c.rotate(dir * 0.7); c.scale(s, s); c.fillStyle = lg(c, 0, -8, dir * 22, 0, "#6EE7A0", "#22A15A"); c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(dir * 11, -12, dir * 22, 0); c.quadraticCurveTo(dir * 11, 9, 0, 0); c.fill(); c.restore(); };
+    leaf(-14, -1, 0.4); leaf(-24, 1, 0.6); leaf(-34, -1, 0.8);
+    c.restore();
+    c.fillStyle = lg(c, 0, 8, 0, 34, tint(A, 0.1), tint(A, -0.3)); c.beginPath(); c.moveTo(-20, 8); c.lineTo(20, 8); c.lineTo(15, 34); c.lineTo(-15, 34); c.closePath(); c.fill();
+    c.fillStyle = tint(A, 0.25); c.fillRect(-22, 6, 44, 6);
+  }],
+  check: ["ผ่าน/ถูกต้อง/สำเร็จ/ใช่", (c, k, t, A) => {
+    ground(c, 40, 30);
+    pop(c, k, () => {
+      c.fillStyle = lg(c, 0, -34, 0, 34, "#4FE08F", "#1FA968"); c.beginPath(); c.arc(0, 0, 34, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "rgba(255,255,255,.2)"; c.beginPath(); c.ellipse(-10, -14, 16, 9, -0.5, 0, Math.PI * 2); c.fill();
+      const ck = clamp01(k * 1.6 - 0.35); c.save(); c.strokeStyle = "#FFFFFF"; c.lineWidth = 7; c.lineCap = "round"; c.lineJoin = "round"; c.setLineDash([70, 70]); c.lineDashOffset = 70 * (1 - xOut(ck * 1.4)); c.beginPath(); c.moveTo(-14, 1); c.lineTo(-4, 12); c.lineTo(16, -10); c.stroke(); c.restore();
+    });
+    confetti(c, 0.6, t, [PAL.y, PAL.s, "#FFFFFF", A], 16, 50);
+  }],
+  alert: ["ข้อควรระวัง/ปัญหา/อย่าทำ/คำเตือน", (c, k, t, A) => {
+    ground(c, 34, 36);
+    const wob = Math.sin(t * 9) * 0.12 * Math.exp(-t * 1.5);
+    pop(c, k, () => {
+      c.save(); c.rotate(wob);
+      c.fillStyle = lg(c, 0, -34, 0, 30, "#FFD966", "#F5A300"); c.beginPath(); c.moveTo(0, -34); c.quadraticCurveTo(4, -34, 6, -30); c.lineTo(36, 24); c.quadraticCurveTo(38, 30, 32, 30); c.lineTo(-32, 30); c.quadraticCurveTo(-38, 30, -36, 24); c.lineTo(-6, -30); c.quadraticCurveTo(-4, -34, 0, -34); c.fill();
+      c.fillStyle = PAL.n; rrect(c, -3.5, -14, 7, 26, 3.5); c.fill(); c.beginPath(); c.arc(0, 20, 4, 0, Math.PI * 2); c.fill();
+      c.restore();
+    });
+  }],
+  flag: ["กอล์ฟ/เป้าหมาย/สนาม", (c, k, t, A) => {
+    c.save(); c.translate(0, 24); c.scale(1, 0.32); c.fillStyle = lg(c, 0, -46, 0, 46, "#5ED37F", "#2B9A52"); c.beginPath(); c.arc(0, 0, 46, 0, Math.PI * 2); c.fill(); c.fillStyle = PAL.d; c.beginPath(); c.arc(6, 0, 7, 0, Math.PI * 2); c.fill(); c.restore();
+    const pk = xOut(k * 1.5); c.fillStyle = "#EEF2F8"; c.fillRect(5, 24 - 56 * pk, 2.6, 56 * pk);
+    if (pk > 0.6) { c.save(); c.translate(7.6, 24 - 56 * pk); c.fillStyle = A; c.beginPath(); c.moveTo(0, 0); for (let i = 0; i <= 10; i++) { const x = i * 2.6; c.lineTo(x, Math.sin(t * 6 - i * 0.6) * 1.8 + i * 0.3); } for (let i = 10; i >= 0; i--) { const x = i * 2.6; c.lineTo(x, 16 + Math.sin(t * 6 - i * 0.6) * 1.8 - i * 0.3); } c.closePath(); c.fill(); c.restore(); }
+    const bx = -40 + 46 * xOut(k * 1.2 - 0.2), by = 24 - Math.abs(Math.sin(bx * 0.15)) * 4;
+    c.fillStyle = "#FFFFFF"; c.beginPath(); c.arc(Math.min(6, bx), by - 2, 3.6, 0, Math.PI * 2); c.fill();
+  }],
+  target: ["เป้าหมาย/ตรงจุด/แม่นยำ", (c, k, t, A) => {
+    ground(c, 40, 32);
+    const hit = clamp01(k * 1.6 - 0.55), shake = hit > 0 && hit < 0.4 ? Math.sin(hit * 80) * 1.5 * (1 - hit / 0.4) : 0;
+    pop(c, k, () => { c.save(); c.translate(shake, 0); [[34, "#FF5A5F"], [26, "#FFFFFF"], [18, "#FF5A5F"], [10, "#FFFFFF"], [4.5, "#FF5A5F"]].forEach(([r, col]) => { c.fillStyle = col; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill(); }); c.restore(); });
+    const ak = xOut(clamp01(k * 1.6 - 0.25) / 0.3), ax = 60 * (1 - ak), ay = -60 * (1 - ak);
+    if (k * 1.6 > 0.25) { c.save(); c.translate(ax + shake, ay); c.rotate(-Math.PI / 4); c.fillStyle = PAL.n; c.fillRect(0, -1.5, 40, 3); c.fillStyle = A; c.beginPath(); c.moveTo(34, -1.5); c.lineTo(46, -7); c.lineTo(42, 0); c.lineTo(46, 7); c.lineTo(34, 1.5); c.fill(); c.restore(); }
+  }],
+  tarot: ["ไพ่ทาโรต์/ดูดวง/โชคชะตา/สายมู", (c, k, t, A) => {
+    ground(c, 40, 40);
+    const back = (gold) => { c.fillStyle = lg(c, 0, -26, 0, 26, "#2B2F6B", "#141633"); rrect(c, -15, -25, 30, 50, 3.5); c.fill(); c.strokeStyle = gold; c.lineWidth = 1.4; rrect(c, -12, -22, 24, 44, 2); c.stroke(); c.beginPath(); c.moveTo(0, -12); c.lineTo(8, 0); c.lineTo(0, 12); c.lineTo(-8, 0); c.closePath(); c.stroke(); sparkle(c, 0, 0, 3.5, gold); };
+    const front = () => { c.fillStyle = lg(c, 0, -26, 0, 26, "#FFF6DD", "#F2D9A0"); rrect(c, -15, -25, 30, 50, 3.5); c.fill(); c.strokeStyle = "#C99A3B"; c.lineWidth = 1.4; rrect(c, -12, -22, 24, 44, 2); c.stroke(); c.fillStyle = "#F5A300"; c.beginPath(); c.arc(0, -3, 7, 0, Math.PI * 2); c.fill(); c.strokeStyle = "#F5A300"; c.lineWidth = 1.4; for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + t * 0.6; c.beginPath(); c.moveTo(10 * Math.cos(a), -3 + 10 * Math.sin(a)); c.lineTo(13 * Math.cos(a), -3 + 13 * Math.sin(a)); c.stroke(); } c.fillStyle = "#8A6A2A"; c.fillRect(-7, 15, 14, 1.6); };
+    const fan = xOut(k * 1.4);
+    [-1, 1].forEach(s => { c.save(); c.translate(s * 22 * fan, 4 * fan); c.rotate(s * 0.28 * fan); back("#E8C26A"); c.restore(); });
+    const fk = clamp01(k * 1.6 - 0.7), sx = Math.cos(Math.PI * Math.min(1, fk * 1.4)), lift = Math.sin(t * 2) * 1.2;
+    c.save(); c.translate(0, -4 + lift); c.scale(Math.abs(sx) * 1.06 + 0.001, 1.06); if (sx > 0) back("#E8C26A"); else front(); c.restore();
+    if (fk >= 0.7) { const tw = 0.5 + 0.5 * Math.sin(t * 4); sparkle(c, 24, -32, 3 + 3 * tw, "#FFE08A"); sparkle(c, -26, -28, 5 - 2 * tw, "#FFFFFF"); }
+  }]
+};
+const ICON_ART = { check: "check", bolt: "bolt", battery: "battery", money: "money", tag: "coins", cart: "cart", clock: "clock", star: "star", shield: "shield", chart: "chart", pin: "pin", phone: "phone", chat: "phone", alert: "alert", heart: "heart", gift: "gift", gear: "gauge", gauge: "gauge", leaf: "plant", calendar: "calendar", home: "home", flag: "flag", spark: "bulb" };
+const artOf = sc => sc.art === "" ? null : ART[sc.art] ? sc.art : ICON_ART[sc.icon] || null;
+function drawArt(ctx, name, cx, cy, size, e, accent) {
+  const a = ART[name]; if (!a || size <= 2) return;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(size / 100, size / 100); ctx.lineJoin = "round";
+  const k = clamp01(e / 1.1);
+  try { a[1](ctx, k, e, accent || "#F5C542"); } catch (err) { console.error(err); }
+  ctx.restore();
+}
+
 let grainCv = null;
 function grainPattern(ctx) {
   if (!grainCv) { grainCv = document.createElement("canvas"); grainCv.width = grainCv.height = 96; const g = grainCv.getContext("2d"), d = g.createImageData(96, 96); for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; } g.putImageData(d, 0, 0); }
@@ -1358,6 +1665,7 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   const dur = Math.max(0.5, sc.end - sc.start), e = Math.max(0, t), u = Math.min(W, H) / 100, land = W / H > 1.2;
   let T = SCENE_THEMES[theme] || SCENE_THEMES.glass;
   const ph = sc.photo && PHOTOS.get(sc.photo.id);
+  const art = !(ph && ph.naturalWidth) && artOf(sc);
   if (media && (media.naturalWidth || media.videoWidth)) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     try { drawCover(ctx, media, { x: 0, y: 0, w: W, h: H }, media.videoWidth ? 1 : 1.02 + 0.06 * clamp01(e / dur)); } catch {}
@@ -1401,7 +1709,7 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   ctx.fillStyle = T.line; ctx.fillRect(0, H - 0.7 * u, W, 0.7 * u);
   ctx.fillStyle = T.accent; ctx.fillRect(0, H - 0.7 * u, W * clamp01(e / dur), 0.7 * u);
   /* big outline icon as a quiet watermark that draws itself in and slowly turns */
-  if (ICONS[sc.icon] && sc.type !== "vs" && !ph) {
+  if (ICONS[sc.icon] && sc.type !== "vs" && !ph && !(art && (sc.type === "big" || sc.type === "number" || !sc.type))) {
     const isz = Math.min(W, H) * 0.62, ik = xOut((e - 0.1) / 1.4);
     ctx.save(); ctx.globalAlpha = (T.fg === "#FFFFFF" ? 0.09 : 0.08) * ik; ctx.translate(W * (land ? 0.86 : 0.8), H * (land ? 0.62 : 0.8)); ctx.rotate(-0.12 + 0.03 * Math.sin(e * 0.5));
     drawIcon(ctx, sc.icon, 0, 0, isz, T.fg, ik); ctx.restore();
@@ -1476,7 +1784,25 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   };
   const hasIcon = !!(ICONS[sc.icon] || sc.emoji), type = SCENE_TYPES[sc.type] ? sc.type : "big";
   const P = 8 * u, cw = W - P * 2;
-  if (type === "big") {
+  if (type === "big" && art) {
+    const wide = W / H > 0.95;
+    const soft = (cx, cy, r) => { const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, r); g2.addColorStop(0, rgba(T.accent, 0.22)); g2.addColorStop(1, rgba(T.accent, 0)); ctx.fillStyle = g2; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); };
+    if (wide) {
+      const as = Math.min(H * 0.7, W * 0.4), ax = W * 0.26, ay = H * 0.5, tx = W * 0.47, tw = W * 0.47;
+      soft(ax, ay, as * 0.75); drawArt(ctx, art, ax, ay + Math.sin(e * 1.4) * 0.6 * u, as, e, T.accent);
+      const hh = fitText(ctx, sc.title || "", tw, 9 * u, 800, 3), th = hh.lines.length * hh.size * 1.18;
+      kicker(sc.kicker, tx, H * 0.5 - th / 2 - 5 * u, "left", 0.1);
+      const used = kinetic(sc.title, tx, H * 0.5, tw, 9 * u, 800, T.fg, 3, 0.25, "left", sc.mark);
+      block(sc.label, tx, H * 0.5 + used / 2 + 6 * u, tw, 4.4 * u, 400, T.sub, 2, 0.75, "left", null, 1.35);
+    } else {
+      const as = Math.min(W * 0.64, H * 0.42), ay = H * 0.07 + as / 2, rest = ay + as / 2, ty = rest + (H - rest) * 0.46;
+      soft(W / 2, ay, as * 0.75); drawArt(ctx, art, W / 2, ay + Math.sin(e * 1.4) * 0.6 * u, as, e, T.accent);
+      const fs = Math.min(9.5 * u, (H - rest) * 0.2), hh = fitText(ctx, sc.title || "", cw, fs, 800, 2), th = hh.lines.length * hh.size * 1.18;
+      kicker(sc.kicker, W / 2, ty - th / 2 - 4.2 * u, "center", 0.1);
+      const used = kinetic(sc.title, W / 2, ty, cw, fs, 800, T.fg, 2, 0.25, "center", sc.mark);
+      block(sc.label, W / 2, ty + used / 2 + 4.6 * u, cw * 0.92, 4.2 * u, 400, T.sub, 1, 0.75, "center", null, 1.3);
+    }
+  } else if (type === "big") {
     const al = land ? "left" : "center", tx = land ? P * 1.5 : W / 2, tw = land ? W * 0.66 : cw, y = H * (land ? 0.5 : 0.47);
     const hh = fitText(ctx, sc.title || "", tw, (land ? 10.5 : 11) * u, 800, 3), th = hh.lines.length * hh.size * 1.18;
     kicker(sc.kicker, tx, y - th / 2 - 5.5 * u, al, 0.02);
@@ -1488,11 +1814,16 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
     const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/), t0 = sc.valueT != null && isFinite(sc.valueT) ? Math.max(0, sc.valueT - sc.start) : 0.25;
     let shown = raw;
     if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * xOut((e - t0) / 1.1)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
-    const align = land ? "left" : "center", x = land ? P * 1.4 : W / 2, maxW = land ? W * 0.62 : cw;
-    kicker(sc.kicker || sc.title, x, H * 0.28, align, 0.05);
-    const f = fitText(ctx, raw, maxW, (land ? 15 : 17) * u, 800, 1), k = xOut((e - t0 + 0.2) / 0.5);
-    if (k > 0) { ctx.save(); ctx.font = SFONT(800, f.size); ctx.fillStyle = T.accent; ctx.textAlign = align; ctx.beginPath(); ctx.rect(0, H * 0.48 - f.size * 0.85, W, f.size * 1.7); ctx.clip(); ctx.fillText(shown, x, H * 0.48 + (1 - k) * f.size); ctx.restore(); }
-    block(sc.label, x, H * 0.7, maxW, 5.4 * u, 600, T.fg, 2, t0 + 0.35, align, sc.mark);
+    const nw = land || (art && W / H > 0.95), align = nw ? "left" : "center", x = nw ? P * 1.4 : W / 2, maxW = nw ? W * (art ? 0.56 : 0.62) : cw;
+    let yk = H * 0.28, yn = H * 0.48, yl = H * 0.7;
+    if (art) {
+      if (W / H > 0.95) { const as = Math.min(H * 0.62, W * 0.32); drawArt(ctx, art, W * 0.8, H * 0.5 + Math.sin(e * 1.4) * 0.6 * u, as, e, T.accent); }
+      else { const as = Math.min(W * 0.52, H * 0.32); drawArt(ctx, art, W / 2, H * 0.06 + as / 2 + Math.sin(e * 1.4) * 0.6 * u, as, e, T.accent); const top = H * 0.06 + as; yk = top + (H - top) * 0.14; yn = top + (H - top) * 0.42; yl = top + (H - top) * 0.74; }
+    }
+    kicker(sc.kicker || sc.title, x, yk, align, 0.05);
+    const f = fitText(ctx, raw, maxW, (nw ? 15 : art ? 14 : 17) * u, 800, 1), k = xOut((e - t0 + 0.2) / 0.5);
+    if (k > 0) { ctx.save(); ctx.font = SFONT(800, f.size); ctx.fillStyle = T.accent; ctx.textAlign = align; ctx.beginPath(); ctx.rect(0, yn - f.size * 0.85, W, f.size * 1.7); ctx.clip(); ctx.fillText(shown, x, yn + (1 - k) * f.size); ctx.restore(); }
+    block(sc.label, x, yl, maxW, (art && !nw ? 4.8 : 5.4) * u, 600, T.fg, 2, t0 + 0.35, align, sc.mark);
   } else if (type === "list") {
     const items = (sc.items || []).filter(Boolean).slice(0, 4), tt = sc.itemsT || [];
     const top = H * (sc.title ? 0.27 : 0.12), x0 = land ? P * 1.3 : P;
@@ -1692,8 +2023,9 @@ Rules:
 7. Text in the script's language, short phrases, no emoji, no exclamation marks, no clichés like "สุดยอด" unless the speaker said it.
 8. "anchor": copy exactly 1 to 4 consecutive words from the text of the start line: the words at the exact moment the graphic should pop in (where the idea, number or name is actually said). The graphic appears when those words are spoken.
 9. "end": index of the last line this idea is still being talked about. After it the speaker's face comes back until the next scene.
+11. "art": for "big" and "number" scenes without a photo, pick the animated illustration that best shows the idea from: ${Object.entries(ART).map(([k, v]) => `${k} (${v[0]})`).join(", ")}. Use "" if none fits. Every shown "big" or "number" scene should have either "photo" or "art".
 10. "photo": an English stock-photo search query of 2 to 4 concrete words that shows what is being talked about (subject + setting, e.g. "electric golf cart resort", "woman reading tarot cards", "thai temple at night", "money wallet cash"). Use "" for abstract ideas that a photo cannot show, and for scenes with "show": false. Give a photo to about half of the shown scenes, mostly "big" and "quote" scenes.
-Reply only with JSON: {"scenes":[{"start":0,"end":1,"anchor":"","show":true,"type":"big","icon":"cart","photo":"","kicker":"","title":"","mark":"","label":"","value":"","value_line":0,"items":[{"text":"","line":0}],"a":"","b":"","b_line":0}]}` },
+Reply only with JSON: {"scenes":[{"start":0,"end":1,"anchor":"","show":true,"type":"big","icon":"cart","art":"","photo":"","kicker":"","title":"","mark":"","label":"","value":"","value_line":0,"items":[{"text":"","line":0}],"a":"","b":"","b_line":0}]}` },
       { role: "user", content: JSON.stringify({ first_line: s, lines: caps.slice(s, s + B).map((c, k) => ({ i: s + k, t: +c.start.toFixed(1), text: c.text })) }) }
     ]);
     (j.scenes || []).forEach(x => raw.push(x));
@@ -1708,7 +2040,7 @@ Reply only with JSON: {"scenes":[{"start":0,"end":1,"anchor":"","show":true,"typ
     const itemsT = itemsRaw.map(v => typeof v === "object" && v ? lineT(v.line) : undefined).slice(0, items.length);
     const anchor = str(x.anchor, 40), at = anchor && first.text.includes(anchor) ? wordTime(p, first, anchor) : first.start;
     const last = caps[Math.max(+x.start, Math.min(caps.length - 1, +x.end || +x.start))] || first;
-    const sc = { id: uid(), start: Math.max(0, at - 0.15), end: first.end, until: last.end + 0.45, photoQ: str(x.photo, 60).replace(/[^\w\s-]/g, "").trim(), type, show: x.show !== false, icon: ICONS[x.icon] ? x.icon : "", kicker: str(x.kicker, 24), title: str(x.title, 60), mark: str(x.mark, 30), label: str(x.label, 70), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
+    const sc = { id: uid(), start: Math.max(0, at - 0.15), end: first.end, until: last.end + 0.45, art: ART[x.art] ? x.art : undefined, photoQ: str(x.photo, 60).replace(/[^\w\s-]/g, "").trim(), type, show: x.show !== false, icon: ICONS[x.icon] ? x.icon : "", kicker: str(x.kicker, 24), title: str(x.title, 60), mark: str(x.mark, 30), label: str(x.label, 70), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
     if (type === "vs") sc.items = items.filter(k => ICONS[k]);
     if (sc.mark && !(sc.title.includes(sc.mark) || sc.label.includes(sc.mark))) sc.mark = "";
     if (type === "number" && !/\d/.test(sc.value)) { sc.type = "big"; sc.title = sc.title || sc.label; }
@@ -3546,6 +3878,7 @@ async function viewEditor(id) {
         </div>
         <div class="scn-ed" hidden>
           <div class="two"><div class="field"><label class="hint">แบบภาพ</label><select class="input" data-k="type">${Object.entries(SCENE_TYPES).map(([k, n]) => `<option value="${k}"${k === sc.type ? " selected" : ""}>${n}</option>`).join("")}</select></div>
+            <div class="field"><label class="hint">ภาพแอนิเมชัน</label><select class="input" data-k="art"><option value=""${sc.art === "" ? " selected" : ""}>ไม่มี</option>${Object.entries(ART).map(([k, v]) => `<option value="${k}"${k === artOf(sc) ? " selected" : ""}>${v[0].split("/")[0]}</option>`).join("")}</select></div>
             <div class="field"><label class="hint">ไอคอน</label><select class="input" data-k="icon"><option value="">ไม่มี</option>${Object.entries(ICONS).map(([k, v]) => `<option value="${k}"${k === sc.icon ? " selected" : ""}>${v[0]}</option>`).join("")}</select></div></div>
           <div class="two"><div class="field"><label class="hint">ป้ายเล็กด้านบน</label><input class="input" data-k="kicker" value="${esc(sc.kicker || "")}"></div>
             <div class="field"><label class="hint">คำที่ไฮไลต์</label><input class="input" data-k="mark" value="${esc(sc.mark || "")}"></div></div>
