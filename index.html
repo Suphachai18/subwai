@@ -364,7 +364,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (3) · แก้หน้าจอเลื่อนไปมา</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (4) · รูปภาพจริงประกอบ + ขึ้นตรงคำพูด</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1356,7 +1356,8 @@ const drawCover = (ctx, src, r, zoom = 1) => drawFramed(ctx, src, r, 50, 50, zoo
 function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   ctx.save(); ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip(); ctx.translate(X, Y);
   const dur = Math.max(0.5, sc.end - sc.start), e = Math.max(0, t), u = Math.min(W, H) / 100, land = W / H > 1.2;
-  const T = SCENE_THEMES[theme] || SCENE_THEMES.glass;
+  let T = SCENE_THEMES[theme] || SCENE_THEMES.glass;
+  const ph = sc.photo && PHOTOS.get(sc.photo.id);
   if (media && (media.naturalWidth || media.videoWidth)) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     try { drawCover(ctx, media, { x: 0, y: 0, w: W, h: H }, media.videoWidth ? 1 : 1.02 + 0.06 * clamp01(e / dur)); } catch {}
@@ -1386,10 +1387,21 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   /* vignette */
   { const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.78); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, T.fg === "#FFFFFF" ? "rgba(0,0,0,.38)" : "rgba(0,0,0,.10)"); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
   const pat = grainPattern(ctx); if (pat) { ctx.save(); ctx.globalAlpha = T.grain; ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  /* real photo: full bleed, slow Ken Burns move, darkened so white type always reads */
+  if (ph && ph.naturalWidth) {
+    const z = 1.06 + 0.1 * eOut(e / Math.max(2.5, dur)), dir = hs % 2 ? 1 : -1, iw = ph.naturalWidth, ih = ph.naturalHeight, k = Math.max(W / iw, H / ih) * z, dw = iw * k, dh = ih * k;
+    const pan = clamp01(e / Math.max(2.5, dur)) * dir * W * 0.03;
+    ctx.save(); ctx.globalAlpha = xOut(e / 0.5); ctx.drawImage(ph, (W - dw) / 2 + pan, (H - dh) / 2, dw, dh);
+    const hero = sc.type === "big" || sc.type === "quote";
+    const og = ctx.createLinearGradient(0, 0, 0, H);
+    og.addColorStop(0, hero ? "rgba(6,9,16,.30)" : "rgba(6,9,16,.70)"); og.addColorStop(0.55, hero ? "rgba(6,9,16,.45)" : "rgba(6,9,16,.74)"); og.addColorStop(1, hero ? "rgba(6,9,16,.82)" : "rgba(6,9,16,.86)");
+    ctx.fillStyle = og; ctx.fillRect(0, 0, W, H); ctx.restore();
+    T = { ...T, fg: "#FFFFFF", sub: "rgba(255,255,255,.82)", line: "rgba(255,255,255,.22)", card: "rgba(255,255,255,.12)", ink: T.accent === "#1F4FE0" ? "#FFFFFF" : T.ink };
+  }
   ctx.fillStyle = T.line; ctx.fillRect(0, H - 0.7 * u, W, 0.7 * u);
   ctx.fillStyle = T.accent; ctx.fillRect(0, H - 0.7 * u, W * clamp01(e / dur), 0.7 * u);
   /* big outline icon as a quiet watermark that draws itself in and slowly turns */
-  if (ICONS[sc.icon] && sc.type !== "vs") {
+  if (ICONS[sc.icon] && sc.type !== "vs" && !ph) {
     const isz = Math.min(W, H) * 0.62, ik = xOut((e - 0.1) / 1.4);
     ctx.save(); ctx.globalAlpha = (T.fg === "#FFFFFF" ? 0.09 : 0.08) * ik; ctx.translate(W * (land ? 0.86 : 0.8), H * (land ? 0.62 : 0.8)); ctx.rotate(-0.12 + 0.03 * Math.sin(e * 0.5));
     drawIcon(ctx, sc.icon, 0, 0, isz, T.fg, ik); ctx.restore();
@@ -1537,6 +1549,7 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
     if (sc.label) kicker(sc.label, land ? P * 1.4 : W / 2, H * 0.82, land ? "left" : "center", 0.8);
   }
   ctx.restore(); // camera
+  if (ph && sc.photo.credit) { ctx.save(); ctx.globalAlpha = 0.55 * xOut(e / 0.8); ctx.font = SFONT(400, Math.max(9, 2.2 * u)); ctx.fillStyle = "#FFFFFF"; ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"; ctx.fillText(sc.photo.credit, W - 2.5 * u, H - 2.6 * u); ctx.restore(); }
   ctx.restore();
 }
 /* ---- transitions between scenes (and between your face and a graphic) ---- */
@@ -1596,6 +1609,7 @@ const holdT = (sc, t) => Math.min(t - sc.start, sc.end - sc.start - 0.26) ; // o
 /* split mode: the graphic half */
 function drawSplitVis(ctx, r, p, t, mediaCb, bgSrc) {
   const m = sceneMix(p, t); if (!m) return false;
+  if (m.sc.gap && m.prev) { drawScene(ctx, r.x, r.y, r.w, r.h, m.prev, holdT(m.prev, m.prev.end - 0.01), mediaCb ? mediaCb(m.prev, t) : null, p.split.theme, bgSrc); return true; }
   const T = SCENE_THEMES[p.split.theme] || SCENE_THEMES.glass;
   const one = (sc, tt) => drawScene(ctx, r.x, r.y, r.w, r.h, sc, tt, mediaCb ? mediaCb(sc, sc.start + tt) : null, p.split.theme, bgSrc);
   if (m.prev && m.k < 1) drawTrans(ctx, r, m.k, transOf(p, m.sc), () => one(m.prev, holdT(m.prev, t)), () => one(m.sc, t - m.sc.start), T.accent);
@@ -1676,7 +1690,10 @@ Rules:
 5. "icon": the single best icon from: ${iconList}. Use "" if none fits.
 6. "mark": the one word or short phrase inside "title" (or "label" for numbers) to highlight, copied exactly; "" if none.
 7. Text in the script's language, short phrases, no emoji, no exclamation marks, no clichés like "สุดยอด" unless the speaker said it.
-Reply only with JSON: {"scenes":[{"start":0,"show":true,"type":"big","icon":"cart","kicker":"","title":"","mark":"","label":"","value":"","value_line":0,"items":[{"text":"","line":0}],"a":"","b":"","b_line":0}]}` },
+8. "anchor": copy exactly 1 to 4 consecutive words from the text of the start line: the words at the exact moment the graphic should pop in (where the idea, number or name is actually said). The graphic appears when those words are spoken.
+9. "end": index of the last line this idea is still being talked about. After it the speaker's face comes back until the next scene.
+10. "photo": an English stock-photo search query of 2 to 4 concrete words that shows what is being talked about (subject + setting, e.g. "electric golf cart resort", "woman reading tarot cards", "thai temple at night", "money wallet cash"). Use "" for abstract ideas that a photo cannot show, and for scenes with "show": false. Give a photo to about half of the shown scenes, mostly "big" and "quote" scenes.
+Reply only with JSON: {"scenes":[{"start":0,"end":1,"anchor":"","show":true,"type":"big","icon":"cart","photo":"","kicker":"","title":"","mark":"","label":"","value":"","value_line":0,"items":[{"text":"","line":0}],"a":"","b":"","b_line":0}]}` },
       { role: "user", content: JSON.stringify({ first_line: s, lines: caps.slice(s, s + B).map((c, k) => ({ i: s + k, t: +c.start.toFixed(1), text: c.text })) }) }
     ]);
     (j.scenes || []).forEach(x => raw.push(x));
@@ -1689,7 +1706,9 @@ Reply only with JSON: {"scenes":[{"start":0,"show":true,"type":"big","icon":"car
     const itemsRaw = Array.isArray(x.items) ? x.items : [];
     let items = itemsRaw.map(v => typeof v === "object" && v ? str(v.text, 40) : String(v == null ? "" : v).trim().slice(0, 40)).filter(Boolean).slice(0, 5);
     const itemsT = itemsRaw.map(v => typeof v === "object" && v ? lineT(v.line) : undefined).slice(0, items.length);
-    const sc = { id: uid(), start: Math.max(0, first.start - 0.12), end: first.end, type, show: x.show !== false, icon: ICONS[x.icon] ? x.icon : "", kicker: str(x.kicker, 24), title: str(x.title, 60), mark: str(x.mark, 30), label: str(x.label, 70), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
+    const anchor = str(x.anchor, 40), at = anchor && first.text.includes(anchor) ? wordTime(p, first, anchor) : first.start;
+    const last = caps[Math.max(+x.start, Math.min(caps.length - 1, +x.end || +x.start))] || first;
+    const sc = { id: uid(), start: Math.max(0, at - 0.15), end: first.end, until: last.end + 0.45, photoQ: str(x.photo, 60).replace(/[^\w\s-]/g, "").trim(), type, show: x.show !== false, icon: ICONS[x.icon] ? x.icon : "", kicker: str(x.kicker, 24), title: str(x.title, 60), mark: str(x.mark, 30), label: str(x.label, 70), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
     if (type === "vs") sc.items = items.filter(k => ICONS[k]);
     if (sc.mark && !(sc.title.includes(sc.mark) || sc.label.includes(sc.mark))) sc.mark = "";
     if (type === "number" && !/\d/.test(sc.value)) { sc.type = "big"; sc.title = sc.title || sc.label; }
@@ -1699,10 +1718,62 @@ Reply only with JSON: {"scenes":[{"start":0,"show":true,"type":"big","icon":"car
     return sc;
   }).filter(Boolean);
   if (!scenes.length) throw new Error("AI ไม่ได้สร้างฉากใดเลย ลองใหม่อีกครั้ง");
-  return normalizeScenes(scenes, p.duration);
+  const out = normalizeScenes(scenes, p.duration), res = [];
+  /* when the speaker has moved on but the next graphic is still far away, go back to the face instead of leaving an old graphic up */
+  out.forEach(sc => { res.push(sc); if (sc.until && sc.end - sc.until > 1.6) { res.push({ id: uid(), start: sc.until, end: sc.end, type: "big", show: false, gap: true, title: "", items: [], media: null }); sc.end = sc.until; } delete sc.until; });
+  return res;
+}
+/* ---- real photos for scenes: Pexels (free key, best quality) or Openverse (no key) ---- */
+const PHOTOS = new Map();
+async function ensurePhotos(p) {
+  for (const sc of (p.split && p.split.scenes) || []) {
+    const m = sc.photo; if (!m || PHOTOS.has(m.id)) continue;
+    const rec = (await DB.mediaGet(m.id).catch(() => null)) || (await Cloud.getMedia({ id: m.id, kind: "image", name: m.q }, p));
+    if (!rec || !rec.blob) continue;
+    const img = new Image(); img.src = URL.createObjectURL(rec.blob); try { await img.decode(); } catch {}
+    PHOTOS.set(m.id, img);
+  }
+}
+async function searchPhotos(q, orient) {
+  const key = (settings.pexelsKey || "").trim();
+  if (key) {
+    const r = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=10&orientation=${orient}`, { headers: { Authorization: key } });
+    if (r.status === 401 || r.status === 403) throw new Error("Pexels API key ไม่ถูกต้อง");
+    if (!r.ok) throw new Error("ค้นรูปไม่สำเร็จ (" + r.status + ")");
+    const j = await r.json();
+    return (j.photos || []).map(x => ({ url: orient === "portrait" ? x.src.portrait : orient === "square" ? x.src.large : x.src.landscape || x.src.large2x, credit: "Photo: " + (x.photographer || "Pexels") + " / Pexels" }));
+  }
+  const r = await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=12&mature=false&license_type=commercial&aspect_ratio=${orient === "portrait" ? "tall" : orient === "square" ? "square" : "wide"}`);
+  if (!r.ok) throw new Error("ค้นรูปไม่สำเร็จ (" + r.status + ")");
+  const j = await r.json();
+  return (j.results || []).filter(x => x.thumbnail).map(x => ({ url: x.thumbnail, credit: "Photo: " + String(x.creator || x.source || "Openverse").slice(0, 40) }));
+}
+function photoOrient(p) {
+  const fd = frameDims(p, p.width, p.height), r = p.split.mode === "split" ? splitRects(p, fd.W, fd.H).vis : cardRect(p, fd.W, fd.H), a = r.w / r.h;
+  return a > 1.15 ? "landscape" : a < 0.87 ? "portrait" : "square";
+}
+async function setScenePhoto(p, sc, next) {
+  const q = (sc.photo && sc.photo.q) || sc.photoQ; if (!q) return false;
+  const list = await searchPhotos(q, photoOrient(p)); if (!list.length) return false;
+  const n = next ? ((sc.photo && sc.photo.n) || 0) + 1 : 0, pick = list[n % list.length];
+  const r = await fetch(pick.url); if (!r.ok) return false;
+  const blob = await r.blob(); if (!/^image\//.test(blob.type) && blob.size < 2000) return false;
+  const id = "ph" + uid();
+  await DB.mediaPut({ id, blob, kind: "image", name: q });
+  const img = new Image(); img.src = URL.createObjectURL(blob); try { await img.decode(); } catch { return false; }
+  if (sc.photo && sc.photo.id) { DB.mediaDel(sc.photo.id).catch(() => {}); PHOTOS.delete(sc.photo.id); }
+  PHOTOS.set(id, img); sc.photo = { id, q, n, credit: pick.credit };
+  return true;
+}
+async function addScenePhotos(p, onProg) {
+  const todo = ((p.split && p.split.scenes) || []).filter(sc => sc.photoQ && !sc.photo && !sc.media && !sc.gap).slice(0, 18);
+  let ok = 0;
+  for (let i = 0; i < todo.length; i++) { try { if (await setScenePhoto(p, todo[i])) ok++; } catch (e) { if (/Pexels/.test(e.message)) throw e; } if (onProg) onProg(i + 1, todo.length); }
+  return ok;
 }
 /* user photos / clips placed on scenes */
 async function loadMediaEls(p, cache) {
+  try { await ensurePhotos(p); } catch {}
   for (const sc of (p.split && p.split.scenes) || []) {
     if (!sc.media || cache[sc.media.id]) continue;
     const rec = (await DB.mediaGet(sc.media.id)) || (await Cloud.getMedia(sc.media, p)); if (!rec) continue;
@@ -2104,8 +2175,8 @@ const Cloud = {
   },
   async pushProject(p) {
     const c = { ...this.meta(p.id) }; c.media = { ...(c.media || {}) };
-    for (const sc of (p.split && p.split.scenes) || []) {
-      const m = sc.media; if (!m || !m.id || c.media[m.id]) continue;
+    for (const sc of (p.split && p.split.scenes) || []) for (const m of [sc.media, sc.photo && { id: sc.photo.id }]) {
+      if (!m || !m.id || c.media[m.id]) continue;
       const rec = await DB.mediaGet(m.id).catch(() => null); if (!rec || !rec.blob) continue;
       const have = await this.find({ subwai: "media", mid: m.id });
       c.media[m.id] = have[0] ? have[0].id : await this.upload(rec.blob, `media-${m.id}`, { subwai: "media", mid: m.id }, null, "m" + m.id);
@@ -2176,7 +2247,7 @@ const Cloud = {
     } catch { return null; }
   },
   /* ---- settings (API keys, chosen AI, vocabulary, default style) ---- */
-  SKEYS: ["groqKey", "apiKey", "geminiKey", "textAI", "vocab", "style", "lang", "lang2", "maxChars"],
+  SKEYS: ["groqKey", "apiKey", "geminiKey", "pexelsKey", "textAI", "vocab", "style", "lang", "lang2", "maxChars"],
   async pushSettings() {
     if (!this.enabled() || !this.valid()) return;
     try {
@@ -2475,6 +2546,7 @@ function viewNew(resumeId) {
         { const [m, a] = [npOrient.split(":")[0], npOrient.slice(npOrient.indexOf(":") + 1)]; p.split.mode = m; if (m === "card") p.split.card = a; if (m === "split") p.split.orient = a; }
         p.split.on = true; p.split.prevPos = p.style.pos; p.style.pos = p.split.mode === "split" ? (p.split.orient === "h" ? 86 : 50) : 84;
         if (autoSfx || autoKw) addTransSfx(p);
+        try { await addScenePhotos(p); } catch {}
         mark("split", "done"); p.updatedAt = Date.now(); await DB.put(p);
       }
       await sleep(300);
@@ -3439,7 +3511,9 @@ async function viewEditor(id) {
     const b = $("#spAi"), st = $("#spStat"); b.disabled = true; st.textContent = "AI กำลังอ่านสคริปต์และออกแบบฉาก…";
     try {
       const sc = await aiScenes(p); p.split.scenes = sc; if (!p.split.on) setSplit(true);
-      addTransSfx(p); renderSfx(); changed(); renderScenes(); sizeStage(); st.textContent = `สร้างแล้ว ${sc.length} ฉาก กดเล่นวิดีโอเพื่อดู แก้ข้อความหรือใส่รูป/คลิปเองได้ทุกฉาก`;
+      addTransSfx(p); renderSfx(); changed(); renderScenes();
+      if (p.split.photos !== false) { st.textContent = "กำลังหารูปภาพประกอบ…"; try { const n = await addScenePhotos(p, (d, t2) => st.textContent = `กำลังหารูปภาพประกอบ ${d}/${t2}…`); if (n) toast(`ใส่รูปประกอบแล้ว ${n} ฉาก`); } catch (e) { toast(e.message, 4000); } }
+      changed(); renderScenes(); sizeStage(); st.textContent = `สร้างแล้ว ${sc.length} ฉาก กดเล่นวิดีโอเพื่อดู แก้ข้อความหรือใส่รูป/คลิปเองได้ทุกฉาก`;
     } catch (e) { st.textContent = ""; toast(e.message, 5000); }
     b.disabled = false;
   };
@@ -3461,14 +3535,14 @@ async function viewEditor(id) {
     await attachMedia(sc, f);
   };
   function renderScenes() {
-    const list = p.split.scenes, fd = frameDims(p, p.width, p.height), vr = p.split.mode === "split" ? splitRects(p, fd.W, fd.H).vis : cardRect(p, fd.W, fd.H), th = Math.max(60, Math.min(220, Math.round(150 * vr.h / vr.w)));
+    const list = p.split.scenes.filter(s => !s.gap), fd = frameDims(p, p.width, p.height), vr = p.split.mode === "split" ? splitRects(p, fd.W, fd.H).vis : cardRect(p, fd.W, fd.H), th = Math.max(60, Math.min(220, Math.round(150 * vr.h / vr.w)));
     $("#scenes").innerHTML = list.length ? list.map(sc => `
       <li class="scn${sc.show === false && p.split.mode !== "split" ? " off" : ""}" data-id="${sc.id}">
         <canvas class="scn-th" width="150" height="${th}"></canvas>
         <div class="scn-b">
           <span class="hint mono">${fmtT(sc.start)}–${fmtT(sc.end)} · ${sc.media ? (sc.media.kind === "video" ? "คลิปของคุณ" : "รูปของคุณ") : SCENE_TYPES[sc.type] || ""}</span>
           <b class="scn-title">${esc(sc.media ? sc.media.name : (sc.title || sc.value || sc.a || "ฉาก"))}</b>
-          <div class="scn-acts"><button class="mini" data-s="go">ดูฉากนี้</button>${p.split.mode !== "split" ? `<button class="mini" data-s="show">${sc.show === false ? "แสดงฉากนี้" : "ซ่อน (เห็นหน้าคุณ)"}</button>` : ""}${sc.media ? "" : `<button class="mini" data-s="edit">แก้ข้อความ</button>`}<label class="mini" for="spf_${sc.id}">${sc.media ? "เปลี่ยนรูป/คลิป" : "ใส่รูป/คลิปเอง"}</label><input type="file" id="spf_${sc.id}" data-s="file" accept="image/*,video/*" hidden>${sc.media ? `<button class="mini" data-s="unmedia">กลับไปใช้แอนิเมชัน</button>` : ""}<button class="mini del" data-s="del">ลบฉาก</button></div>
+          <div class="scn-acts"><button class="mini" data-s="go">ดูฉากนี้</button>${p.split.mode !== "split" ? `<button class="mini" data-s="show">${sc.show === false ? "แสดงฉากนี้" : "ซ่อน (เห็นหน้าคุณ)"}</button>` : ""}${sc.media ? "" : `<button class="mini" data-s="edit">แก้ข้อความ</button>`}<label class="mini" for="spf_${sc.id}">${sc.media ? "เปลี่ยนรูป/คลิป" : "ใส่รูป/คลิปเอง"}</label><input type="file" id="spf_${sc.id}" data-s="file" accept="image/*,video/*" hidden>${sc.media ? `<button class="mini" data-s="unmedia">กลับไปใช้แอนิเมชัน</button>` : ""}${!sc.media ? (sc.photo ? `<button class="mini" data-s="phnext">เปลี่ยนรูป</button><button class="mini" data-s="phdel">เอารูปออก</button>` : `<button class="mini" data-s="phadd">ใส่รูปประกอบ</button>`) : ""}<button class="mini del" data-s="del">ลบฉาก</button></div>
         </div>
         <div class="scn-ed" hidden>
           <div class="two"><div class="field"><label class="hint">แบบภาพ</label><select class="input" data-k="type">${Object.entries(SCENE_TYPES).map(([k, n]) => `<option value="${k}"${k === sc.type ? " selected" : ""}>${n}</option>`).join("")}</select></div>
@@ -3499,6 +3573,13 @@ async function viewEditor(id) {
     if (a === "go") { if (!p.split.on) setSplit(true); seekTo(sc.start); draw(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     else if (a === "edit") { const ed = $(".scn-ed", b.closest(".scn")); ed.hidden = !ed.hidden; }
     else if (a === "unmedia") { sc.media = null; changed(); renderScenes(); }
+    else if (a === "phdel") { if (sc.photo) { PHOTOS.delete(sc.photo.id); DB.mediaDel(sc.photo.id).catch(() => {}); } sc.photo = null; changed(); renderScenes(); seekTo(sc.start); draw(); }
+    else if (a === "phnext" || a === "phadd") {
+      if (a === "phadd" && !sc.photoQ) { const q = prompt("ค้นรูปด้วยคำภาษาอังกฤษสั้น ๆ เช่น golf cart, tarot cards, money", sc.photoQ || ""); if (!q) return; sc.photoQ = q.trim(); }
+      b.disabled = true; b.textContent = "กำลังหารูป…";
+      setScenePhoto(p, sc, a === "phnext").then(ok => { if (!ok) toast("ไม่พบรูปที่เหมาะ ลองคำค้นอื่น", 3000); changed(); renderScenes(); seekTo(sc.start); draw(); })
+        .catch(err => { toast(err.message, 4000); renderScenes(); });
+    }
     else if (a === "show") { sc.show = sc.show === false; changed(); renderScenes(); seekTo(sc.start); draw(); }
     else if (a === "del") {
       if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบฉาก"; } }, 3000); return; }
@@ -3663,6 +3744,9 @@ function openSettings() {
     <h2 id="stt">ตั้งค่า AI</h2>
     ${keyBox("groq", PROVIDERS.groq, "ฟรี · ใช้ถอดเสียงจากวิดีโอ")}
     ${keyBox("gemini", PROVIDERS.gemini, "ฟรี ไม่ต้องใช้บัตร · ภาษาไทยแม่นมาก แนะนำสำหรับจัดซับและแปล")}
+    <details class="box"><summary>รูปภาพประกอบคุณภาพสูง: Pexels (ฟรี · ไม่บังคับ)</summary><div class="in">
+      <div class="row"><input class="input" id="k_pexels" type="password" autocomplete="off" placeholder="Pexels API key" style="flex:1;min-width:0"></div>
+      <span class="hint">ไม่ใส่ก็ได้ ระบบใช้คลังรูปฟรี Openverse แทน แต่ Pexels ได้รูปสวยและคมกว่า สมัครฟรีที่ pexels.com/api ด้วยอีเมล ไม่ต้องใช้บัตร</span></div></details>
     <details class="box"><summary>OpenAI (เสียเงิน · ไม่บังคับ)</summary><div class="in">${keyBox("openai", PROVIDERS.openai, "ต้องใช้บัตร")}</div></details>
     <div class="field"><span class="lab">AI ที่ใช้จัดซับ แก้คำผิด และแปล</span>
       <div class="seg" id="taiSeg"><button type="button" data-v="gemini">Gemini ★</button><button type="button" data-v="groq">Groq</button><button type="button" data-v="openai">OpenAI</button></div>
@@ -3676,7 +3760,7 @@ function openSettings() {
     <div class="field"><span class="lab">ตรวจระบบ</span><button class="btn small" id="sysChk">ตรวจว่าทุกส่วนใช้งานได้จริง</button><ol class="chk" id="chkOut" hidden></ol></div>
     <div class="row"><button class="btn primary" id="kSave" style="margin-left:auto">บันทึก</button><button class="btn" id="kClose">ปิด</button></div>
   </div></div>`;
-  $("#k_groq").value = settings.groqKey || ""; $("#k_openai").value = settings.apiKey || ""; $("#k_gemini").value = settings.geminiKey || "";
+  $("#k_groq").value = settings.groqKey || ""; $("#k_openai").value = settings.apiKey || ""; $("#k_gemini").value = settings.geminiKey || ""; $("#k_pexels").value = settings.pexelsKey || "";
   if (!settings.textAI && settings.geminiKey) tai = "gemini";
   const paint = () => {
     $$("#taiSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === tai));
@@ -3746,7 +3830,7 @@ function openSettings() {
     } catch { s.textContent = `✗ เชื่อมต่อ ${P.n} ไม่ได้ ตรวจอินเทอร์เน็ต`; s.style.color = "var(--danger)"; }
   });
   $("#kSave").onclick = () => {
-    settings.groqKey = $("#k_groq").value.trim(); settings.apiKey = $("#k_openai").value.trim(); settings.geminiKey = $("#k_gemini").value.trim();
+    settings.groqKey = $("#k_groq").value.trim(); settings.apiKey = $("#k_openai").value.trim(); settings.geminiKey = $("#k_gemini").value.trim(); settings.pexelsKey = $("#k_pexels").value.trim();
     if (!keyOf(PROVIDERS[tai])) { toast(`ใส่ ${PROVIDERS[tai].n} API key ก่อน หรือเลือก AI ตัวอื่น`); return; }
     if (!settings.groqKey && !settings.apiKey) { toast("ต้องมี Groq API key สำหรับถอดเสียง (ฟรี)"); return; }
     if (settings.textAI !== tai) { delete settings.chat_openai; delete settings.chat_gemini; }
