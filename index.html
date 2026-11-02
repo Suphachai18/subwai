@@ -368,7 +368,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (13) · ลบฉากแล้วกลับเป็นหน้าคุณ</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (14) · แก้กราฟิกค้าง/กะพริบตอนตัดกลับหน้าคุณ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -379,7 +379,11 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
   for (const fnName of ["fillText", "strokeText"]) { const orig = P[fnName];
     P[fnName] = function (txt, x, y, mw) { const al = this.textAlign;
       if (al === "center" || al === "right" || al === "end") { const w = Math.min(this.measureText(txt).width, mw === undefined ? Infinity : mw); this.textAlign = "left"; try { const dx = al === "center" ? w / 2 : w; return mw === undefined ? orig.call(this, txt, x - dx, y) : orig.call(this, txt, x - dx, y, mw); } finally { this.textAlign = al; } }
-      return mw === undefined ? orig.call(this, txt, x, y) : orig.call(this, txt, x, y, mw); }; } })();
+      return mw === undefined ? orig.call(this, txt, x, y) : orig.call(this, txt, x, y, mw); }; }
+  /* iPhone Safari ignores globalAlpha on anything drawn with a shadow, so fading graphics left solid pieces behind
+     (they "stuck" and flashed at scene changes). While something is fading, draw it without its shadow. */
+  for (const fnName of ["fill", "stroke", "fillText", "strokeText", "drawImage", "fillRect", "strokeRect"]) { const orig = P[fnName];
+    P[fnName] = function (...a) { if (this.globalAlpha < 0.999 && this.shadowColor !== "rgba(0, 0, 0, 0)" && (this.shadowBlur > 0 || this.shadowOffsetX || this.shadowOffsetY)) { const c = this.shadowColor; this.shadowColor = "rgba(0,0,0,0)"; try { return orig.apply(this, a); } finally { this.shadowColor = c; } } return orig.apply(this, a); }; } })();
 
 "use strict";
 /* ================= helpers ================= */
@@ -2143,7 +2147,7 @@ function mixRects(p, W, H) { const sp = p.split; return splitRects({ split: { ..
 function drawMixLayer(ctx, p, W, H, t, mediaCb, bgSrc, vsrc) {
   const m = sceneMix(p, t); if (!m) return;
   const { sc } = m, prevOn = m.prev && m.prev.show !== false, curOn = sc.show !== false, sp = p.split;
-  if (!curOn && !(prevOn && m.k < 1)) return;
+  if (!curOn) return;
   const T = SCENE_THEMES[sp.theme] || SCENE_THEMES.glass, F = { x: 0, y: 0, w: W, h: H };
   const cr = cardRect({ split: { ...sp, mode: "card" } }, W, H);
   const paint = (s, tt, a = 1) => {
@@ -2185,7 +2189,7 @@ function drawSceneLayer(ctx, p, W, H, t, mediaCb, bgSrc, vsrc) {
   if (p.split.mode === "mix") return drawMixLayer(ctx, p, W, H, t, mediaCb, bgSrc, vsrc || bgSrc);
   const m = sceneMix(p, t); if (!m) return;
   const { sc } = m, prevOn = m.prev && m.prev.show !== false, curOn = sc.show !== false;
-  if (!curOn && !(prevOn && m.k < 1)) return;
+  if (!curOn) return; /* the outgoing scene already played its exit at its own end */
   const r = cardRect(p, W, H), full = p.split.mode === "full", T = SCENE_THEMES[p.split.theme] || SCENE_THEMES.glass;
   const card = (s, tt, a = 1) => {
     ctx.save(); ctx.globalAlpha *= a;
