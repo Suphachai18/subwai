@@ -2935,6 +2935,8 @@ const Cloud = {
     settings.cloudOn = true; saveSettings();
     await this.pullSettings(); await this.pushSettings();
     const n = await this.pull(true);
+    /* upload the work that so far only lived in this browser */
+    try { for (const p of await DB.all()) if (!p.draft && !this.meta(p.id).fileId) this.queue.add(p.id); if (this.queue.size) { clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 800); } } catch {}
     return n;
   }
 };
