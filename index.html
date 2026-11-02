@@ -29,10 +29,9 @@
   :root{ --bg:#F3F5F8; --surface:#FFFFFF; --raise:#ECEFF4; --line:#D9DEE6; --fg:#121821; --muted:#5A6473; --accent-text:#866200; --danger:#C93A34; --ok:#1F8A5B; color-scheme:light }
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;overscroll-behavior-y:none}
-/* the page itself never scrolls (so iPhone can't pull-to-refresh); only #scroller scrolls */
-body{position:fixed;inset:0;width:100%}
-#scroller{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+html,body{margin:0;overscroll-behavior:none;overscroll-behavior-y:none;overflow-x:hidden}
+/* the page scrolls normally (works in Safari, Chrome and in-app browsers); work is autosaved so a refresh never loses it */
+#scroller{min-height:100%}
 .ver{display:block;margin-top:10px;text-align:center;font-size:12px;color:var(--muted)}
 body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -365,7 +364,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (2) · ภาพประกอบเคลื่อนไหวแบบมืออาชีพ</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (3) · แก้หน้าจอเลื่อนไปมา</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1100,7 +1099,13 @@ function drawCaption(ctx, W, H, cap, p, t) {
   }
   const total = rows.reduce((a, r) => a + r.lh, 0);
   const pad0 = main.px * 0.3;
-  const cy = Math.min(H - total / 2 - pad0, Math.max(total / 2 + pad0, H * st.pos / 100));
+  let posPct = st.pos;
+  const sp = p.split;
+  if (sp && sp.on && sp.mode === "split" && sp.orient !== "h") {
+    const seam = (sp.top !== "video" ? sp.ratio : 1 - sp.ratio) * 100, visTop = sp.top !== "video";
+    if ((visTop ? posPct < seam - 6 : posPct > seam + 6)) posPct = seam;
+  }
+  const cy = Math.min(H - total / 2 - pad0, Math.max(total / 2 + pad0, H * posPct / 100));
   // horizontal position: keep the widest line inside the frame
   const maxRow = rows.reduce((m, r) => Math.max(m, r.w + r.px * 0.9), 0);
   const cx = Math.min(W - maxRow / 2 - W * 0.02, Math.max(maxRow / 2 + W * 0.02, W * (st.posX == null ? 50 : st.posX) / 100));
@@ -1929,7 +1934,7 @@ window.addEventListener("beforeunload", e => { if (BUSY) { e.preventDefault(); e
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && BUSY && !wakeL) { BUSY--; setBusy(true); } });
 function route(h) { try { history.replaceState(null, "", h ? "#" + h : location.pathname + location.search); } catch {} }
 let cleanup = null;
-function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null; } $("#scroller").scrollTo(0, 0); fn(); }
+function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null; } window.scrollTo(0, 0); fn(); }
 
 /* ================= Google Drive sync =================
    Everything still lives in this browser first (fast, works offline). When Google Drive is connected,
@@ -3491,7 +3496,7 @@ async function viewEditor(id) {
   $("#scenes").addEventListener("click", e => {
     const b = e.target.closest("button[data-s]"); if (!b) return; const sc = scOf(b); if (!sc) return;
     const a = b.dataset.s;
-    if (a === "go") { if (!p.split.on) setSplit(true); seekTo(sc.start); draw(); $("#scroller").scrollTo({ top: 0, behavior: "smooth" }); }
+    if (a === "go") { if (!p.split.on) setSplit(true); seekTo(sc.start); draw(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     else if (a === "edit") { const ed = $(".scn-ed", b.closest(".scn")); ed.hidden = !ed.hidden; }
     else if (a === "unmedia") { sc.media = null; changed(); renderScenes(); }
     else if (a === "show") { sc.show = sc.show === false; changed(); renderScenes(); seekTo(sc.start); draw(); }
