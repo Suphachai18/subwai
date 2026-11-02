@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;700;800&family=Prompt:wght@500;700;800&family=Mitr:wght@500;600&family=Sarabun:wght@500;700;800&family=Noto+Sans+Thai:wght@500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&family=Prompt:wght@500;700;800&family=Mitr:wght@500;600&family=Sarabun:wght@500;700;800&family=Noto+Sans+Thai:wght@500;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Bai+Jamjuree:wght@500;700&family=K2D:wght@500;700;800&family=Krub:wght@500;700&family=Athiti:wght@500;700&family=Niramit:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Itim&family=Sriracha&family=Mali:wght@500;700&family=Pattaya&family=Chonburi&family=Kodchasan:wght@500;700&family=Fahkwang:wght@500;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Charmonman:wght@400;700&family=Srisakdi:wght@400;700&family=Pridi:wght@500;700&family=Trirong:wght@500;700;800&family=Taviraj:wght@500;700;800&family=Noto+Serif+Thai:wght@500;700;800&display=swap" rel="stylesheet">
@@ -366,11 +366,19 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (10) · โหมดผสม + ย้ายงานข้ามเบราว์เซอร์</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (11) · เปลี่ยนฉากลื่นขึ้น + ตัวอักษรตรงกลางบน iPhone</span>
 </div></div>
 <div id="modalRoot"></div>
 
 <script>
+/* Some iPhone Safari builds misplace text drawn with textAlign "center"/"right" on canvas (Thai text lands half a line to the right).
+   Measure and place it ourselves; the result is identical everywhere else. */
+(() => { const P = CanvasRenderingContext2D.prototype;
+  for (const fnName of ["fillText", "strokeText"]) { const orig = P[fnName];
+    P[fnName] = function (txt, x, y, mw) { const al = this.textAlign;
+      if (al === "center" || al === "right" || al === "end") { const w = Math.min(this.measureText(txt).width, mw === undefined ? Infinity : mw); this.textAlign = "left"; try { const dx = al === "center" ? w / 2 : w; return mw === undefined ? orig.call(this, txt, x - dx, y) : orig.call(this, txt, x - dx, y, mw); } finally { this.textAlign = al; } }
+      return mw === undefined ? orig.call(this, txt, x, y) : orig.call(this, txt, x, y, mw); }; } })();
+
 "use strict";
 /* ================= helpers ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1651,10 +1659,19 @@ function grainPattern(ctx) {
   try { return ctx.createPattern(grainCv, "repeat"); } catch { return null; }
 }
 const blurCv = document.createElement("canvas");
-function fitText(ctx, text, maxW, px, weight, maxLines) {
+const FIT_CACHE = new Map();
+function fitText(ctx, text, maxW, px, weight, maxLines, fam) {
+  const key = [text, Math.round(maxW), Math.round(px * 10), weight, maxLines, fam || ""].join("|"), hit = FIT_CACHE.get(key);
+  if (hit) return hit;
+  const r = fitText0(ctx, text, maxW, px, weight, maxLines, fam);
+  if (FIT_CACHE.size > 600) FIT_CACHE.clear(); FIT_CACHE.set(key, r); return r;
+}
+try { document.fonts.addEventListener("loadingdone", () => FIT_CACHE.clear()); } catch {}
+const PFONT = (w, px, fam) => fam ? `${w} ${px}px "${fam}", "Kanit", "Noto Sans Thai", sans-serif` : SFONT(w, px);
+function fitText0(ctx, text, maxW, px, weight, maxLines, fam) {
   let size = px, lines = [];
   for (let k = 0; k < 10; k++) {
-    ctx.font = SFONT(weight, size); lines = wrapLines(ctx, String(text), maxW, "th");
+    ctx.font = PFONT(weight, size, fam); lines = wrapLines(ctx, String(text), maxW, "th");
     if (lines.length <= maxLines && lines.every(l => ctx.measureText(l).width <= maxW)) break;
     size *= 0.9;
   }
@@ -1699,7 +1716,7 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   const art = !(ph && ph.naturalWidth) && artOf(sc);
   if (sc.type === "custom") {
     const fn = PACKFN.get(sc.pk);
-    if (fn) { try { ctx.save(); fn(ctx, W, H, Math.max(0, t), dur, PACK_API(T.accent)); ctx.restore(); } catch (err) { ctx.restore(); console.error(err); } }
+    if (fn) { try { ctx.save(); fn(ctx, W, H, Math.max(0, t), dur, PACK_API(T.accent, sc.pk.split(":")[0])); ctx.restore(); } catch (err) { ctx.restore(); console.error(err); } }
     else { ctx.fillStyle = "#14161c"; ctx.fillRect(0, 0, W, H); ctx.fillStyle = "#fff"; ctx.font = SFONT(600, Math.max(12, u * 4)); ctx.textAlign = "center"; ctx.fillText("กำลังโหลดกราฟิก…", W / 2, H / 2); }
     ctx.restore(); return;
   }
@@ -2093,7 +2110,7 @@ function addTransSfx(p) {
 function sceneMix(p, t) {
   const list = (p.split && p.split.scenes) || [], i = list.findIndex(s => t >= s.start && t < s.end);
   if (i < 0) return null;
-  const sc = list[i], prev = i > 0 && Math.abs(list[i - 1].end - sc.start) < 0.05 ? list[i - 1] : null, e = t - sc.start;
+  const sc = list[i], prev = i > 0 && Math.abs(list[i - 1].end - sc.start) < 0.08 ? list[i - 1] : null, e = t - sc.start;
   return { sc, prev, k: e < TR_D ? e / TR_D : 1 };
 }
 const holdT = (sc, t) => Math.min(t - sc.start, sc.end - sc.start - 0.26) ; // outgoing scene stays fully built during the change
@@ -2332,10 +2349,29 @@ async function addScenePhotos(p, onProg) {
    A pack is a small JS file: SUBWAI_PACK({ version: 1, mode, scenes: [{ start, end, show, title, draw(ctx, W, H, t, dur, A) }] }).
    Scenes become type "custom"; the app keeps doing timing, transitions, subtitles, sounds and export. */
 const PACKFN = new Map();
-const PACK_API = accent => ({
+const PACKASSET = new Map(); /* pack id -> { name: Image } */
+const TINTED = new Map();
+function packImg(pid, name, color) {
+  const im = (PACKASSET.get(pid) || {})[name]; if (!im || !im.complete || !im.naturalWidth) return null;
+  if (!color) return im;
+  const key = pid + "|" + name + "|" + color; let c = TINTED.get(key); if (c) return c;
+  c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight; const g = c.getContext("2d");
+  g.drawImage(im, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height); TINTED.set(key, c); return c;
+}
+function loadPackAssets(pid, g) {
+  const a = g.assets || {}, out = {};
+  for (const [k, url] of Object.entries(a)) { if (!/^data:image\//.test(String(url))) continue; const im = new Image(); im.onload = () => { try { if (window.__redraw) window.__redraw(); } catch {} }; im.src = url; out[k] = im; }
+  PACKASSET.set(pid, out);
+  for (const f of g.fonts || []) { try { document.fonts.load(String(f), "ทดสอบ Aa"); } catch {} }
+}
+const PACK_APIS = new Map();
+const PACK_API = (accent, pid = "") => { const k = accent + "|" + pid; let a = PACK_APIS.get(k); if (!a) { a = PACK_API0(accent, pid); PACK_APIS.set(k, a); } return a; };
+const WORD_CACHE = new Map();
+const PACK_API0 = (accent, pid) => ({
   ease: { out: eOut, expo: xOut, back: bOut, inOut: easeIO, spring: sprg }, clamp: clamp01, lerp: (a, b, k) => a + (b - a) * k,
-  rrect, font: (w, px) => SFONT(w, px), fit: (ctx, text, maxW, px, w, lines) => fitText(ctx, text, maxW, px, w || 800, lines || 2),
-  art: (ctx, name, cx, cy, size, t) => drawArt(ctx, name, cx, cy, size, t, accent), tint, rgba, words: s => tokens(String(s), "th"),
+  rrect, font: (w, px, fam) => PFONT(w, px, fam), fit: (ctx, text, maxW, px, w, lines, fam) => fitText(ctx, text, maxW, px, w || 800, lines || 2, fam),
+  img: (name, color) => packImg(pid, name, color),
+  art: (ctx, name, cx, cy, size, t) => drawArt(ctx, name, cx, cy, size, t, accent), tint, rgba, words: s => { s = String(s); let w = WORD_CACHE.get(s); if (!w) { w = tokens(s, "th"); if (WORD_CACHE.size > 800) WORD_CACHE.clear(); WORD_CACHE.set(s, w); } return w; },
   grain: (ctx, W, H, a = 0.05) => { const pat = grainPattern(ctx); if (pat) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H); ctx.restore(); } },
   sparkle: (ctx, x, y, r, col) => sparkle(ctx, x, y, r, col), accent: accent || "#F5C542", PAL
 });
@@ -2350,16 +2386,18 @@ function compilePack(code) {
 function ensurePack(p) {
   const pk = p.pack; if (!pk || !pk.code) return null;
   if (PACKFN.has(pk.id + ":0")) return true;
-  try { const g = compilePack(pk.code); g.scenes.forEach((x, i) => PACKFN.set(pk.id + ":" + i, x.draw)); return true; } catch (e) { console.error(e); return false; }
+  try { const g = compilePack(pk.code); g.scenes.forEach((x, i) => PACKFN.set(pk.id + ":" + i, x.draw)); loadPackAssets(pk.id, g); return true; } catch (e) { console.error(e); return false; }
 }
 function applyPack(p, code, name) {
   const g = compilePack(code), id = "pk" + uid();
-  g.scenes.forEach((x, i) => PACKFN.set(id + ":" + i, x.draw));
+  g.scenes.forEach((x, i) => PACKFN.set(id + ":" + i, x.draw)); loadPackAssets(id, g);
   p.pack = { id, code: String(code), name: name || "ชุดกราฟิก", at: Date.now(), accent: g.theme && g.theme.accent || "" };
   const list = g.scenes.map((x, i) => ({ id: uid(), start: +x.start, end: +x.end, type: "custom", pk: id + ":" + i, show: x.show !== false, title: String(x.title || "กราฟิกฉากที่ " + (i + 1)).slice(0, 60), overlay: !!x.overlay, look: LOOKS3[x.look] ? x.look : undefined, items: [], media: null })).sort((a, b) => a.start - b.start);
   /* fill the gaps with "face" scenes so timing stays exactly as designed */
   const out = []; let t = 0;
-  for (const sc of list) { if (sc.start - t > 0.05) out.push({ id: uid(), start: t, end: sc.start, type: "big", show: false, gap: true, title: "", items: [], media: null }); sc.start = Math.max(sc.start, t); out.push(sc); t = sc.end; }
+  for (const sc of list) { const last = out[out.length - 1];
+    if (last && !last.gap && sc.start - t > 0 && sc.start - t < 1.2) { last.end = sc.start; t = sc.start; } /* a tiny gap would flash your face for a split second */
+    if (sc.start - t > 0.05) out.push({ id: uid(), start: t, end: sc.start, type: "big", show: false, gap: true, title: "", items: [], media: null }); sc.start = Math.max(sc.start, t); out.push(sc); t = sc.end; }
   if ((p.duration || 0) - t > 0.05) out.push({ id: uid(), start: t, end: p.duration, type: "big", show: false, gap: true, title: "", items: [], media: null });
   const sp = p.split; sp.scenes = out; sp.on = true;
   if (["full", "card", "split", "mix"].includes(g.mode)) sp.mode = g.mode;
@@ -3583,6 +3621,7 @@ async function viewEditor(id) {
       b.drawImage(src, (bg.width - sw * k) / 2, (bg.height - sh * k) / 2, sw * k, sh * k);
     } catch {}
   }
+  window.__redraw = () => { draw(); try { paintSceneThumbs(); } catch {} };
   function draw() {
     if (!cv) return;
     const ctx = cv.getContext("2d"), t = video ? video.currentTime : 0;
