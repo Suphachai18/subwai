@@ -140,6 +140,8 @@ input.input,select.input,textarea.input{max-width:100%}
 .tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 .pane{padding:14px;display:grid;gap:14px}
 .subseg{margin:12px 14px 0}
+.claudebox{display:grid;gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:12px} .claudebox .row{flex-wrap:wrap}
+#pkModal textarea{width:100%;min-height:200px;font-family:var(--mono);font-size:12px}
 .chk{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px} .chk li{display:grid} .chk li.ok .hint{color:var(--ok)} .chk li.bad .hint{color:var(--danger)} .chk li.warn .hint{color:var(--accent-text)}
 .cloudchip{min-height:34px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
 .cloudchip.ok{color:var(--ok)} .cloudchip.warn{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,var(--surface))} .cloudchip.busy{color:var(--muted)}
@@ -364,7 +366,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (7) · โมชันเล่าเรื่อง: นับข้อ ป้ายราคา สถิติ ขั้นตอน คำถาม</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (8) · นำเข้ากราฟิกจาก Claude</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1259,7 +1261,7 @@ function renderFrame(ctx, W, H, v, p, t, media) {
 }
 
 /* ================= Split screen: animated explainer scenes ================= */
-const SCENE_TYPES = { big: "หัวข้อ", steps: "นับทีละข้อ", question: "คำถามชวนคิด", price: "ป้ายราคา", stat: "สถิติวงกลม", timeline: "ขั้นตอน/ไทม์ไลน์", number: "ตัวเลข", list: "ลิสต์", vs: "เปรียบเทียบ", bars: "กราฟ", quote: "คำพูด" };
+const SCENE_TYPES = { custom: "กราฟิกจาก Claude", big: "หัวข้อ", steps: "นับทีละข้อ", question: "คำถามชวนคิด", price: "ป้ายราคา", stat: "สถิติวงกลม", timeline: "ขั้นตอน/ไทม์ไลน์", number: "ตัวเลข", list: "ลิสต์", vs: "เปรียบเทียบ", bars: "กราฟ", quote: "คำพูด" };
 const SCENE_THEMES = {
   glass: { n: "กระจก (เบลอจากคลิป)", glass: true, bg: ["rgba(9,13,22,.66)", "rgba(9,13,22,.84)"], fg: "#FFFFFF", sub: "rgba(255,255,255,.74)", accent: "#F5C542", ink: "#16110A", card: "rgba(255,255,255,.10)", line: "rgba(255,255,255,.18)", grain: 0.05 },
   navy: { n: "กรมท่า", bg: ["#0B1730", "#182B52"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#F5C542", ink: "#16110A", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", grain: 0.05 },
@@ -1666,6 +1668,12 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   let T = SCENE_THEMES[theme] || SCENE_THEMES.glass;
   const ph = sc.photo && PHOTOS.get(sc.photo.id);
   const art = !(ph && ph.naturalWidth) && artOf(sc);
+  if (sc.type === "custom") {
+    const fn = PACKFN.get(sc.pk);
+    if (fn) { try { ctx.save(); fn(ctx, W, H, Math.max(0, t), dur, PACK_API(T.accent)); ctx.restore(); } catch (err) { ctx.restore(); console.error(err); } }
+    else { ctx.fillStyle = "#14161c"; ctx.fillRect(0, 0, W, H); ctx.fillStyle = "#fff"; ctx.font = SFONT(600, Math.max(12, u * 4)); ctx.textAlign = "center"; ctx.fillText("กำลังโหลดกราฟิก…", W / 2, H / 2); }
+    ctx.restore(); return;
+  }
   if (media && (media.naturalWidth || media.videoWidth)) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     try { drawCover(ctx, media, { x: 0, y: 0, w: W, h: H }, media.videoWidth ? 1 : 1.02 + 0.06 * clamp01(e / dur)); } catch {}
@@ -2236,8 +2244,70 @@ async function addScenePhotos(p, onProg) {
   for (let i = 0; i < todo.length; i++) { try { if (await setScenePhoto(p, todo[i])) ok++; } catch (e) { if (/Pexels/.test(e.message)) throw e; } if (onProg) onProg(i + 1, todo.length); }
   return ok;
 }
+/* ================= custom motion-graphics packs designed by Claude in chat =================
+   A pack is a small JS file: SUBWAI_PACK({ version: 1, mode, scenes: [{ start, end, show, title, draw(ctx, W, H, t, dur, A) }] }).
+   Scenes become type "custom"; the app keeps doing timing, transitions, subtitles, sounds and export. */
+const PACKFN = new Map();
+const PACK_API = accent => ({
+  ease: { out: eOut, expo: xOut, back: bOut, inOut: easeIO, spring: sprg }, clamp: clamp01, lerp: (a, b, k) => a + (b - a) * k,
+  rrect, font: (w, px) => SFONT(w, px), fit: (ctx, text, maxW, px, w, lines) => fitText(ctx, text, maxW, px, w || 800, lines || 2),
+  art: (ctx, name, cx, cy, size, t) => drawArt(ctx, name, cx, cy, size, t, accent), tint, rgba, words: s => tokens(String(s), "th"),
+  grain: (ctx, W, H, a = 0.05) => { const pat = grainPattern(ctx); if (pat) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H); ctx.restore(); } },
+  sparkle: (ctx, x, y, r, col) => sparkle(ctx, x, y, r, col), accent: accent || "#F5C542", PAL
+});
+function compilePack(code) {
+  let got = null;
+  const fn = new Function("SUBWAI_PACK", "\"use strict\";\n" + String(code));
+  fn(o => { got = o; });
+  if (!got || !Array.isArray(got.scenes) || !got.scenes.length) throw new Error("ไฟล์นี้ไม่ใช่ชุดกราฟิกของซับไว");
+  got.scenes.forEach((x, i) => { if (typeof x.draw !== "function") throw new Error(`ฉากที่ ${i + 1} ไม่มีส่วนวาดภาพ`); if (!isFinite(x.start) || !isFinite(x.end) || x.end <= x.start) throw new Error(`ฉากที่ ${i + 1} เวลาไม่ถูกต้อง`); });
+  return got;
+}
+function ensurePack(p) {
+  const pk = p.pack; if (!pk || !pk.code) return null;
+  if (PACKFN.has(pk.id + ":0")) return true;
+  try { const g = compilePack(pk.code); g.scenes.forEach((x, i) => PACKFN.set(pk.id + ":" + i, x.draw)); return true; } catch (e) { console.error(e); return false; }
+}
+function applyPack(p, code, name) {
+  const g = compilePack(code), id = "pk" + uid();
+  g.scenes.forEach((x, i) => PACKFN.set(id + ":" + i, x.draw));
+  p.pack = { id, code: String(code), name: name || "ชุดกราฟิก", at: Date.now(), accent: g.theme && g.theme.accent || "" };
+  const list = g.scenes.map((x, i) => ({ id: uid(), start: +x.start, end: +x.end, type: "custom", pk: id + ":" + i, show: x.show !== false, title: String(x.title || "กราฟิกฉากที่ " + (i + 1)).slice(0, 60), overlay: !!x.overlay, items: [], media: null })).sort((a, b) => a.start - b.start);
+  /* fill the gaps with "face" scenes so timing stays exactly as designed */
+  const out = []; let t = 0;
+  for (const sc of list) { if (sc.start - t > 0.05) out.push({ id: uid(), start: t, end: sc.start, type: "big", show: false, gap: true, title: "", items: [], media: null }); sc.start = Math.max(sc.start, t); out.push(sc); t = sc.end; }
+  if ((p.duration || 0) - t > 0.05) out.push({ id: uid(), start: t, end: p.duration, type: "big", show: false, gap: true, title: "", items: [], media: null });
+  const sp = p.split; sp.scenes = out; sp.on = true;
+  if (["full", "card", "split"].includes(g.mode)) sp.mode = g.mode;
+  if (g.card && CARD_AR[g.card]) sp.card = g.card;
+  if (g.orient === "h" || g.orient === "v") sp.orient = g.orient;
+  if (g.transition && TRANS[g.transition]) sp.tr = g.transition;
+  return out.filter(x => !x.gap).length;
+}
+function packRequest(p) {
+  const fd = frameDims(p, p.width, p.height), words = (p.raw && p.raw.words) || [];
+  const caps = p.captions.map((c, i) => ({ i, s: +c.start.toFixed(2), e: +c.end.toFixed(2), text: c.text, tr: c.tr || undefined,
+    w: words.filter(w => w.start >= c.start - 0.05 && w.start < c.end + 0.05).map(w => [String(w.word).trim(), +w.start.toFixed(2)]) }));
+  const clip = { app: "subwai", pack: 1, name: p.name, duration: +(p.duration || 0).toFixed(2), frame: { w: fd.W, h: fd.H }, lang: p.lang, translation: p.tr && p.tr.lang || "", brand: "", captions: caps };
+  return `=== ซับไว · ขอชุดกราฟิกโมชันสำหรับคลิปนี้ (pack v1) ===
+ช่วยออกแบบโมชันกราฟิกประกอบการเล่าเรื่องของคลิปนี้ ให้สวยระดับมืออาชีพ ตรงจังหวะคำพูด แล้วส่งกลับเป็นไฟล์ .js ตามสเปกด้านล่าง
+
+[SPEC]
+- ไฟล์ต้องเป็น: SUBWAI_PACK({ version: 1, mode: "full" | "card" | "split", card: "16:9" | "1:1" | "4:5", orient: "v" | "h", transition: "auto" | "push" | "wipe" | "zoom" | "iris" | "flash" | "fade", theme: { accent: "#hex" }, scenes: [ { start, end, show: true, title, draw(ctx, W, H, t, dur, A) { ... } } ] })
+- start/end เป็นวินาทีของคลิป ใช้เวลาของคำใน captions[].w ([คำ, วินาที]) ให้กราฟิกขึ้นตรงคำที่พูด ช่วงที่ไม่มีฉาก แอปจะโชว์หน้าผู้พูด
+- mode "full" = กราฟิกเต็มเฟรมสลับกับหน้าคน, "card" = การ์ดลอยกลางจอ, "split" = แบ่งจอครึ่งหนึ่งเป็นกราฟิก
+- draw() ถูกเรียกทุกเฟรม วาดลง ctx (Canvas 2D) ในพื้นที่ 0..W, 0..H (ขนาดของพื้นที่กราฟิกตามโหมด) t = วินาทีนับจากต้นฉาก, dur = ความยาวฉาก ต้องคำนวณจาก t ล้วน ๆ (ไม่มีตัวแปรสะสม ไม่สุ่มแบบไม่มี seed) และวาดพื้นหลังเองให้ทึบ
+- ห้ามโหลดรูป ฟอนต์ หรือเน็ตจากภายนอก ไม่ต้องวาดซับ (แอปวาดให้แล้ว) ภาษาในกราฟิกให้ตรงกับคลิป
+- ตัวช่วย A: A.ease.{out,expo,back,inOut,spring}(x 0..1), A.clamp(x), A.lerp(a,b,k), A.rrect(ctx,x,y,w,h,r), A.font(weight,px) (ฟอนต์ Kanit รองรับไทย), A.fit(ctx,text,maxW,px,weight,maxLines) → {size,lines}, A.words(text) ตัดคำไทย, A.art(ctx,name,cx,cy,size,t) ภาพแอนิเมชันสำเร็จรูป: ${Object.keys(ART).join(", ")}, A.tint(hex,amt), A.rgba(hex,a), A.grain(ctx,W,H,alpha), A.sparkle(ctx,x,y,r,color), A.accent, A.PAL
+- เฟรมคลิป: ${fd.W}×${fd.H}
+
+[CLIP]
+${JSON.stringify(clip)}
+`;
+}
 /* user photos / clips placed on scenes */
 async function loadMediaEls(p, cache) {
+  try { ensurePack(p); } catch {}
   try { await ensurePhotos(p); } catch {}
   for (const sc of (p.split && p.split.scenes) || []) {
     if (!sc.media || cache[sc.media.id]) continue;
@@ -3125,6 +3195,13 @@ async function viewEditor(id) {
           <label class="sw big"><input type="checkbox" id="spOn"> เปิดภาพประกอบ</label>
           <span class="hint" style="margin-top:-8px">กราฟิกเคลื่อนไหวประกอบสิ่งที่พูด ตรงจังหวะ ใส่รูปหรือคลิปของคุณแทนได้ทุกฉาก</span>
           <button class="btn primary block" id="spAi">✨ ให้ AI ออกแบบภาพประกอบจากสคริปต์</button>
+          <div class="xbox claudebox">
+            <b>กราฟิกระดับมืออาชีพจาก Claude (ทำทีละคลิป)</b>
+            <span class="hint">1) กดส่งสคริปต์ แล้วส่งให้ Claude ในแชต 2) Claude ส่งไฟล์ชุดกราฟิกกลับมา 3) กดนำเข้า</span>
+            <div class="row"><button class="btn small" id="pkSend">① ส่งสคริปต์ให้ Claude</button><button class="btn small" id="pkCopy">คัดลอกเป็นข้อความ</button></div>
+            <div class="row"><label class="btn small primary" for="pkFile">③ นำเข้าชุดกราฟิก (.js)</label><input type="file" id="pkFile" accept=".js,.txt,text/javascript,text/plain,application/javascript" hidden><button class="btn small" id="pkPaste">วางโค้ด</button><button class="btn small" id="pkOff" hidden>เอาชุดกราฟิกออก</button></div>
+            <span class="hint" id="pkStat"></span>
+          </div>
           <span class="hint" id="spStat" style="margin-top:-8px"></span>
           <div class="field"><span class="lab">แสดงแบบ</span><div class="seg" id="spMode"><button type="button" data-v="card">การ์ดกลางจอ</button><button type="button" data-v="full">เต็มจอ</button><button type="button" data-v="split">แบ่งจอ</button></div>
             <span class="hint" id="spModeHint"></span></div>
@@ -3943,6 +4020,29 @@ async function viewEditor(id) {
     $("#spModeHint").textContent = { card: "การ์ดลอยกลางจอทับคลิปของคุณ คลิปไม่ถูกตัด เฟรมวิดีโอเท่าเดิม", full: "ภาพประกอบเต็มจอเฉพาะช่วงที่ AI เลือก สลับกับหน้าคุณแบบ B-roll", split: "แบ่งจอครึ่งหนึ่งเป็นภาพประกอบ อีกครึ่งเป็นคลิปของคุณ" }[sp.mode];
   }
   const capPosFor = sp => sp.mode === "split" ? (sp.orient === "h" ? 86 : 50) : 84;
+  const pkPaint = () => { $("#pkOff").hidden = !p.pack; $("#pkStat").textContent = p.pack ? `ใช้ "${p.pack.name}" อยู่ · ${p.split.scenes.filter(x => x.type === "custom").length} ฉาก` : ""; };
+  pkPaint();
+  const pkFileOf = () => new File([packRequest(p)], `subwai-${(p.name || "clip").replace(/[^\w\u0E00-\u0E7F-]+/g, "_").slice(0, 40)}.txt`, { type: "text/plain" });
+  $("#pkSend").onclick = async () => {
+    if (!p.captions.length) { toast("ยังไม่มีซับในคลิปนี้"); return; }
+    const f = pkFileOf();
+    try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: "สคริปต์สำหรับ Claude" }); $("#pkStat").textContent = "ส่งแล้ว รอ Claude ส่งไฟล์ชุดกราฟิกกลับมา แล้วกด ③ นำเข้า"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    $("#pkStat").textContent = "บันทึกไฟล์สคริปต์แล้ว แนบไฟล์นี้ในแชตกับ Claude";
+  };
+  $("#pkCopy").onclick = async () => { try { await navigator.clipboard.writeText(packRequest(p)); toast("คัดลอกแล้ว ไปวางในแชตกับ Claude ได้เลย", 3000); } catch { toast("คัดลอกไม่ได้ ใช้ปุ่มส่งสคริปต์แทน"); } };
+  const pkLoad = (code, name) => {
+    try { const n = applyPack(p, code, name); changed(); syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); pkPaint(); toast(`นำเข้าชุดกราฟิกแล้ว ${n} ฉาก กดเล่นดูได้เลย`, 3500); seekTo(0); draw(); }
+    catch (e) { toast("นำเข้าไม่ได้: " + e.message, 5000); }
+  };
+  $("#pkFile").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; pkLoad(await f.text(), f.name.replace(/\.[^.]+$/, "")); };
+  $("#pkPaste").onclick = () => {
+    const root = $("#modalRoot");
+    root.innerHTML = `<div class="modal" id="pkModal"><div class="sheet"><h2>วางโค้ดชุดกราฟิก</h2><span class="hint">คัดลอกโค้ดทั้งหมดที่ Claude ส่งมา (ขึ้นต้นด้วย SUBWAI_PACK) แล้ววางที่นี่</span><textarea id="pkTa" class="input" spellcheck="false"></textarea><div class="row"><button class="btn primary" id="pkGo" style="margin-left:auto">นำเข้า</button><button class="btn" id="pkX">ปิด</button></div></div></div>`;
+    $("#pkX").onclick = () => root.innerHTML = "";
+    $("#pkGo").onclick = () => { const c = $("#pkTa").value; root.innerHTML = ""; if (c.trim()) pkLoad(c, "ชุดกราฟิก"); };
+  };
+  $("#pkOff").onclick = () => { if (!confirm("เอาชุดกราฟิกจาก Claude ออก แล้วกลับไปใช้ภาพประกอบอัตโนมัติ?")) return; delete p.pack; p.split.scenes = plainScenes(p); changed(); renderScenes(); pkPaint(); draw(); };
   function setSplit(on) {
     const sp = p.split; if (sp.on === on) return;
     sp.on = on;
