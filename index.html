@@ -364,7 +364,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (6) · คำแปลอ่านชัด ปรับสีและขอบได้</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (7) · โมชันเล่าเรื่อง: นับข้อ ป้ายราคา สถิติ ขั้นตอน คำถาม</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1259,7 +1259,7 @@ function renderFrame(ctx, W, H, v, p, t, media) {
 }
 
 /* ================= Split screen: animated explainer scenes ================= */
-const SCENE_TYPES = { big: "หัวข้อ", number: "ตัวเลข", list: "ลิสต์", vs: "เปรียบเทียบ", bars: "กราฟ", quote: "คำพูด" };
+const SCENE_TYPES = { big: "หัวข้อ", steps: "นับทีละข้อ", question: "คำถามชวนคิด", price: "ป้ายราคา", stat: "สถิติวงกลม", timeline: "ขั้นตอน/ไทม์ไลน์", number: "ตัวเลข", list: "ลิสต์", vs: "เปรียบเทียบ", bars: "กราฟ", quote: "คำพูด" };
 const SCENE_THEMES = {
   glass: { n: "กระจก (เบลอจากคลิป)", glass: true, bg: ["rgba(9,13,22,.66)", "rgba(9,13,22,.84)"], fg: "#FFFFFF", sub: "rgba(255,255,255,.74)", accent: "#F5C542", ink: "#16110A", card: "rgba(255,255,255,.10)", line: "rgba(255,255,255,.18)", grain: 0.05 },
   navy: { n: "กรมท่า", bg: ["#0B1730", "#182B52"], fg: "#FFFFFF", sub: "rgba(255,255,255,.7)", accent: "#F5C542", ink: "#16110A", card: "rgba(255,255,255,.08)", line: "rgba(255,255,255,.16)", grain: 0.05 },
@@ -1824,6 +1824,128 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
     const f = fitText(ctx, raw, maxW, (nw ? 15 : art ? 14 : 17) * u, 800, 1), k = xOut((e - t0 + 0.2) / 0.5);
     if (k > 0) { ctx.save(); ctx.font = SFONT(800, f.size); ctx.fillStyle = T.accent; ctx.textAlign = align; ctx.beginPath(); ctx.rect(0, yn - f.size * 0.85, W, f.size * 1.7); ctx.clip(); ctx.fillText(shown, x, yn + (1 - k) * f.size); ctx.restore(); }
     block(sc.label, x, yl, maxW, (art && !nw ? 4.8 : 5.4) * u, 600, T.fg, 2, t0 + 0.35, align, sc.mark);
+
+  } else if (type === "steps") {
+    /* numbered cards that arrive one by one exactly when each point is spoken; finished points collect in a rail */
+    const items = (sc.items || []).filter(Boolean).slice(0, 6), n = items.length || 1, tt = sc.itemsT || [], arts = sc.itemsArt || [];
+    const at = items.map((_, i) => tt[i] != null && isFinite(tt[i]) ? Math.max(0.35, tt[i] - sc.start) : 0.9 + i * Math.max(1, (dur - 1.2) / n));
+    let cur = -1; at.forEach((s0, i) => { if (e >= s0) cur = i; });
+    const hk = cur >= 0 ? eOut((e - at[0]) / 0.55) : 0;
+    /* header: big in the middle first, then glides up and shrinks */
+    const hY = H * (0.42 - 0.31 * hk), hSize = (land ? 9 : 10) * u * (1 - 0.42 * hk);
+    kicker(sc.kicker, W / 2, hY - hSize * 1.15, "center", 0);
+    kinetic(sc.title, W / 2, hY, W - P * 2, hSize, 800, T.fg, 2, 0.08, "center", sc.mark);
+    if (cur < 0) { /* teaser: empty numbered chips waiting */
+      for (let i = 0; i < n; i++) { const kk = bOut((e - 0.4 - i * 0.12) / 0.45); if (kk <= 0) continue; const cx0 = W / 2 + (i - (n - 1) / 2) * 11 * u, cy0 = H * 0.7; ctx.save(); ctx.translate(cx0, cy0); ctx.scale(kk, kk); ctx.strokeStyle = T.accent; ctx.lineWidth = 0.6 * u; ctx.beginPath(); ctx.arc(0, 0, 3.6 * u, 0, Math.PI * 2); ctx.stroke(); ctx.font = SFONT(800, 3.8 * u); ctx.fillStyle = T.fg; ctx.textAlign = "center"; ctx.fillText(String(i + 1), 0, 0.2 * u); ctx.restore(); }
+    }
+    /* cards */
+    const tall = H / W > 1.25, cw2 = land ? W * 0.62 : W - P * 2, ch2 = land ? H * 0.48 : tall ? Math.min(H * 0.5, cw2 * 1.0) : Math.min(H * 0.48, cw2 * 0.7), cx = W / 2, cy = land ? H * 0.56 : H * (tall ? 0.52 : 0.55);
+    for (let i = Math.max(0, cur - 1); i <= cur; i++) {
+      const ki = sprg((e - at[i]) / 0.65), ko = i < cur ? eOut((e - at[i + 1]) / 0.45) : 0; if (ko >= 1) continue;
+      const x = cx + (1 - Math.min(1, ki)) * W * 0.85 - ko * W * 0.9, rot = (1 - Math.min(1, ki)) * 0.12 - ko * 0.08;
+      ctx.save(); ctx.globalAlpha *= 1 - ko * 0.6; ctx.translate(x, cy); ctx.rotate(rot);
+      ctx.save(); ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 4 * u; ctx.shadowOffsetY = 1.2 * u; ctx.fillStyle = T.fg === "#FFFFFF" ? "rgba(255,255,255,.10)" : "rgba(255,255,255,.85)"; rrect(ctx, -cw2 / 2, -ch2 / 2, cw2, ch2, 3 * u); ctx.fill(); ctx.restore();
+      ctx.strokeStyle = T.line; ctx.lineWidth = 0.3 * u; rrect(ctx, -cw2 / 2, -ch2 / 2, cw2, ch2, 3 * u); ctx.stroke();
+      ctx.fillStyle = T.accent; rrect(ctx, -cw2 / 2, -ch2 / 2, 1.4 * u, ch2, 0.7 * u); ctx.fill();
+      /* giant numeral with accent gradient */
+      const nk = bOut((e - at[i] - 0.1) / 0.5), ns = tall ? ch2 * 0.4 : ch2 * 0.62;
+      ctx.save(); ctx.translate(-cw2 / 2 + ns * 0.42 + 3 * u, tall ? -ch2 * 0.24 : 0); ctx.scale(nk, nk); ctx.font = SFONT(800, ns); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const ng = ctx.createLinearGradient(0, -ns / 2, 0, ns / 2); ng.addColorStop(0, tint(T.accent, 0.25)); ng.addColorStop(1, tint(T.accent, -0.25)); ctx.fillStyle = ng; ctx.fillText(String(i + 1), 0, ns * 0.04); ctx.restore();
+      const art2 = ART[arts[i]] ? arts[i] : null, tcol = T.fg === "#FFFFFF" ? "#FFFFFF" : "#141414";
+      if (tall) {
+        const asz = Math.min(ch2 * 0.42, cw2 * 0.42);
+        if (art2) drawArt(ctx, art2, cw2 / 2 - asz * 0.6, -ch2 * 0.24, asz, Math.max(0, e - at[i] - 0.15), T.accent);
+        kinetic(items[i], -cw2 / 2 + 4 * u, ch2 * 0.2, cw2 - 8 * u, Math.min(8.2 * u, ch2 * 0.13), 700, tcol, 2, at[i] + 0.15, "left", null, 1.2);
+      } else {
+        const asz = Math.min(ch2 * 0.62, cw2 * 0.26), tx = -cw2 / 2 + ns * 0.9 + 4 * u, tw = cw2 / 2 - tx - 3 * u - (art2 && !land ? asz * 0.95 : 0);
+        if (art2 && !land) drawArt(ctx, art2, cw2 / 2 - asz * 0.58, 0, asz, Math.max(0, e - at[i] - 0.15), T.accent);
+        kinetic(items[i], tx, 0, tw, Math.min(7.6 * u, ch2 * 0.2), 700, tcol, 3, at[i] + 0.15, "left", null, 1.2);
+      }
+      if (art2 && land) drawArt(ctx, art2, cw2 / 2 + W * 0.1, 0, Math.min(H * 0.34, W * 0.16), Math.max(0, e - at[i] - 0.15), T.accent);
+      ctx.restore();
+    }
+    /* progress rail */
+    if (cur >= 0) { const ry = H * (land ? 0.92 : 0.86), gap = 9 * u; for (let i = 0; i < n; i++) { const x = W / 2 + (i - (n - 1) / 2) * gap, on = i <= cur, now = i === cur, pk = now ? 1 + 0.08 * Math.sin(e * 6) : 1;
+      ctx.save(); ctx.translate(x, ry); ctx.scale(pk, pk); ctx.fillStyle = on ? T.accent : "transparent"; ctx.strokeStyle = on ? T.accent : T.line; ctx.lineWidth = 0.5 * u; ctx.beginPath(); ctx.arc(0, 0, 2.8 * u, 0, Math.PI * 2); on ? ctx.fill() : ctx.stroke();
+      ctx.font = SFONT(800, 3 * u); ctx.fillStyle = on ? T.ink : T.sub; ctx.textAlign = "center"; ctx.fillText(String(i + 1), 0, 0.15 * u); ctx.restore();
+      if (i < n - 1) { ctx.fillStyle = i < cur ? T.accent : T.line; ctx.fillRect(x + 3.4 * u, ry - 0.2 * u, gap - 6.8 * u, 0.4 * u); } } }
+  } else if (type === "question") {
+    /* a big question mark that drops in with rings, then the question types itself out */
+    const qx = land ? W * 0.24 : W / 2, qy = land ? H * 0.5 : H * 0.32, qs = Math.min(land ? H * 0.62 : H * 0.36, W * 0.5);
+    for (let i = 0; i < 3; i++) { const f = ((e * 0.55 + i / 3) % 1); ctx.save(); ctx.globalAlpha *= (1 - f) * 0.5 * xOut(e / 0.6); ctx.strokeStyle = T.accent; ctx.lineWidth = 0.5 * u; ctx.beginPath(); ctx.arc(qx, qy, qs * (0.35 + f * 0.45), 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+    const qk = sprg(e / 0.7), wob = Math.sin(e * 3) * 0.06 * Math.min(1, e);
+    ctx.save(); ctx.translate(qx, qy - (1 - Math.min(1, qk)) * H * 0.4); ctx.rotate(wob); ctx.scale(Math.max(0.01, qk), Math.max(0.01, qk));
+    ctx.fillStyle = rgba(T.accent, 0.18); ctx.beginPath(); ctx.arc(0, 0, qs * 0.36, 0, Math.PI * 2); ctx.fill();
+    ctx.font = SFONT(800, qs * 0.62); ctx.textAlign = "center"; ctx.textBaseline = "middle"; const qg = ctx.createLinearGradient(0, -qs * 0.3, 0, qs * 0.3); qg.addColorStop(0, tint(T.accent, 0.3)); qg.addColorStop(1, tint(T.accent, -0.2)); ctx.fillStyle = qg; ctx.fillText("?", 0, qs * 0.03); ctx.restore();
+    const tx = land ? W * 0.47 : W / 2, ty = land ? H * 0.5 : H * 0.68, tw = land ? W * 0.47 : cw;
+    kicker(sc.kicker, tx, ty - 9 * u, land ? "left" : "center", 0.3);
+    kinetic(sc.title, tx, ty + 2 * u, tw, (land ? 8 : 8.5) * u, 800, T.fg, 3, 0.45, land ? "left" : "center", sc.mark);
+  } else if (type === "price") {
+    /* a price tag swings in on its string, the number rolls up, an old price gets struck through */
+    const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/), t0 = sc.valueT != null && isFinite(sc.valueT) ? Math.max(0.2, sc.valueT - sc.start) : 0.35;
+    let shown = raw; if (m) { const num = parseFloat(m[0].replace(/,/g, "")), dec = (m[0].split(".")[1] || "").length; shown = raw.replace(m[0], (num * xOut((e - t0) / 1.2)).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
+    const ax = land ? W * 0.36 : W / 2, ay = land ? H * 0.16 : H * 0.12, tagW = land ? W * 0.5 : W * 0.78, tagH = tagW * 0.42;
+    const sw = Math.sin(e * 4.2) * 0.22 * Math.exp(-e * 1.4) + (1 - Math.min(1, sprg(e / 0.8))) * -0.6, drop = (1 - Math.min(1, sprg(e / 0.8))) * -H * 0.4;
+    ctx.save(); ctx.translate(ax, ay + drop); ctx.rotate(sw);
+    ctx.strokeStyle = T.sub; ctx.lineWidth = 0.4 * u; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, H * 0.1); ctx.stroke();
+    ctx.translate(0, H * 0.1 + tagH / 2);
+    ctx.save(); ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 5 * u; ctx.shadowOffsetY = 2 * u;
+    const tg = ctx.createLinearGradient(0, -tagH / 2, 0, tagH / 2); tg.addColorStop(0, tint(T.accent, 0.12)); tg.addColorStop(1, tint(T.accent, -0.18)); ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.moveTo(-tagW / 2 + tagH * 0.32, -tagH / 2); ctx.lineTo(tagW / 2 - 2 * u, -tagH / 2); ctx.quadraticCurveTo(tagW / 2, -tagH / 2, tagW / 2, -tagH / 2 + 2 * u); ctx.lineTo(tagW / 2, tagH / 2 - 2 * u); ctx.quadraticCurveTo(tagW / 2, tagH / 2, tagW / 2 - 2 * u, tagH / 2); ctx.lineTo(-tagW / 2 + tagH * 0.32, tagH / 2); ctx.lineTo(-tagW / 2, 0); ctx.closePath(); ctx.fill(); ctx.restore();
+    ctx.fillStyle = T.fg === "#FFFFFF" ? "#0E1424" : "#FFFFFF"; ctx.beginPath(); ctx.arc(-tagW / 2 + tagH * 0.3, 0, tagH * 0.07, 0, Math.PI * 2); ctx.fill();
+    ctx.translate(-tagW / 2, 0); ctx.rotate(-sw * 0.0);
+    const f = fitText(ctx, raw, tagW - tagH * 0.62, tagH * 0.5, 800, 1);
+    ctx.font = SFONT(800, f.size); ctx.fillStyle = T.ink; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(shown, tagH * 0.5, tagH * 0.03);
+    ctx.restore();
+    const bx = land ? W * 0.74 : W / 2, by0 = land ? H * 0.42 : H * 0.66;
+    kicker(sc.kicker, bx, by0, "center", t0 + 0.2);
+    if (sc.a) { const ob = by0 + 9 * u, ok = xOut((e - 0.6) / 0.4); if (ok > 0) { ctx.save(); ctx.globalAlpha *= ok; ctx.font = SFONT(600, 6 * u); ctx.fillStyle = T.sub; ctx.textAlign = "center"; ctx.textBaseline = "middle"; const wv = ctx.measureText(sc.a).width; const by0 = ob; ctx.fillText(sc.a, bx, by0); const sk = xOut((e - t0 - 0.7) / 0.35); if (sk > 0) { ctx.strokeStyle = PAL.r; ctx.lineWidth = 0.8 * u; ctx.beginPath(); ctx.moveTo(bx - wv / 2 - u, by0 + u); ctx.lineTo(bx - wv / 2 - u + (wv + 2 * u) * sk, by0 - u); ctx.stroke(); } ctx.restore(); } }
+    block(sc.label, bx, by0 + (sc.a ? 19 : 10) * u, land ? W * 0.4 : cw, 5 * u, 600, T.fg, 2, t0 + 0.5, "center", sc.mark);
+    if (e > t0 + 1.1) { const tw2 = 0.5 + 0.5 * Math.sin(e * 5); sparkle(ctx, ax + tagW * 0.42, ay + H * 0.1 + tagH * 0.05, 1.5 * u + 1.5 * u * tw2, "#FFFFFF"); sparkle(ctx, ax - tagW * 0.3, ay + H * 0.1 + tagH * 1.05, 2.4 * u - u * tw2, T.accent); }
+  } else if (type === "stat") {
+    /* a ring fills to the percentage while the number counts up in its centre */
+    const raw = String(sc.value || ""), m = raw.match(/-?[\d,]*\.?\d+/), t0 = sc.valueT != null && isFinite(sc.valueT) ? Math.max(0.2, sc.valueT - sc.start) : 0.3;
+    const num = m ? parseFloat(m[0].replace(/,/g, "")) : 0, pct = /%/.test(raw) ? Math.max(0, Math.min(100, num)) / 100 : 1, k = xOut((e - t0) / 1.4);
+    const dec = m ? (m[0].split(".")[1] || "").length : 0, shown = m ? raw.replace(m[0], (num * k).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })) : raw;
+    const rx = land ? W * 0.3 : W / 2, ry = land ? H * 0.5 : H * 0.38, R = Math.min(land ? H * 0.34 : W * 0.3, H * 0.3), lw = R * 0.16;
+    const ik = bOut(e / 0.6); ctx.save(); ctx.translate(rx, ry); ctx.scale(ik, ik);
+    ctx.strokeStyle = T.line; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+    const rg2 = ctx.createLinearGradient(-R, -R, R, R); rg2.addColorStop(0, tint(T.accent, 0.3)); rg2.addColorStop(1, tint(T.accent, -0.2));
+    ctx.strokeStyle = rg2; ctx.lineCap = "round"; ctx.beginPath(); ctx.arc(0, 0, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct * k); ctx.stroke();
+    if (k > 0.02) { const a = -Math.PI / 2 + Math.PI * 2 * pct * k; ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(R * Math.cos(a), R * Math.sin(a), lw * 0.32, 0, Math.PI * 2); ctx.fill(); }
+    const f = fitText(ctx, shown, R * 1.45, R * 0.52, 800, 1); ctx.font = SFONT(800, f.size); ctx.fillStyle = T.fg; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(shown, 0, R * 0.02);
+    ctx.restore();
+    const tx = land ? W * 0.6 : W / 2, al = land ? "left" : "center", tw = land ? W * 0.36 : cw;
+    kicker(sc.kicker, tx, land ? H * 0.36 : H * 0.72, al, t0 + 0.2);
+    block(sc.label || sc.title, tx, land ? H * 0.52 : H * 0.83, tw, 5.4 * u, 700, T.fg, 2, t0 + 0.35, al, sc.mark);
+  } else if (type === "timeline") {
+    /* a path draws itself; each step lights up when it is said and a glowing dot travels to it */
+    const items = (sc.items || []).filter(Boolean).slice(0, 5), n = items.length || 1, tt = sc.itemsT || [];
+    const at = items.map((_, i) => tt[i] != null && isFinite(tt[i]) ? Math.max(0.3, tt[i] - sc.start) : 0.6 + i * Math.max(0.8, (dur - 1) / n));
+    let cur = -1; at.forEach((s0, i) => { if (e >= s0) cur = i; });
+    if (sc.title) block(sc.title, W / 2, H * 0.11, W - P * 2, 6.2 * u, 800, T.fg, 1, 0, "center", sc.mark);
+    const vert = !land, pts = items.map((_, i) => vert ? [P * 1.6, H * 0.26 + i * (H * 0.66 / Math.max(1, n - 1 || 1)) * (n > 1 ? 1 : 0)] : [P * 1.5 + i * ((W - P * 3) / Math.max(1, n - 1)), H * 0.55]);
+    if (n === 1) pts[0] = vert ? [P * 1.6, H * 0.5] : [W / 2, H * 0.55];
+    const pathK = xOut(e / 0.9), full = pts.length > 1 ? (vert ? pts[n - 1][1] - pts[0][1] : pts[n - 1][0] - pts[0][0]) : 0;
+    ctx.strokeStyle = T.line; ctx.lineWidth = 0.7 * u; ctx.beginPath(); if (vert) { ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[0][0], pts[0][1] + full * pathK); } else { ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[0][0] + full * pathK, pts[0][1]); } ctx.stroke();
+    /* progress up to the current step, with a travelling glow */
+    if (cur >= 0) {
+      const target = cur, from = Math.max(0, cur - 1), mk = cur === 0 ? 1 : eOut((e - at[cur]) / 0.5), p0 = pts[from], p1 = pts[target];
+      const hx = p0[0] + (p1[0] - p0[0]) * mk, hy = p0[1] + (p1[1] - p0[1]) * mk;
+      ctx.strokeStyle = T.accent; ctx.lineWidth = 0.9 * u; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(hx, hy); ctx.stroke();
+      const gl = ctx.createRadialGradient(hx, hy, 0, hx, hy, 6 * u); gl.addColorStop(0, rgba(T.accent, 0.6)); gl.addColorStop(1, rgba(T.accent, 0)); ctx.fillStyle = gl; ctx.fillRect(hx - 6 * u, hy - 6 * u, 12 * u, 12 * u);
+    }
+    items.forEach((it, i) => {
+      const [x, y] = pts[i], on = i <= cur, now = i === cur, nk = on ? bOut((e - at[i]) / 0.45) : xOut((e - 0.3 - i * 0.12) / 0.4) * 0.8;
+      if (nk <= 0) return;
+      ctx.save(); ctx.translate(x, y); ctx.scale(nk, nk); ctx.fillStyle = on ? T.accent : (T.fg === "#FFFFFF" ? "#1A2338" : "#FFFFFF"); ctx.strokeStyle = on ? T.accent : T.line; ctx.lineWidth = 0.5 * u; ctx.beginPath(); ctx.arc(0, 0, (now ? 4 : 3.2) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.font = SFONT(800, 3.2 * u); ctx.fillStyle = on ? T.ink : T.sub; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(i + 1), 0, 0.15 * u); ctx.restore();
+      const lk = on ? xOut((e - at[i] - 0.1) / 0.4) : 0.35 * xOut((e - 0.5 - i * 0.12) / 0.4); if (lk <= 0) return;
+      ctx.save(); ctx.globalAlpha *= lk;
+      if (vert) block(it, x + 7 * u + (1 - lk) * 3 * u, y, W - x - 9 * u - P, (now ? 6.2 : 5.2) * u, now ? 800 : 600, now ? T.fg : T.sub, 2, 0, "left");
+      else block(it, x, y + (i % 2 ? -1 : 1) * 10 * u, (W - P * 3) / Math.max(1, n - 1) * 0.95 + 4 * u, (now ? 5.4 : 4.6) * u, now ? 800 : 600, now ? T.fg : T.sub, 2, 0, "center");
+      ctx.restore();
+    });
   } else if (type === "list") {
     const items = (sc.items || []).filter(Boolean).slice(0, 4), tt = sc.itemsT || [];
     const top = H * (sc.title ? 0.27 : 0.12), x0 = land ? P * 1.3 : P;
@@ -1861,6 +1983,7 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
     };
     box(0, sc.a, 0.12, false); box(1, sc.b, tb, true);
     const pk = bOut((e - Math.min(tb, 0.7)) / 0.45);
+    { const sk = (e - Math.min(tb, 0.7)) / 0.6; if (sk > 0 && sk < 1) { const vx2 = W / 2, vy2 = land ? top + area / 2 : top + (area - 9 * u) / 2 + 4.5 * u; ctx.save(); ctx.globalAlpha *= 1 - sk; ctx.strokeStyle = T.accent; ctx.lineWidth = 1.2 * u * (1 - sk); ctx.beginPath(); ctx.arc(vx2, vy2, 4.6 * u + sk * 22 * u, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } }
     if (pk > 0) { const vx = land ? W / 2 : W / 2, vy = land ? top + area / 2 : top + (area - 9 * u) / 2 + 4.5 * u; ctx.save(); ctx.translate(vx, vy); ctx.scale(pk, pk); ctx.fillStyle = T.accent; ctx.beginPath(); ctx.arc(0, 0, 4.6 * u, 0, Math.PI * 2); ctx.fill(); ctx.font = SFONT(800, 3.6 * u); ctx.fillStyle = T.ink; ctx.textAlign = "center"; ctx.fillText("VS", 0, 0.2 * u); ctx.restore(); }
   } else if (type === "bars") {
     const rows = (sc.items || []).map(s => { const m = String(s).match(/^(.*?)[\s:：=\-]+(-?\d+(?:\.\d+)?)\s*(%?)\s*$/); return m ? { l: m[1].trim(), v: +m[2], pct: m[3] } : null; }).filter(Boolean).slice(0, 5), tt = sc.itemsT || [];
@@ -2014,6 +2137,11 @@ Rules:
 4. Types:
  - "big": "title" a punchy headline under 22 characters, optional "kicker" (1-2 word label above it, e.g. "จุดเด่น", "เคล็ดลับ"), optional "label" one short supporting line
  - "number": "value" exactly as said with its unit ("189,000 บาท", "50%", "3 ปี"), "kicker" what it is (1-3 words), "label" a short explanation, "value_line" index of the line where the number is said
+ - "steps": PREFERRED whenever the speaker counts or lists points over several lines ("3 คำถาม", "ข้อแรก... ข้อสอง...", "มี 4 อย่าง"): "title" the overall headline (e.g. "3 คำถามที่ไม่ควรถาม"), 2-5 "items" each {"text": the point in under 30 characters, "line": index where that point starts, "anchor": 1-4 exact words from that line where it starts, "art": optional illustration name}. One scene covers all the points, so "end" is the line of the last point.
+ - "question": when the speaker asks the audience a question or hooks with one: "title" the question (under 40 characters), optional "kicker"
+ - "price": when a price or cost is said: "value" exactly as said ("189,000 บาท"), optional "a" an older/normal price if one is said, "kicker" (e.g. "ราคาเริ่มต้น"), "label" a short note, "value_line"
+ - "stat": a percentage or striking statistic: "value" ("80%", "3 เท่า"), "kicker", "label", "value_line"
+ - "timeline": steps of a process or events in order: "title", 2-5 "items" {"text" under 22 characters, "line", "anchor"}
  - "list": "title" plus 2-4 "items" each {"text": under 18 characters, "line": index where that item is said}
  - "vs": "a" versus "b" (under 16 characters each), "items": [icon for a, icon for b], optional "title", "b_line" where b is said
  - "bars": only when amounts are compared: "title" plus items {"text": "label: number", "line": index}
@@ -2037,11 +2165,16 @@ Reply only with JSON: {"scenes":[{"start":0,"end":1,"anchor":"","show":true,"typ
     const type = SCENE_TYPES[x.type] ? x.type : "big";
     const itemsRaw = Array.isArray(x.items) ? x.items : [];
     let items = itemsRaw.map(v => typeof v === "object" && v ? str(v.text, 40) : String(v == null ? "" : v).trim().slice(0, 40)).filter(Boolean).slice(0, 5);
-    const itemsT = itemsRaw.map(v => typeof v === "object" && v ? lineT(v.line) : undefined).slice(0, items.length);
+    const itemsT = itemsRaw.map(v => { if (!(typeof v === "object" && v)) return undefined; const c = caps[+v.line]; if (!c) return undefined; const an = str(v.anchor, 40); return an && c.text.includes(an) ? wordTime(p, c, an) : c.start; }).slice(0, items.length);
+    const itemsArt = itemsRaw.map(v => typeof v === "object" && v && ART[v.art] ? v.art : "").slice(0, items.length);
     const anchor = str(x.anchor, 40), at = anchor && first.text.includes(anchor) ? wordTime(p, first, anchor) : first.start;
     const last = caps[Math.max(+x.start, Math.min(caps.length - 1, +x.end || +x.start))] || first;
     const sc = { id: uid(), start: Math.max(0, at - 0.15), end: first.end, until: last.end + 0.45, art: ART[x.art] ? x.art : undefined, photoQ: str(x.photo, 60).replace(/[^\w\s-]/g, "").trim(), type, show: x.show !== false, icon: ICONS[x.icon] ? x.icon : "", kicker: str(x.kicker, 24), title: str(x.title, 60), mark: str(x.mark, 30), label: str(x.label, 70), value: str(x.value, 30), valueT: lineT(x.value_line), items, itemsT, a: str(x.a, 40), b: str(x.b, 40), bT: lineT(x.b_line), media: null };
+    sc.itemsArt = itemsArt;
     if (type === "vs") sc.items = items.filter(k => ICONS[k]);
+    if ((type === "steps" || type === "timeline") && items.length < 2) { sc.type = "big"; sc.title = sc.title || items[0] || ""; }
+    if ((type === "price" || type === "stat") && !/\d/.test(sc.value)) { sc.type = "big"; sc.title = sc.title || sc.label || sc.value; }
+    if (type === "question" && !sc.title) sc.title = str(first.text, 40);
     if (sc.mark && !(sc.title.includes(sc.mark) || sc.label.includes(sc.mark))) sc.mark = "";
     if (type === "number" && !/\d/.test(sc.value)) { sc.type = "big"; sc.title = sc.title || sc.label; }
     if ((type === "list" || type === "bars") && items.length < 2) { sc.type = "big"; sc.title = sc.title || items[0] || ""; }
