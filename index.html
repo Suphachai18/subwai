@@ -146,7 +146,7 @@ input.input,select.input,textarea.input{max-width:100%}
 .cloudchip{min-height:34px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
 .cloudchip.ok{color:var(--ok)} .cloudchip.warn{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,var(--surface))} .cloudchip.busy{color:var(--muted)}
 .aibar{display:grid;gap:10px;padding:12px;border:1px solid var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
-.aibar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.cutbox{display:grid;gap:8px;margin-bottom:12px} .cutbox .row{flex-wrap:wrap;gap:8px} .ln.cut .ln-in{opacity:.45;text-decoration:line-through} .ln.cut .ln-t::after{content:" ✂";} .aibar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .aibar,.aibar>*{min-width:0;max-width:100%}
 .aibar .btn{white-space:normal;text-align:center;line-height:1.3;padding-block:8px}
 .ls-acts{flex-wrap:wrap}
@@ -368,7 +368,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (17) · อัปโหลดวิดีโอขึ้น Drive ต่อเองทุกครั้งที่เปิด</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (18) · ✂️ ตัดต่ออัตโนมัติ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1297,7 +1297,8 @@ function renderFrame(ctx, W, H, v, p, t, media) {
     try { if (v && v.videoWidth) drawFramed(ctx, v, vid, sp.fx, sp.fy, sp.zoom); } catch {}
     try { drawSplitVis(ctx, vis, p, t, media, v); } catch (e) { console.error(e); }
   } else {
-    try { drawVideo(ctx, W, H, v, p, null); } catch {}
+    const zm = zoomAt(p, t);
+    try { if (zm) { ctx.save(); ctx.translate(W * zm.cx, H * zm.cy); ctx.scale(zm.z, zm.z); ctx.translate(-W * zm.cx, -H * zm.cy); } drawVideo(ctx, W, H, v, p, null); if (zm) ctx.restore(); } catch { if (zm) ctx.restore(); }
     if (sp && sp.on) { try { drawSceneLayer(ctx, p, W, H, t, media, v); } catch (e) { console.error(e); } }
   }
   const c = captionAt(p.captions, t); if (c) { try { drawCaption(ctx, W, H, c, p, t); } catch (e) { console.error(e); } }
@@ -2609,6 +2610,90 @@ function wordTime(p, c, w) {
   return +(c.start + (c.end - c.start) * pre / tot).toFixed(2);
 }
 const EMPH_SFX = { hit: "punchy default for an important word", pop: "light or fun word", sparkle: "benefit, beauty or wow", ding: "tip or idea", kaching: "price, money or saving", whoosh: "speed, change or movement", boom: "big reveal or shocking fact (use rarely)" };
+/* ================= auto edit: drop silences, retakes and off-script talk; punch-in zooms =================
+   Everything stays in source time: p.edit.cuts are the removed ranges [s, e]. Preview and export skip them. */
+function cutAt(p, t) { const E = p.edit; if (!E || !E.on) return null; for (const c of E.cuts) if (t >= c[0] && t < c[1]) return c; return null; }
+function keptBefore(p, t) { const E = p.edit; let k = t; if (E && E.on) for (const c of E.cuts) { if (c[0] >= t) break; k -= Math.min(t, c[1]) - c[0]; } return Math.max(0, k); }
+function keptDuration(p) { return keptBefore(p, p.duration || 0); }
+function zoomAt(p, t) {
+  const E = p.edit; if (!E || !E.on || E.zoom === false) return null;
+  let run = 0; for (const c of E.cuts) { if (c[1] <= t) run++; else break; }
+  let z = [1, 1.12, 1, 1.2][run % 4];
+  if ((E.emph || []).some(r => t >= r[0] && t < r[1])) z = Math.max(z, 1.28);
+  if (z <= 1.001) return null;
+  return { z, cx: (E.cx ?? 50) / 100, cy: (E.cy ?? 36) / 100 };
+}
+/* loudness every 20 ms, to find real pauses (word timestamps from speech engines are often stretched) */
+async function audioEnvelope(blob) {
+  if (!blob || blob.size > 600e6) return null;
+  const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!AC) return null;
+  const ab = await blob.arrayBuffer(), ctx = new AC(1, 16000, 16000);
+  const buf = await new Promise((res, rej) => { const pr = ctx.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); });
+  const d = buf.getChannelData(0), sr = buf.sampleRate, hop = Math.max(1, Math.round(sr * 0.02)), n = Math.floor(d.length / hop), env = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let sum = 0; for (let j = i * hop, e = j + hop; j < e; j++) sum += d[j] * d[j]; env[i] = Math.sqrt(sum / hop); }
+  return { env, step: hop / sr };
+}
+async function aiAutoEdit(p, opt = {}) {
+  const caps = p.captions.filter(c => String(c.text || "").trim());
+  if (!caps.length) throw new Error("ยังไม่มีซับให้ตัด");
+  const lines = caps.map((c, i) => ({ i, s: +c.start.toFixed(1), e: +c.end.toFixed(1), text: c.text }));
+  let drop = [], emph = [];
+  if (opt.ai !== false) {
+    const sys = `You are the editor of short talking-head videos for social media (${LEN[p.lang] || "Thai"}). The input is the raw recording as numbered subtitle lines with start/end seconds, in order.
+Decide which lines to REMOVE so the final video plays as one clean, natural take:
+- "retake": an earlier attempt of something that is said again later (same sentence or idea restarted, stumbled, cut off). Always keep the LAST complete attempt, drop the earlier ones.
+- "offscript": talk that is not part of the content: counting in ("3 4", "หนึ่ง สอง สาม"), "cut", talking to the camera person, asking what was said, someone else giving instructions, testing the mic, laughing breaks, "ไม่ได้ เอาใหม่".
+- "filler": lines that only contain hesitation sounds (เอ่อ อ่า อืม) or nothing meaningful.
+Never drop content just because it is short. When unsure, keep it.
+Also pick "emph": up to 20% of the kept lines that carry the key point (the question, the answer, the punchline) for a punch-in zoom.
+Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
+    const out = await chatJSON([{ role: "system", content: sys }, { role: "user", content: JSON.stringify({ lines }) }], { maxTok: 4000 });
+    const ok = new Set(["retake", "offscript", "filler"]);
+    drop = (Array.isArray(out.drop) ? out.drop : []).filter(d => d && Number.isInteger(d.i) && caps[d.i]).map(d => ({ i: d.i, why: ok.has(d.why) ? d.why : "offscript" }));
+    emph = (Array.isArray(out.emph) ? out.emph : []).filter(i => Number.isInteger(i) && caps[i] && !drop.some(d => d.i === i));
+  }
+  const dropped = new Set(drop.map(d => d.i));
+  const words = ((p.raw && p.raw.words) || []).filter(w => isFinite(w.start) && isFinite(w.end) && String(w.word || "").trim());
+  /* speech pieces we keep: words inside kept lines, or whole lines when there are no word times */
+  const keeps = [];
+  caps.forEach((c, i) => {
+    if (dropped.has(i)) return;
+    const ws = words.filter(w => w.start >= c.start - 0.05 && w.start < c.end + 0.02);
+    if (ws.length) ws.forEach(w => keeps.push([w.start, Math.min(Math.max(w.end, w.start + 0.08), w.start + 0.75)])); /* speech engines often stretch a word over the pause after it */ else keeps.push([c.start, c.end]);
+  });
+  keeps.sort((a, b) => a[0] - b[0]);
+  const PAD = opt.pad ?? 0.12, GAP = opt.gap ?? 0.45, dur = p.duration || (keeps.length ? keeps[keeps.length - 1][1] : 0);
+  const runs = [];
+  for (const [s, e] of keeps) { const r = runs[runs.length - 1]; if (r && s - r[1] <= GAP) r[1] = Math.max(r[1], e); else runs.push([s, e]); }
+  let kept = runs.map(([s, e]) => [Math.max(0, s - PAD), Math.min(dur, e + PAD)]);
+  /* split kept pieces at real pauses found in the audio */
+  let A = null; try { A = opt.blob ? await audioEnvelope(opt.blob) : null; } catch {}
+  if (A && A.env.length > 50) {
+    const sorted = Array.from(A.env).sort((a, b) => a - b), q = f => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * f))];
+    const th = Math.max(q(0.1) * 2.5, q(0.9) * 0.1), minF = Math.ceil(GAP / A.step), out = [];
+    for (const [s, e] of kept) {
+      let a = s, i0 = Math.floor(s / A.step), i1 = Math.min(A.env.length, Math.ceil(e / A.step)), run0 = -1;
+      for (let i = i0; i <= i1; i++) {
+        const quiet = i < i1 && A.env[i] < th;
+        if (quiet && run0 < 0) run0 = i;
+        if (!quiet && run0 >= 0) { if (i - run0 >= minF) { const qs = run0 * A.step + PAD, qe = i * A.step - PAD; if (qs - a > 0.15 && qe > qs) { out.push([a, qs]); a = qe; } } run0 = -1; }
+      }
+      out.push([a, e]);
+    }
+    kept = out.filter(([s, e]) => e - s > 0.12);
+  }
+  for (let k = kept.length - 1; k > 0; k--) if (kept[k][0] <= kept[k - 1][1]) { kept[k - 1][1] = Math.max(kept[k - 1][1], kept[k][1]); kept.splice(k, 1); }
+  const cuts = []; let t = 0;
+  for (const [s, e] of kept) { if (s - t > 0.05) cuts.push([+t.toFixed(3), +s.toFixed(3)]); t = e; }
+  if (dur - t > 0.05) cuts.push([+t.toFixed(3), +dur.toFixed(3)]);
+  p.edit = { on: true, zoom: p.edit ? p.edit.zoom !== false : true, cx: p.edit && p.edit.cx != null ? p.edit.cx : 50, cy: p.edit && p.edit.cy != null ? p.edit.cy : 36, cuts,
+    emph: emph.map(i => [caps[i].start, caps[i].end]), dropped: drop.map(d => ({ id: caps[d.i].id, why: d.why })), at: Date.now() };
+  return { cuts: cuts.length, removed: drop.length, before: dur, after: keptDuration(p) };
+}
+/* bring one removed line back */
+function restoreRange(p, s, e) { const E = p.edit; if (!E) return; const out = [];
+  for (const c of E.cuts) { if (c[1] <= s || c[0] >= e) { out.push(c); continue; } if (c[0] < s) out.push([c[0], s]); if (c[1] > e) out.push([e, c[1]]); }
+  E.cuts = out.filter(c => c[1] - c[0] > 0.04); }
 async function aiEmphasis(p, withSfx) {
   const B = 60; let n = 0; const picks = [];
   for (let i = 0; i < p.captions.length; i += B) {
@@ -3031,6 +3116,7 @@ function viewNew(resumeId) {
       </div>
       <div class="field"><span class="lab">ให้ AI ช่วย</span>
         <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
+        <label class="sw"><input type="checkbox" id="npCut"> ✂️ ตัดต่ออัตโนมัติ: ตัดช่วงเงียบ เทคที่พูดซ้ำ คำพูดนอกบท + ซูมสลับจังหวะ</label>
         <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญ (สี + เด้ง) พร้อมเสียงตรงจังหวะคำนั้น</label>
         <label class="sw"><input type="checkbox" id="npSfx"> ใส่เสียงช่วงเปิดคลิปและเปลี่ยนเรื่องเพิ่ม</label>
         <label class="sw"><input type="checkbox" id="npSplit"> ใส่ภาพประกอบ: AI ทำกราฟิกเคลื่อนไหวประกอบสิ่งที่พูด (เหมาะกับคลิปเล่าเรื่อง)</label>
@@ -3044,6 +3130,7 @@ function viewNew(resumeId) {
         <li data-s="cap"><span class="dot"></span>จัดบรรทัดซับ</li>
         <li data-s="fix" hidden><span class="dot"></span><span id="fixLab">AI ตรวจคำผิด</span></li>
         <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
+        <li data-s="cut" hidden><span class="dot"></span>AI ตัดต่ออัตโนมัติ</li>
         <li data-s="kw" hidden><span class="dot"></span>AI เน้นคำสำคัญ + ใส่เสียง</li>
         <li data-s="sfx" hidden><span class="dot"></span>AI ใส่เอฟเฟกต์เสียง</li>
         <li data-s="split" hidden><span class="dot"></span>AI สร้างแอนิเมชันประกอบ</li>
@@ -3058,6 +3145,7 @@ function viewNew(resumeId) {
   $("#npSfx").checked = settings.autoSfx !== false;
   $("#npFix").checked = settings.autoFix !== false;
   $("#npKw").checked = settings.autoKw !== false;
+  $("#npCut").checked = settings.autoCut !== false;
   $("#npSplit").checked = !!settings.autoSplit;
   let npOrient = settings.splitLook || "card:16:9";
   const syncOrient = () => { $("#npOrient").hidden = !$("#npSplit").checked; $$("#npOrient button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === npOrient)); };
@@ -3143,7 +3231,8 @@ function viewNew(resumeId) {
     $$("li", steps).forEach(li => li.className = "");
     $('li[data-s="tr"]', steps).hidden = !lang2;
     const autoSfx = $("#npSfx").checked, autoFix = $("#npFix").checked, autoKw = $("#npKw").checked;
-    const autoSplit = $("#npSplit").checked;
+    const autoSplit = $("#npSplit").checked, autoCut = $("#npCut").checked;
+    $('li[data-s="cut"]', steps).hidden = !autoCut;
     $('li[data-s="split"]', steps).hidden = !autoSplit;
     $('li[data-s="sfx"]', steps).hidden = !autoSfx; $('li[data-s="fix"]', steps).hidden = !autoFix; $('li[data-s="kw"]', steps).hidden = !autoKw;
     if (lang2) $("#trLab").textContent = "แปลเป็นภาษา" + LNAME[lang2];
@@ -3151,7 +3240,7 @@ function viewNew(resumeId) {
     let stage = "audio";
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
-      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoSplit = autoSplit; settings.splitLook = npOrient; saveSettings();
+      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoCut = autoCut; settings.autoSplit = autoSplit; settings.splitLook = npOrient; saveSettings();
       if (saving) await saving;
       let raw, detected = lang, duration = meta ? meta.duration : 0;
       if (haveRaw) { raw = draft.raw; detected = draft.detected || lang; mark("audio", "done"); mark("ai", "done"); }
@@ -3219,6 +3308,11 @@ function viewNew(resumeId) {
           await translateCaptions(p.captions, p.lang, p.tr.lang, (d, t) => $("#trLab").textContent = `แปลเป็นภาษา${LNAME[p.tr.lang]} (${d}/${t})`);
           mark("tr", "done"); p.updatedAt = Date.now(); await DB.put(p);
         } catch (e) { mark("tr", "fail"); toast("ซับพร้อมแล้ว แต่แปลไม่สำเร็จ: " + e.message + " กดแปลใหม่ได้ในหน้าแก้ไข", 6000); await sleep(1500); }
+      }
+      if (autoCut) {
+        stage = "cut"; mark("cut", "doing");
+        try { await aiAutoEdit(p, { blob: file }); mark("cut", "done"); p.updatedAt = Date.now(); await DB.put(p); }
+        catch (e) { mark("cut", "fail"); toast("ข้ามการตัดต่ออัตโนมัติ: " + e.message + " กดตัดใหม่ได้ในหน้าแก้ไข", 5000); }
       }
       if (autoKw) {
         stage = "kw"; mark("kw", "doing");
@@ -3306,6 +3400,11 @@ async function viewEditor(id) {
         <div class="seg subseg" id="subSeg" hidden>${SUBS.map(([k, n]) => `<button type="button" data-s="${k}" aria-pressed="${k === "style"}">${n}</button>`).join("")}</div>
 
         <section class="pane" data-p="text">
+          <div class="cutbox">
+            <button class="btn primary block" id="qCut">✂️ ตัดต่อให้อัตโนมัติ</button>
+            <span class="hint" id="qCutStat">ตัดช่วงเงียบ เทคที่พูดซ้ำ และคำพูดนอกบทออก แล้วซูมสลับจังหวะให้ · ต้นฉบับไม่ถูกลบ เอาคืนได้ทุกจุด</span>
+            <div class="row" id="qCutCtl" hidden><button class="btn small" id="qCutOn"></button><button class="btn small" id="qZoom"></button><button class="btn small" id="qCutAgain">ตัดใหม่</button></div>
+          </div>
           <div class="aibar">
             <b>ซับหรือคำแปลไม่ตรง? ให้ AI ทำใหม่ในปุ่มเดียว</b>
             <div class="aibar-row"><select class="input" id="qTr" aria-label="แปลเป็นภาษา">${langOptions(p.tr.lang, `<option value="">เลือกภาษาที่จะแปล</option>`)}</select><button class="btn primary" id="qTrGo">✨ แปลใหม่</button></div>
@@ -3466,7 +3565,7 @@ async function viewEditor(id) {
     </div>`;
 
   /* ---------- save + undo/redo ---------- */
-  const snap = () => JSON.stringify({ captions: p.captions, sfx: p.sfx, style: p.style, tr: p.tr, layout: p.layout, fit: p.fit, lang: p.lang, audio: p.audio, maxChars: p.maxChars, split: p.split });
+  const snap = () => JSON.stringify({ captions: p.captions, sfx: p.sfx, style: p.style, tr: p.tr, layout: p.layout, fit: p.fit, lang: p.lang, audio: p.audio, maxChars: p.maxChars, split: p.split, edit: p.edit || null });
   let hist = [snap()], hi = 0;
   const syncUndo = () => { $("#undo").disabled = hi <= 0 && !histT; $("#redo").disabled = hi >= hist.length - 1; };
   const pushHist = () => { clearTimeout(histT); histT = 0; const s = snap(); if (s !== hist[hi]) { hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 80) hist.shift(); hi = hist.length - 1; } syncUndo(); };
@@ -3479,7 +3578,7 @@ async function viewEditor(id) {
   }
   function restore(i) {
     Object.assign(p, JSON.parse(hist[i])); hi = i; save(); syncUndo();
-    renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); syncSplitUI(); renderScenes(); sizeStage(); loadMediaEls(p, pvMedia).then(hookMedia);
+    renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); syncSplitUI(); renderScenes(); sizeStage(); syncCut(); draw(); loadMediaEls(p, pvMedia).then(hookMedia);
     if (sid) { if (p.captions.some(c => c.id === sid)) fillSheet(); else closeSheet(); }
   }
   $("#mvOut").onclick = async () => {
@@ -3655,6 +3754,8 @@ async function viewEditor(id) {
   window.__redraw = () => { draw(); try { paintSceneThumbs(); } catch {} };
   function draw() {
     if (!cv) return;
+    if (video && !video.paused) { const ct = cutAt(p, video.currentTime + 0.03); if (ct) { if (ct[1] >= (video.duration || p.duration) - 0.05) { video.pause(); video.currentTime = Math.max(0, ct[0] - 0.05); } else video.currentTime = ct[1] + 0.005; } }
+    if (video && !(p.split.on && p.split.mode === "split")) { const zm = zoomAt(p, video.currentTime), tf = zm ? `scale(${zm.z})` : ""; if (video.style.transform !== tf) { video.style.transformOrigin = zm ? `${zm.cx * 100}% ${zm.cy * 100}%` : ""; video.style.transform = tf; } }
     const ctx = cv.getContext("2d"), t = video ? video.currentTime : 0;
     ctx.clearRect(0, 0, cv.width, cv.height);
     paintBg(video && video.paused);
@@ -3662,6 +3763,7 @@ async function viewEditor(id) {
     const c = captionAt(p.captions, t);
     if (c && c.id !== edId) { try { drawCaption(ctx, cv.width, cv.height, c, p, t); } catch (e) { console.error(e); } }
     if (guideOn) { ctx.save(); ctx.strokeStyle = "rgba(255,212,0,.95)"; ctx.setLineDash([10, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cv.width / 2, 0); ctx.lineTo(cv.width / 2, cv.height); ctx.stroke(); ctx.restore(); }
+    if (cutAt(p, t)) { const W = cv.width, H = cv.height, px = Math.round(W * 0.045); ctx.save(); ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, 0, W, H); ctx.font = `600 ${px}px "IBM Plex Sans Thai", Kanit, sans-serif`; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("✂ ช่วงนี้ถูกตัดออก (ตอนเล่นจะข้ามไป)", W / 2, H * 0.5); ctx.restore(); }
     if (edId) styleInline();
     const d = (video && video.duration) || p.duration || 0;
     const pt = $("#pTime"); if (pt) pt.textContent = `${fmtDur(t)} / ${fmtDur(d)}`;
@@ -3710,12 +3812,14 @@ async function viewEditor(id) {
 
   /* ---------- caption list ---------- */
   const grow = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+  const WHY = { retake: "เทคซ้ำ", offscript: "นอกบท", filler: "คำติดปาก", silence: "เงียบ" };
+  const capCut = c => { if (!p.edit || !p.edit.on) return ""; const m = (c.start + c.end) / 2; if (!cutAt(p, m) || !cutAt(p, c.start + 0.02)) return ""; const d = (p.edit.dropped || []).find(x => x.id === c.id); return d ? (WHY[d.why] || "ตัดออก") : "ตัดออก"; };
   const rowHTML = c => {
     const fx = p.sfx.filter(x => x.t >= c.start && x.t < c.end).map(x => sfxName(x.key)).join(", ");
     return `<button type="button" class="ln-t mono" data-open aria-label="ตั้งค่าบรรทัดเวลา ${fmtT(c.start)}">${fmtT(c.start)}</button><textarea class="ln-in" data-f="text" rows="1" enterkeyhint="enter" aria-label="ข้อความซับ" placeholder="พิมพ์ซับ…">${esc(c.text)}</textarea>${p.tr.lang ? `<textarea class="ln-in tr" data-f="tr" rows="1" aria-label="คำแปล" placeholder="คำแปลภาษา${LNAME[p.tr.lang]}">${esc(c.tr || "")}</textarea>` : ""}${c.hl && c.hl.length ? `<span class="ln-sfx">เน้น: ${esc(c.hl.join(", "))}</span>` : ""}${fx ? `<span class="ln-sfx">♪ ${esc(fx)}</span>` : ""}`;
   };
   function renderList(focusId, caret) {
-    $("#lines").innerHTML = p.captions.map(c => `<li class="ln${c.id === sid ? " sel" : ""}" data-id="${c.id}">${rowHTML(c)}</li>`).join("");
+    $("#lines").innerHTML = p.captions.map(c => { const cut = capCut(c); return `<li class="ln${c.id === sid ? " sel" : ""}${cut ? " cut" : ""}" data-id="${c.id}">${rowHTML(c)}${cut ? `<button type="button" class="mini" data-restore>✂ ${cut} · เอาคืน</button>` : ""}</li>`; }).join("");
     $$("#lines .ln-in").forEach(grow);
     activeId = undefined; draw();
     if (focusId) { const ta = $(`.ln[data-id="${focusId}"] .ln-in`); if (ta) { ta.focus(); const pos = caret == null ? ta.value.length : caret; try { ta.setSelectionRange(pos, pos); } catch {} } }
@@ -3991,6 +4095,29 @@ async function viewEditor(id) {
     changed(); syncLang(); renderList(); runTranslate();
   };
   $("#qKw").onclick = () => runEmphasis($("#qKw"), $("#qStat"));
+  /* ---------- auto edit ---------- */
+  function syncCut() {
+    const E = p.edit, on = !!(E && E.cuts && E.cuts.length);
+    $("#qCutCtl").hidden = !on; $("#qCut").hidden = on;
+    if (!on) return;
+    $("#qCutOn").textContent = E.on ? "ดูต้นฉบับ (ไม่ตัด)" : "ใช้คลิปที่ตัดแล้ว";
+    $("#qZoom").textContent = E.zoom === false ? "ซูม: ปิด" : "ซูม: เปิด";
+    $("#qCutStat").textContent = E.on ? `ตัดแล้ว ${E.cuts.length} จุด · เหลือ ${fmtDur(keptDuration(p))} จาก ${fmtDur(p.duration)}${(E.dropped || []).length ? ` · เอาบรรทัดที่พูดซ้ำ/นอกบทออก ${E.dropped.length} บรรทัด (ขีดฆ่าในรายการด้านล่าง กด "เอาคืน" ได้)` : ""}` : "กำลังดูต้นฉบับ ยังไม่ได้ใช้การตัด";
+  }
+  async function runCut(btn) {
+    if (!hasKey()) { openSettings(); return; }
+    btn.disabled = true; const st = $("#qCutStat"); st.textContent = "AI กำลังดูทั้งคลิป หาช่วงเงียบ เทคซ้ำ และคำพูดนอกบท…";
+    try { const r = await aiAutoEdit(p, { blob }); changed(); renderList(); syncCut(); video && video.pause(); seekTo(0); draw(); toast(`ตัดแล้ว เหลือ ${fmtDur(r.after)} จาก ${fmtDur(r.before)} กดเล่นดูได้เลย`, 4000); }
+    catch (e) { st.textContent = ""; toast(e.message, 5000); syncCut(); }
+    btn.disabled = false;
+  }
+  $("#qCut").onclick = () => runCut($("#qCut"));
+  $("#qCutAgain").onclick = () => runCut($("#qCutAgain"));
+  $("#qCutOn").onclick = () => { p.edit.on = !p.edit.on; changed(); renderList(); syncCut(); draw(); };
+  $("#qZoom").onclick = () => { p.edit.zoom = p.edit.zoom === false; changed(); syncCut(); draw(); };
+  $("#lines").addEventListener("click", e => { const b = e.target.closest("[data-restore]"); if (!b) return; const c = capOf(b); if (!c) return;
+    restoreRange(p, c.start - 0.12, c.end + 0.12); p.edit.dropped = (p.edit.dropped || []).filter(x => x.id !== c.id); changed(); renderList(); syncCut(); seekTo(c.start); draw(); });
+  syncCut();
   $("#qRe").onclick = () => {
     const v = $("#qTr").value;
     if (v && v !== p.lang && v !== p.tr.lang) { p.captions.forEach(c => c.tr = ""); p.tr.lang = v; if (p.tr.mode === "main") p.tr.mode = "both"; syncLang(); }
@@ -4399,7 +4526,7 @@ async function viewEditor(id) {
       const rec = new MediaRecorder(stream, opts); const parts = [];
       rec.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
       const stopped = new Promise(r => rec.onstop = r);
-      v.currentTime = 0; if (v.seeking) await once(v, "seeked");
+      { const c0 = cutAt(p, 0); v.currentTime = c0 ? c0[1] + 0.005 : 0; } if (v.seeking) await once(v, "seeked");
       await loadMediaEls(p, exMedia);
       const frame = () => renderFrame(ctx, W, H, v, p, v.currentTime, (sc, t) => mediaFor(exMedia, sc, t, true));
       const done = new Set();
@@ -4407,20 +4534,34 @@ async function viewEditor(id) {
         const now = v.currentTime;
         for (const s of p.sfx) {
           if (done.has(s.id) || !bufs[s.key]) continue;
-          if (s.t < now - 0.05) { done.add(s.id); continue; }
+          if (s.t < now - 0.05 || cutAt(p, s.t)) { done.add(s.id); continue; }
           if (s.t < now + 0.3) { done.add(s.id); const bs = ac.createBufferSource(); bs.buffer = bufs[s.key]; const g = ac.createGain(); g.gain.value = s.vol; bs.connect(g).connect(sfxBus); bs.start(ac.currentTime + Math.max(0, s.t - now)); srcs.push(bs); }
         }
       };
       frame(); rec.start(1000); await ac.resume(); await v.play();
-      let rafE = 0;
-      const tick = () => { frame(); schedule(); const pct = Math.min(100, v.currentTime / v.duration * 100); $("#exBar").style.width = pct + "%"; $("#exTxt").textContent = `${pct.toFixed(0)}% · ${fmtDur(v.currentTime)} / ${fmtDur(v.duration)}`; if (!v.ended && !job.cancel) rafE = requestAnimationFrame(tick); };
+      let rafE = 0, jumping = false;
+      const total = keptDuration(p) || v.duration;
+      const jump = c => { /* hop over a removed piece with the recorder paused, so the cut is seamless */
+        jumping = true; try { rec.pause(); } catch {} v.pause();
+        v.currentTime = c[1] + 0.005;
+        once(v, "seeked").then(() => { frame(); return v.play(); }).then(() => { try { rec.resume(); } catch {} jumping = false; }).catch(() => { jumping = false; });
+      };
+      const tick = () => {
+        if (!jumping) {
+          const c = cutAt(p, v.currentTime + 0.02);
+          if (c) { if (c[1] >= v.duration - 0.05) { job.done && job.done(); return; } jump(c); }
+          else { frame(); schedule(); }
+        }
+        const kt = keptBefore(p, v.currentTime), pct = Math.min(100, kt / total * 100); $("#exBar").style.width = pct + "%"; $("#exTxt").textContent = `${pct.toFixed(0)}% · ${fmtDur(kt)} / ${fmtDur(total)}`;
+        if (!v.ended && !job.cancel) rafE = requestAnimationFrame(tick);
+      };
       tick();
       const onHide = () => { if (document.hidden) toast("อย่าสลับแอประหว่างสร้างวิดีโอ วิดีโออาจกระตุก", 4000); };
       document.addEventListener("visibilitychange", onHide);
       await new Promise(r => { v.onended = r; job.done = r; });
       document.removeEventListener("visibilitychange", onHide);
       cancelAnimationFrame(rafE); frame();
-      const tail = p.sfx.filter(s => bufs[s.key]).reduce((m, s) => Math.max(m, s.t + bufs[s.key].duration - v.duration), 0);
+      const tail = p.sfx.filter(s => bufs[s.key] && !cutAt(p, s.t)).reduce((m, s) => Math.max(m, s.t + bufs[s.key].duration - v.duration), 0);
       await sleep(200 + Math.min(2500, Math.max(0, tail) * 1000));
       rec.stop(); await stopped;
       if (job.cancel) { finish(); toast("ยกเลิกแล้ว"); return; }
