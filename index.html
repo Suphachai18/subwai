@@ -141,6 +141,7 @@ input.input,select.input,textarea.input{max-width:100%}
 .tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 .pane{padding:14px;display:grid;gap:14px}
 .subseg{margin:12px 14px 0}
+.chk{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px} .chk li{display:grid} .chk li.ok .hint{color:var(--ok)} .chk li.bad .hint{color:var(--danger)} .chk li.warn .hint{color:var(--accent-text)}
 .cloudchip{min-height:34px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
 .cloudchip.ok{color:var(--ok)} .cloudchip.warn{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,var(--surface))} .cloudchip.busy{color:var(--muted)}
 .aibar{display:grid;gap:10px;padding:12px;border:1px solid var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
@@ -364,7 +365,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 14 ต.ค. (8) · ซิงก์ Google Drive</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. · ตรวจระบบ + Gemini รุ่นล่าสุด</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -549,7 +550,7 @@ function buildCaptions(raw, maxChars, lang) {
 const PROVIDERS = {
   groq: { n: "Groq", tag: "ฟรี", base: "https://api.groq.com/openai/v1", stt: "whisper-large-v3", chat: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b"], keyField: "groqKey", ph: "gsk_..." },
   openai: { n: "OpenAI", tag: "เสียเงิน", base: "https://api.openai.com/v1", stt: "whisper-1", chat: ["gpt-4.1", "gpt-4o", "gpt-4.1-mini", "gpt-4o-mini"], keyField: "apiKey", ph: "sk-..." },
-  gemini: { n: "Google Gemini", tag: "ฟรี", base: "https://generativelanguage.googleapis.com/v1beta/openai", stt: "", chat: ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"], keyField: "geminiKey", ph: "AIza..." }
+  gemini: { n: "Google Gemini", tag: "ฟรี", base: "https://generativelanguage.googleapis.com/v1beta/openai", stt: "", chat: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"], keyField: "geminiKey", ph: "AIza..." }
 };
 /* Two keys can work together: Groq (free) transcribes, OpenAI (paid, more accurate) writes and translates the subtitles. */
 const keyOf = P => (settings[P.keyField] || "").trim();
@@ -568,6 +569,7 @@ function apiError(status, j, PP = prov()) {
   const P = PP.n, code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || "";
   if (status === 401) return new Error(`API key ของ ${P} ไม่ถูกต้อง เปิดตั้งค่าแล้ววาง key ใหม่`);
   if (status === 429 && code === "insufficient_quota") return new Error("เครดิต OpenAI หมดหรือยังไม่ได้เติม ลองเปลี่ยนไปใช้ Groq (ฟรี) ในหน้าตั้งค่า");
+  if (status === 429 && /per day|PerDay|daily/i.test(msg)) return new Error(`โควตาฟรีรายวันของ ${P} หมดแล้ว ใช้ต่อได้พรุ่งนี้ หรือเปลี่ยน AI ในหน้าตั้งค่า`);
   if (status === 429) return new Error(`ใช้งาน ${P} ถี่เกินโควตาฟรีชั่วคราว รอสักครู่แล้วกดลองใหม่`);
   if ((status === 400 || status === 403) && /API key|API_KEY/i.test(msg)) return new Error(`API key ของ ${P} ไม่ถูกต้อง เปิดตั้งค่าแล้ววาง key ใหม่`);
   if (status === 413) return new Error(`ไฟล์เสียงใหญ่เกินที่ ${P} รับ`);
@@ -829,6 +831,7 @@ async function chatJSON(messages, opt = {}) {
       if (P === PROVIDERS.gemini) body.max_tokens = opt.maxTok || 8000; else body.max_completion_tokens = opt.maxTok || 8000;
       if (strict) body.response_format = { type: "json_object" };
       if (m.startsWith("openai/gpt-oss")) body.reasoning_effort = opt.effort || "low";
+      if (P === PROVIDERS.gemini) { const w = (chatJSON.last || 0) + 4500 - Date.now(); if (w > 0) await sleep(w); chatJSON.last = Date.now(); }
       const r = await apiFetch("/chat/completions", { method: "POST", headers: { ...authH(P), "Content-Type": "application/json" }, body: JSON.stringify(body) }, P);
       if (r.ok) {
         const j = await r.json();
@@ -3540,6 +3543,7 @@ function openSettings() {
       <details class="box" id="gBox"><summary>Google Client ID (ตั้งครั้งเดียว)</summary><div class="in"><input class="input" id="gCid" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"><span class="hint">ได้จาก console.cloud.google.com → Clients</span></div></details>
     </div>
     <span class="hint">key เก็บไว้ในเบราว์เซอร์เครื่องนี้ (และใน Google Drive ของคุณถ้าเชื่อมไว้) ส่งตรงไปที่ผู้ให้บริการ AI นั้นเท่านั้น</span>
+    <div class="field"><span class="lab">ตรวจระบบ</span><button class="btn small" id="sysChk">ตรวจว่าทุกส่วนใช้งานได้จริง</button><ol class="chk" id="chkOut" hidden></ol></div>
     <div class="row"><button class="btn primary" id="kSave" style="margin-left:auto">บันทึก</button><button class="btn" id="kClose">ปิด</button></div>
   </div></div>`;
   $("#k_groq").value = settings.groqKey || ""; $("#k_openai").value = settings.apiKey || ""; $("#k_gemini").value = settings.geminiKey || "";
@@ -3570,6 +3574,32 @@ function openSettings() {
   };
   $("#gOff").onclick = () => { if (!confirm("หยุดซิงก์กับ Google Drive? งานในเครื่องนี้ยังอยู่ครบ และไฟล์ใน Drive ไม่ถูกลบ")) return; Cloud.disconnect(); gPaint(); };
   gPaint();
+  $("#sysChk").onclick = async () => {
+    settings.groqKey = $("#k_groq").value.trim(); settings.apiKey = $("#k_openai").value.trim(); settings.geminiKey = $("#k_gemini").value.trim(); if (keyOf(PROVIDERS[tai])) settings.textAI = tai; saveSettings();
+    const out = $("#chkOut"); out.hidden = false; out.innerHTML = ""; $("#sysChk").disabled = true;
+    const row = name => { const li = document.createElement("li"); li.innerHTML = `<b>${name}</b><span class="hint">กำลังตรวจ…</span>`; out.appendChild(li); return (ok, msg) => { li.className = ok === true ? "ok" : ok === false ? "bad" : "warn"; li.lastChild.textContent = (ok === true ? "✓ " : ok === false ? "✗ " : "! ") + msg; }; };
+    let r;
+    r = row("ถอดเสียง (" + sttProv().n + ")");
+    try {
+      if (!keyOf(sttProv())) r(false, "ยังไม่ได้ใส่ key");
+      else { await whisper(encodeWav(new Float32Array(16000), 16000), { lang: "th" }); r(true, "ส่งเสียงให้ AI ถอดได้ปกติ"); }
+    } catch (e) { r(false, e.message); }
+    r = row("จัดซับ แก้คำ และแปล (" + chatProv().n + ")");
+    try {
+      const j = await chatJSON([{ role: "system", content: 'Translate the user text to English. Reply only JSON: {"t": "..."}' }, { role: "user", content: "รถกอล์ฟไฟฟ้าราคาดี" }], { maxTok: 400 });
+      r(j && j.t ? true : null, j && j.t ? `ตอบได้ปกติ (ทดลองแปล: “${String(j.t).slice(0, 40)}”) · ${settings["chat_" + provKey(chatProv())] || ""}` : "ตอบกลับแต่รูปแบบแปลก ยังใช้ได้");
+    } catch (e) { r(false, e.message); }
+    r = row("ซิงก์ Google Drive");
+    if (!Cloud.cid()) r(null, "ยังไม่ได้ตั้งค่า (ไม่บังคับ) งานเก็บเฉพาะเครื่องนี้");
+    else if (!Cloud.enabled()) r(null, "ยังไม่ได้กดเชื่อม");
+    else if (!Cloud.valid()) r(null, "ต้องกดเชื่อมอีกครั้ง");
+    else { try { await Cloud.root(); r(true, "เชื่อมแล้ว อ่านและเขียน Drive ได้"); } catch (e) { r(false, e.message === "AUTH" ? "ต้องกดเชื่อมอีกครั้ง" : e.message); } }
+    r = row("พื้นที่เก็บงานในเครื่อง");
+    try { const e = await navigator.storage.estimate(); const free = (e.quota - e.usage) / 1e9; r(free > 3 ? true : null, `ใช้ไป ${(e.usage / 1e9).toFixed(2)} GB · เหลือประมาณ ${free.toFixed(1)} GB${free < 3 ? " (ใกล้เต็ม ลบโปรเจกต์เก่าที่ไม่ใช้)" : ""}`); } catch { r(null, "เบราว์เซอร์นี้ไม่บอกพื้นที่ที่เหลือ"); }
+    r = row("สร้างไฟล์วิดีโอ (ส่งออก)");
+    const mm = pickMime(); r(mm === null ? false : /mp4/.test(mm) ? true : null, mm === null ? "เบราว์เซอร์นี้สร้างวิดีโอไม่ได้ ใช้ Safari หรือ Chrome รุ่นใหม่" : /mp4/.test(mm) ? "ได้ไฟล์ MP4 ลง TikTok/Reels ได้เลย" : "ได้ไฟล์ WebM (บางแอปอาจต้องแปลงก่อนอัปโหลด)");
+    $("#sysChk").disabled = false;
+  };
   $("#k_openai").oninput = paint; $("#k_groq").oninput = paint; $("#k_gemini").oninput = paint; paint();
   const close = () => { root.innerHTML = ""; };
   $("#mdl").onclick = e => { if (e.target.id === "mdl") close(); };
