@@ -368,7 +368,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (16) · ลบโปรเจกต์จากหน้าแรกได้</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (17) · อัปโหลดวิดีโอขึ้น Drive ต่อเองทุกครั้งที่เปิด</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2694,6 +2694,7 @@ const Cloud = {
     try { const t = JSON.parse(localStorage.getItem("subwai.gtok") || "null"); if (t && t.exp > Date.now() + 60000) { this.tok = t.tok; this.exp = t.exp; } } catch {}
     if (this.cid()) this.gis().catch(() => {});
     this.state = this.enabled() ? (this.valid() ? "ok" : "auth") : "off"; this.paint();
+    if (this.enabled() && this.valid()) setTimeout(() => this.resumeAll(), 2500);
   },
   valid() { return !!this.tok && this.exp > Date.now() + 60000; },
   gis() {
@@ -2855,8 +2856,10 @@ const Cloud = {
     c.pushedU = p.updatedAt || 0; c.dirty = false; this.meta(p.id, c);
     if (!c.videoId) this.uploadVideo(p.id);
   },
-  async uploadVideo(pid) {
-    if (this.vUp.has(pid) || !this.valid()) return;
+  /* one video at a time (phones choke on parallel big uploads) */
+  uploadVideo(pid) { this._vq = (this._vq || Promise.resolve()).then(() => this._uploadVideo(pid)).catch(() => {}); return this._vq; },
+  async _uploadVideo(pid) {
+    if (this.vUp.has(pid) || !this.valid() || this.meta(pid).videoId) return;
     const blob = (await DB.getVideo(pid).catch(() => null)) || tempVideos[pid]; if (!blob) return;
     this.vUp.set(pid, 0); this.paint(); setBusy(true);
     try {
@@ -2935,9 +2938,19 @@ const Cloud = {
     settings.cloudOn = true; saveSettings();
     await this.pullSettings(); await this.pushSettings();
     const n = await this.pull(true);
-    /* upload the work that so far only lived in this browser */
-    try { for (const p of await DB.all()) if (!p.draft && !this.meta(p.id).fileId) this.queue.add(p.id); if (this.queue.size) { clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 800); } } catch {}
+    this.resumeAll();
     return n;
+  },
+  /* anything in this browser that is not (fully) in Drive yet: project files first, then videos one by one.
+     Runs on every app start too, so an upload that stopped (screen locked, app switched) simply continues. */
+  async resumeAll() {
+    if (this._resuming || !this.enabled() || !this.valid()) return; this._resuming = true;
+    try {
+      const all = (await DB.all()).filter(p => !p.draft);
+      for (const p of all) if (!this.meta(p.id).fileId) this.queue.add(p.id);
+      if (this.queue.size) { clearTimeout(this.timer); await this.flush(); }
+      for (const p of all) { const m = this.meta(p.id); if (m.fileId && !m.videoId) await this.uploadVideo(p.id); }
+    } catch (e) { console.error(e); } finally { this._resuming = false; this.paint(); }
   }
 };
 
@@ -4573,9 +4586,9 @@ function openSettings() {
 $("#goHome").onclick = () => { if (BUSY) { toast("กำลังทำงานอยู่ รอให้เสร็จก่อน"); return; } setView(viewHome); };
 $("#openSettings").onclick = openSettings;
 $("#cloudChip").onclick = () => {
-  if (Cloud.state === "auth" || !Cloud.valid()) { Cloud.connect().then(() => Cloud.pull(true)).then(n => { toast(n ? `ซิงก์แล้ว ดึงงานมา ${n} โปรเจกต์` : "ซิงก์แล้ว"); if ($(".home-head")) viewHome(); }).catch(e => toast(e.message, 4000)); return; }
+  if (Cloud.state === "auth" || !Cloud.valid()) { Cloud.connect().then(() => { Cloud.resumeAll(); return Cloud.pull(true); }).then(n => { toast(n ? `ซิงก์แล้ว ดึงงานมา ${n} โปรเจกต์` : "ซิงก์แล้ว"); if ($(".home-head")) viewHome(); }).catch(e => toast(e.message, 4000)); return; }
   if (Cloud.state === "err") { toast(Cloud.msg || "ซิงก์ไม่สำเร็จ", 4000); }
-  Cloud.pull(true).then(n => { if (n && $(".home-head")) viewHome(); }); Cloud.flush();
+  Cloud.pull(true).then(n => { if (n && $(".home-head")) viewHome(); }); Cloud.flush(); Cloud.resumeAll();
 };
 Cloud.init();
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
