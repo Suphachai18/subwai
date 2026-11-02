@@ -368,7 +368,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (14) · แก้กราฟิกค้าง/กะพริบตอนตัดกลับหน้าคุณ</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (15) · ซิงก์ Google Drive พร้อมใช้</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2679,7 +2679,7 @@ function setView(fn) { if (cleanup) { try { cleanup(); } catch {} cleanup = null
    each project (subtitles, translation, style, sounds, scenes), your own photos/clips, the settings and
    the original video are copied to a "ซับไว (Subwai)" folder in the user's own Google Drive, so another
    phone or computer can open the same work. Scope drive.file: the app only sees files it created. */
-const CLOUD_CLIENT_ID = "";
+const CLOUD_CLIENT_ID = "850221167647-s2iql2e43rl2r00d6bmq33mvq1ndjl02.apps.googleusercontent.com";
 const DRV = "https://www.googleapis.com/drive/v3/files", UPL = "https://www.googleapis.com/upload/drive/v3/files";
 const Cloud = {
   tok: null, exp: 0, state: "off", msg: "", queue: new Set(), timer: 0, folder: null, flushing: false, vUp: new Map(), down: new Map(), pulledAt: 0,
@@ -2949,6 +2949,7 @@ async function viewHome() {
   const drafts = all.filter(p => p.draft), projects = all.filter(p => !p.draft);
   app.innerHTML = `
     ${hasKey() ? "" : `<div class="notice"><p><b>เริ่มต้นใช้งาน:</b> ใส่ API key ก่อน แนะนำ Groq ใช้ฟรีและไม่ต้องใช้บัตร สมัครได้ในหน้าตั้งค่า</p><button class="btn primary small" id="nkey">ใส่ API key</button></div>`}
+    ${Cloud.cid() && !settings.cloudOn ? `<div class="notice"><p><b>เปิดงานได้ทุกเครื่อง:</b> เชื่อม Google Drive ครั้งเดียว แล้วเปิดลิงก์ซับไวที่ไหนก็ทำงานต่อได้เลย งานในเครื่องนี้จะถูกอัปโหลดให้อัตโนมัติ</p><button class="btn primary small" id="cloudGo">☁ เชื่อม Google Drive</button></div>` : ""}
     <div class="home-head">
       <div><h1>โปรเจกต์ของฉัน</h1><div class="muted">${projects.length ? projects.length + " โปรเจกต์ เก็บไว้ในเครื่องนี้" : "อัปโหลดวิดีโอ แล้ว AI จะถอดเสียงและใส่ซับให้"}</div></div>
       <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end"><label class="btn" for="bIn">เปิดไฟล์งาน</label><input type="file" id="bIn" hidden><button class="btn primary" id="newp">+ โปรเจกต์ใหม่</button></div>
@@ -2964,6 +2965,9 @@ async function viewHome() {
       : drafts.length ? "" : `<div class="empty"><span class="sample">ซับขึ้นแบบนี้ อ่านง่าย<small>Subtitles look like this</small></span><p class="muted" style="margin:0;max-width:42ch">ยังไม่มีโปรเจกต์ เลือกวิดีโอจากเครื่อง AI จะถอดเสียง แปลเป็นภาษาที่สองได้ ใส่ซาวด์เอฟเฟกต์ แล้วดาวน์โหลดวิดีโอที่ฝังซับแล้ว</p><button class="btn primary" id="newp2">สร้างโปรเจกต์แรก</button></div>`}
   `;
   $("#newp").onclick = () => setView(viewNew);
+  const cg = $("#cloudGo"); if (cg) cg.onclick = () => { cg.disabled = true; cg.textContent = "กำลังเชื่อม…";
+    Cloud.connect().then(() => Cloud.start()).then(n => { toast(n ? `เชื่อมแล้ว ดึงงานมา ${n} โปรเจกต์` : "เชื่อม Google Drive แล้ว งานจะซิงก์อัตโนมัติ", 4000); viewHome(); })
+      .catch(e => { toast(e.message, 5000); cg.disabled = false; cg.textContent = "☁ เชื่อม Google Drive"; }); };
   $("#bIn").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; toast("กำลังเปิดไฟล์งาน…", 8000);
     try { const p = await readBundle(f); toast(`เปิด "${p.name || "งาน"}" แล้ว ทำต่อได้เลย`, 3500); setView(() => p.draft ? viewNew(p.id) : viewEditor(p.id)); } catch (err) { toast("เปิดไฟล์ไม่ได้: " + err.message, 5000); } };
   const n2 = $("#newp2"); if (n2) n2.onclick = () => setView(viewNew);
