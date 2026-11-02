@@ -342,7 +342,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
 .scn-b{display:grid;gap:4px;min-width:0;align-content:start}
 .scn-title{font-family:var(--ui);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scn-acts{display:flex;flex-wrap:wrap;gap:2px}
-.scn-acts label.mini{display:inline-flex;align-items:center;cursor:pointer}
+.scn-acts label.mini{display:inline-flex;align-items:center;cursor:pointer} .scn-look .mini[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-radius:999px}
 .scn-ed{grid-column:1/-1;display:grid;gap:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .sw.big{font-family:var(--ui);font-weight:700;font-size:16px}
 .sw.big input{width:22px;height:22px}
@@ -366,7 +366,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (9) · กราฟิกจาก Claude ปรับตามทุกโหมด</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (10) · โหมดผสม + ย้ายงานข้ามเบราว์เซอร์</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -404,6 +404,35 @@ async function shareOrSave(blob, name) {
     if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return; }
   } catch (e) { if (e && e.name === "AbortError") return; }
   downloadBlob(blob, name);
+}
+/* one file that carries a whole project (video, photos, own sounds, graphics) to another browser or device */
+const BUNDLE_MAGIC = "SUBWAI-BUNDLE1\n";
+async function makeBundle(p) {
+  const parts = [], blobs = [];
+  const add = (meta, blob) => { if (!blob) return; parts.push({ ...meta, size: blob.size, type: blob.type || "" }); blobs.push(blob); };
+  add({ t: "video", id: p.id }, await DB.getVideo(p.id).catch(() => null));
+  const mids = new Set();
+  for (const sc of (p.split && p.split.scenes) || []) { if (sc.media && sc.media.id) mids.add(sc.media.id); if (sc.photo && sc.photo.id) mids.add(sc.photo.id); }
+  for (const id of mids) { const r = await DB.mediaGet(id).catch(() => null); if (r) add({ t: "media", id, kind: r.kind, name: r.name || "" }, r.blob); }
+  for (const x of p.sfx || []) { if (!String(x.key).startsWith("c:")) continue; const c = customLib.find(c => "c:" + c.id === x.key); if (c && !parts.some(q => q.t === "sfx" && q.id === c.id)) add({ t: "sfx", id: c.id, name: c.name }, c.blob); }
+  const head = JSON.stringify({ v: 1, project: p, parts }), hb = new Blob([head]);
+  return new Blob([BUNDLE_MAGIC, String(hb.size).padStart(12, "0"), hb, ...blobs], { type: "application/octet-stream" });
+}
+async function readBundle(file) {
+  const m = await file.slice(0, BUNDLE_MAGIC.length + 12).text();
+  if (!m.startsWith(BUNDLE_MAGIC)) throw new Error("ไฟล์นี้ไม่ใช่ไฟล์งานของซับไว");
+  const hl = parseInt(m.slice(BUNDLE_MAGIC.length), 10), o0 = BUNDLE_MAGIC.length + 12;
+  const head = JSON.parse(await file.slice(o0, o0 + hl).text()); let o = o0 + hl;
+  const p = head.project; if (!p || !p.id) throw new Error("ไฟล์งานเสียหาย");
+  for (const q of head.parts || []) {
+    const b = file.slice(o, o + q.size, q.type); o += q.size;
+    const blob = new Blob([await b.arrayBuffer()], { type: q.type });
+    if (q.t === "video") await DB.putVideo(p.id, blob);
+    else if (q.t === "media") await DB.mediaPut({ id: q.id, blob, kind: q.kind, name: q.name });
+    else if (q.t === "sfx") { const it = { id: q.id, name: q.name, blob }; await DB.sfxPut(it); if (!customLib.some(c => c.id === q.id)) customLib.push(it); }
+  }
+  await DB.putRaw(p);
+  return p;
 }
 const safeName = s => (s || "video").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 60) || "video";
 
@@ -2079,7 +2108,62 @@ function drawSplitVis(ctx, r, p, t, mediaCb, bgSrc) {
   return true;
 }
 /* card / full-screen modes: graphic over your video, with shadow and rounded corners for the card */
-function drawSceneLayer(ctx, p, W, H, t, mediaCb, bgSrc) {
+/* mixed mode: every scene picks its own look (full screen, split, floating card) so the clip keeps changing */
+const LOOKS3 = { full: "เต็มจอ", split: "แบ่งจอ", card: "การ์ดกลางจอ" };
+function lookOf(p, sc) {
+  if (LOOKS3[sc.look]) return sc.look;
+  const L = (p.split.scenes || []).filter(s => !s.gap && s.show !== false), i = Math.max(0, L.indexOf(sc));
+  if (i === 0) return "full";
+  const byType = { question: "full", quote: "full", big: "full", list: "split", steps: "split", timeline: "split", bars: "split", vs: "split", price: "card", stat: "card", number: "card" }[sc.type];
+  const prev = i > 0 ? lookOf(p, L[i - 1]) : "";
+  const rot = ["split", "card", "full", "split", "full", "card"][i % 6];
+  const pick = sc.type !== "custom" && byType ? byType : rot;
+  return pick === prev ? ["full", "split", "card"].find(x => x !== prev && x !== (i > 1 ? lookOf(p, L[i - 2]) : "")) || pick : pick;
+}
+function mixRects(p, W, H) { const sp = p.split; return splitRects({ split: { ...sp, orient: W > H ? "h" : "v" } }, W, H); }
+function drawMixLayer(ctx, p, W, H, t, mediaCb, bgSrc, vsrc) {
+  const m = sceneMix(p, t); if (!m) return;
+  const { sc } = m, prevOn = m.prev && m.prev.show !== false, curOn = sc.show !== false, sp = p.split;
+  if (!curOn && !(prevOn && m.k < 1)) return;
+  const T = SCENE_THEMES[sp.theme] || SCENE_THEMES.glass, F = { x: 0, y: 0, w: W, h: H };
+  const cr = cardRect({ split: { ...sp, mode: "card" } }, W, H);
+  const paint = (s, tt, a = 1) => {
+    const lk = lookOf(p, s), md = mediaCb ? mediaCb(s, s.start + tt) : null;
+    ctx.save(); ctx.globalAlpha *= a;
+    if (lk === "full") drawScene(ctx, 0, 0, W, H, s, tt, md, sp.theme, bgSrc);
+    else if (lk === "split") {
+      const { vis, vid } = mixRects(p, W, H), src = vsrc && vsrc.videoWidth ? vsrc : (bgSrc && (bgSrc.videoWidth || bgSrc.naturalWidth) ? bgSrc : null);
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+      if (src) { try { drawFramed(ctx, src, vid, sp.fx, sp.fy, sp.zoom); } catch {} }
+      ctx.save(); ctx.beginPath(); ctx.rect(vis.x, vis.y, vis.w, vis.h); ctx.clip(); drawScene(ctx, vis.x, vis.y, vis.w, vis.h, s, tt, md, sp.theme, bgSrc); ctx.restore();
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,.22)"; ctx.fillRect(0, 0, W, H);
+      ctx.save(); ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = cr.w * 0.06; ctx.shadowOffsetY = cr.w * 0.015; ctx.fillStyle = "#000"; rrect(ctx, cr.x, cr.y, cr.w, cr.h, cr.r); ctx.fill(); ctx.restore();
+      ctx.save(); rrect(ctx, cr.x, cr.y, cr.w, cr.h, cr.r); ctx.clip(); drawScene(ctx, cr.x, cr.y, cr.w, cr.h, s, tt, md, sp.theme, bgSrc); ctx.restore();
+    }
+    ctx.restore();
+  };
+  const pop = (s, tt, k, inn) => { /* a card springs in from (or back out to) your face */
+    const sp2 = inn ? 1 - Math.exp(-6 * k) * Math.cos(8 * k) : k, cx = cr.x + cr.w / 2, cy = cr.y + cr.h / 2, z = 0.82 + 0.18 * sp2;
+    ctx.save(); ctx.translate(cx, cy + (1 - k) * cr.h * 0.06); ctx.scale(z, z); ctx.translate(-cx, -cy); paint(s, tt, clamp01(k * 1.6)); ctx.restore();
+  };
+  const e = t - sc.start, dur = sc.end - sc.start;
+  const L = sp.scenes, n = L[L.indexOf(sc) + 1], nextOff = !n || n.show === false || Math.abs(n.start - sc.end) > 0.05;
+  if (m.k < 1 && (prevOn || curOn)) {
+    if (!prevOn && lookOf(p, sc) === "card") return pop(sc, e, m.k, true);
+    if (!curOn && lookOf(p, m.prev) === "card") return pop(m.prev, holdT(m.prev, t), 1 - m.k, false);
+    return drawTrans(ctx, F, m.k, transOf(p, sc), () => { if (prevOn) paint(m.prev, holdT(m.prev, t)); }, () => { if (curOn) paint(sc, e); }, T.accent);
+  }
+  if (!curOn) return;
+  if (nextOff && dur - e < TR_D) {
+    const k = 1 - (dur - e) / TR_D;
+    if (lookOf(p, sc) === "card") return pop(sc, holdT(sc, t), 1 - eOut(k), false);
+    return drawTrans(ctx, F, k, transOf(p, sc), () => paint(sc, holdT(sc, t)), () => {}, T.accent);
+  }
+  paint(sc, e);
+}
+function drawSceneLayer(ctx, p, W, H, t, mediaCb, bgSrc, vsrc) {
+  if (p.split.mode === "mix") return drawMixLayer(ctx, p, W, H, t, mediaCb, bgSrc, vsrc || bgSrc);
   const m = sceneMix(p, t); if (!m) return;
   const { sc } = m, prevOn = m.prev && m.prev.show !== false, curOn = sc.show !== false;
   if (!curOn && !(prevOn && m.k < 1)) return;
@@ -2272,13 +2356,13 @@ function applyPack(p, code, name) {
   const g = compilePack(code), id = "pk" + uid();
   g.scenes.forEach((x, i) => PACKFN.set(id + ":" + i, x.draw));
   p.pack = { id, code: String(code), name: name || "ชุดกราฟิก", at: Date.now(), accent: g.theme && g.theme.accent || "" };
-  const list = g.scenes.map((x, i) => ({ id: uid(), start: +x.start, end: +x.end, type: "custom", pk: id + ":" + i, show: x.show !== false, title: String(x.title || "กราฟิกฉากที่ " + (i + 1)).slice(0, 60), overlay: !!x.overlay, items: [], media: null })).sort((a, b) => a.start - b.start);
+  const list = g.scenes.map((x, i) => ({ id: uid(), start: +x.start, end: +x.end, type: "custom", pk: id + ":" + i, show: x.show !== false, title: String(x.title || "กราฟิกฉากที่ " + (i + 1)).slice(0, 60), overlay: !!x.overlay, look: LOOKS3[x.look] ? x.look : undefined, items: [], media: null })).sort((a, b) => a.start - b.start);
   /* fill the gaps with "face" scenes so timing stays exactly as designed */
   const out = []; let t = 0;
   for (const sc of list) { if (sc.start - t > 0.05) out.push({ id: uid(), start: t, end: sc.start, type: "big", show: false, gap: true, title: "", items: [], media: null }); sc.start = Math.max(sc.start, t); out.push(sc); t = sc.end; }
   if ((p.duration || 0) - t > 0.05) out.push({ id: uid(), start: t, end: p.duration, type: "big", show: false, gap: true, title: "", items: [], media: null });
   const sp = p.split; sp.scenes = out; sp.on = true;
-  if (["full", "card", "split"].includes(g.mode)) sp.mode = g.mode;
+  if (["full", "card", "split", "mix"].includes(g.mode)) sp.mode = g.mode;
   if (g.card && CARD_AR[g.card]) sp.card = g.card;
   if (g.orient === "h" || g.orient === "v") sp.orient = g.orient;
   if (g.transition && TRANS[g.transition]) sp.tr = g.transition;
@@ -2293,7 +2377,7 @@ function packRequest(p) {
 ช่วยออกแบบโมชันกราฟิกประกอบการเล่าเรื่องของคลิปนี้ ให้สวยระดับมืออาชีพ ตรงจังหวะคำพูด แล้วส่งกลับเป็นไฟล์ .js ตามสเปกด้านล่าง
 
 [SPEC]
-- ไฟล์ต้องเป็น: SUBWAI_PACK({ version: 1, mode: "full" | "card" | "split", card: "16:9" | "1:1" | "4:5", orient: "v" | "h", transition: "auto" | "push" | "wipe" | "zoom" | "iris" | "flash" | "fade", theme: { accent: "#hex" }, scenes: [ { start, end, show: true, title, draw(ctx, W, H, t, dur, A) { ... } } ] })
+- ไฟล์ต้องเป็น: SUBWAI_PACK({ version: 1, mode: "full" | "card" | "split" | "mix" (ผสม: แต่ละฉากใส่ look: "full" | "split" | "card" ได้), card: "16:9" | "1:1" | "4:5", orient: "v" | "h", transition: "auto" | "push" | "wipe" | "zoom" | "iris" | "flash" | "fade", theme: { accent: "#hex" }, scenes: [ { start, end, show: true, title, draw(ctx, W, H, t, dur, A) { ... } } ] })
 - start/end เป็นวินาทีของคลิป ใช้เวลาของคำใน captions[].w ([คำ, วินาที]) ให้กราฟิกขึ้นตรงคำที่พูด ช่วงที่ไม่มีฉาก แอปจะโชว์หน้าผู้พูด
 - mode "full" = กราฟิกเต็มเฟรมสลับกับหน้าคน, "card" = การ์ดลอยกลางจอ, "split" = แบ่งจอครึ่งหนึ่งเป็นกราฟิก
 - draw() ถูกเรียกทุกเฟรม วาดลง ctx (Canvas 2D) ในพื้นที่ 0..W, 0..H (ขนาดของพื้นที่กราฟิกตามโหมด) t = วินาทีนับจากต้นฉาก, dur = ความยาวฉาก ต้องคำนวณจาก t ล้วน ๆ (ไม่มีตัวแปรสะสม ไม่สุ่มแบบไม่มี seed) และวาดพื้นหลังเองให้ทึบ
@@ -2821,7 +2905,7 @@ async function viewHome() {
     ${hasKey() ? "" : `<div class="notice"><p><b>เริ่มต้นใช้งาน:</b> ใส่ API key ก่อน แนะนำ Groq ใช้ฟรีและไม่ต้องใช้บัตร สมัครได้ในหน้าตั้งค่า</p><button class="btn primary small" id="nkey">ใส่ API key</button></div>`}
     <div class="home-head">
       <div><h1>โปรเจกต์ของฉัน</h1><div class="muted">${projects.length ? projects.length + " โปรเจกต์ เก็บไว้ในเครื่องนี้" : "อัปโหลดวิดีโอ แล้ว AI จะถอดเสียงและใส่ซับให้"}</div></div>
-      <button class="btn primary" id="newp">+ โปรเจกต์ใหม่</button>
+      <div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end"><label class="btn" for="bIn">เปิดไฟล์งาน</label><input type="file" id="bIn" hidden><button class="btn primary" id="newp">+ โปรเจกต์ใหม่</button></div>
     </div>
     ${drafts.length ? `<div class="field"><span class="lab">งานที่ทำค้างไว้ (วิดีโอบันทึกไว้แล้ว ไม่ต้องอัปโหลดใหม่)</span><div class="drafts">${drafts.map(d => `
       <div class="dcard"><img src="${d.thumb || ""}" alt=""><div class="meta"><b>${esc(d.name || d.fileName || "วิดีโอ")}</b><span class="hint">${d.raw ? "ถอดเสียงเสร็จแล้ว รอทำต่อ" : "เลือกวิดีโอไว้แล้ว ยังไม่ได้สร้างซับ"}${d.duration ? " · " + fmtDur(d.duration) : ""}</span></div>
@@ -2834,6 +2918,8 @@ async function viewHome() {
       : drafts.length ? "" : `<div class="empty"><span class="sample">ซับขึ้นแบบนี้ อ่านง่าย<small>Subtitles look like this</small></span><p class="muted" style="margin:0;max-width:42ch">ยังไม่มีโปรเจกต์ เลือกวิดีโอจากเครื่อง AI จะถอดเสียง แปลเป็นภาษาที่สองได้ ใส่ซาวด์เอฟเฟกต์ แล้วดาวน์โหลดวิดีโอที่ฝังซับแล้ว</p><button class="btn primary" id="newp2">สร้างโปรเจกต์แรก</button></div>`}
   `;
   $("#newp").onclick = () => setView(viewNew);
+  $("#bIn").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; toast("กำลังเปิดไฟล์งาน…", 8000);
+    try { const p = await readBundle(f); toast(`เปิด "${p.name || "งาน"}" แล้ว ทำต่อได้เลย`, 3500); setView(() => p.draft ? viewNew(p.id) : viewEditor(p.id)); } catch (err) { toast("เปิดไฟล์ไม่ได้: " + err.message, 5000); } };
   const n2 = $("#newp2"); if (n2) n2.onclick = () => setView(viewNew);
   const nk = $("#nkey"); if (nk) nk.onclick = openSettings;
   $$(".pcard").forEach(b => b.onclick = () => setView(() => viewEditor(b.dataset.id)));
@@ -3145,6 +3231,7 @@ async function viewEditor(id) {
       <input class="name" id="pn" aria-label="ชื่อโปรเจกต์">
       <button class="iconbtn" id="undo" aria-label="ย้อนกลับ" title="ย้อนกลับ">↶</button>
       <button class="iconbtn" id="redo" aria-label="ทำซ้ำ" title="ทำซ้ำ">↷</button>
+      <button class="iconbtn" id="mvOut" aria-label="ย้ายงานนี้ไปเปิดที่อื่น" title="ย้ายงานนี้ไปเปิดที่อื่น (Safari / เครื่องอื่น)">⇪</button>
     </div>
     <div class="ed-grid">
       <div class="stage-col" id="stageCol"></div>
@@ -3207,14 +3294,14 @@ async function viewEditor(id) {
             <span class="hint" id="pkStat"></span>
           </div>
           <span class="hint" id="spStat" style="margin-top:-8px"></span>
-          <div class="field"><span class="lab">แสดงแบบ</span><div class="seg" id="spMode"><button type="button" data-v="card">การ์ดกลางจอ</button><button type="button" data-v="full">เต็มจอ</button><button type="button" data-v="split">แบ่งจอ</button></div>
+          <div class="field"><span class="lab">แสดงแบบ</span><div class="seg" id="spMode"><button type="button" data-v="card">การ์ดกลางจอ</button><button type="button" data-v="full">เต็มจอ</button><button type="button" data-v="split">แบ่งจอ</button><button type="button" data-v="mix">ผสม</button></div>
             <span class="hint" id="spModeHint"></span></div>
-          <div class="field" data-for="card"><span class="lab">รูปทรงการ์ด</span><div class="seg" id="spCard"><button type="button" data-v="16:9">แนวนอน 16:9</button><button type="button" data-v="1:1">สี่เหลี่ยม 1:1</button><button type="button" data-v="4:5">แนวตั้ง 4:5</button></div>
+          <div class="field" data-for="card mix"><span class="lab">รูปทรงการ์ด</span><div class="seg" id="spCard"><button type="button" data-v="16:9">แนวนอน 16:9</button><button type="button" data-v="1:1">สี่เหลี่ยม 1:1</button><button type="button" data-v="4:5">แนวตั้ง 4:5</button></div>
             <div class="ctl"><label for="spCardY">ตำแหน่งการ์ด</label><input type="range" id="spCardY" min="25" max="65" step="1"><output id="oCardY"></output></div></div>
           <div class="field" data-for="split"><span class="lab">รูปแบบวิดีโอ</span><div class="seg" id="spOrient"><button type="button" data-v="v">แนวตั้ง 9:16 · บน-ล่าง</button><button type="button" data-v="h">แนวนอน 16:9 · ซ้าย-ขวา</button></div></div>
-          <div class="field" data-for="split"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual"></button><button type="button" data-v="video"></button></div></div>
-          <div class="ctl" data-for="split"><label for="spRatio">ขนาดภาพประกอบ</label><input type="range" id="spRatio" min="30" max="70" step="1"><output id="oRatio"></output></div>
-          <div class="xbox" data-for="split"><span class="lab">จัดตำแหน่งคลิปของคุณ</span><span class="hint" style="margin-top:-6px">ลากบนคลิปในวิดีโอเพื่อเลื่อนให้หน้าอยู่กลาง หรือปรับด้านล่าง</span>
+          <div class="field" data-for="split mix"><span class="lab">ภาพประกอบอยู่</span><div class="seg" id="spTop"><button type="button" data-v="visual"></button><button type="button" data-v="video"></button></div></div>
+          <div class="ctl" data-for="split mix"><label for="spRatio">ขนาดภาพประกอบ</label><input type="range" id="spRatio" min="30" max="70" step="1"><output id="oRatio"></output></div>
+          <div class="xbox" data-for="split mix"><span class="lab">จัดตำแหน่งคลิปของคุณ</span><span class="hint" style="margin-top:-6px">ลากบนคลิปในวิดีโอเพื่อเลื่อนให้หน้าอยู่กลาง หรือปรับด้านล่าง</span>
             <div class="ctl"><label for="spZoom">ซูม</label><input type="range" id="spZoom" min="100" max="220" step="5"><output id="oZoom"></output></div>
             <div class="ctl"><label for="spFx">ซ้าย-ขวา</label><input type="range" id="spFx" min="0" max="100" step="1"><output id="oFx"></output></div>
             <div class="ctl"><label for="spFy">บน-ล่าง</label><input type="range" id="spFy" min="0" max="100" step="1"><output id="oFy"></output></div>
@@ -3329,6 +3416,11 @@ async function viewEditor(id) {
     renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); syncSplitUI(); renderScenes(); sizeStage(); loadMediaEls(p, pvMedia).then(hookMedia);
     if (sid) { if (p.captions.some(c => c.id === sid)) fillSheet(); else closeSheet(); }
   }
+  $("#mvOut").onclick = async () => {
+    toast("กำลังรวมไฟล์งาน (วิดีโอ + ซับ + กราฟิก)…", 8000);
+    try { await DB.putRaw(p); const b = await makeBundle(p); await shareOrSave(b, safeName(p.name) + ".subwai");
+      toast("ได้ไฟล์งานแล้ว ไปเปิดซับไวในเบราว์เซอร์หรือเครื่องที่ต้องการ แล้วกด “เปิดไฟล์งาน” หน้าแรก", 6000); } catch (e) { toast("ทำไฟล์งานไม่ได้: " + e.message, 5000); }
+  };
   $("#undo").onclick = () => { if (histT) pushHist(); if (hi > 0) { restore(hi - 1); toast("ย้อนกลับแล้ว", 1000); } };
   $("#redo").onclick = () => { if (hi < hist.length - 1) { restore(hi + 1); toast("ทำซ้ำแล้ว", 1000); } };
   syncUndo();
@@ -3536,7 +3628,7 @@ async function viewEditor(id) {
   function paintScene(t) {
     const sv = $("#scv"); if (!sv || sv.hidden) return;
     const g = sv.getContext("2d"), playing = !!video && !video.paused;
-    if (p.split.mode !== "split") { g.clearRect(0, 0, sv.width, sv.height); try { drawSceneLayer(g, p, sv.width, sv.height, t, (sc, tt) => mediaFor(pvMedia, sc, tt, playing), thumbImg); } catch (e) { console.error(e); } return; }
+    if (p.split.mode !== "split") { g.clearRect(0, 0, sv.width, sv.height); try { drawSceneLayer(g, p, sv.width, sv.height, t, (sc, tt) => mediaFor(pvMedia, sc, tt, playing), thumbImg, video); } catch (e) { console.error(e); } return; }
     let ok = false; try { ok = drawSplitVis(g, { x: 0, y: 0, w: sv.width, h: sv.height }, p, t, (sc, tt) => mediaFor(pvMedia, sc, tt, playing), thumbImg); } catch (e) { console.error(e); }
     if (!ok) { g.fillStyle = "#14161c"; g.fillRect(0, 0, sv.width, sv.height); }
   }
@@ -4020,17 +4112,17 @@ async function viewEditor(id) {
     $$("#spMode button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.mode));
     $$("#spCard button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === sp.card));
     $("#spCardY").value = Math.round(sp.cardY * 100); $("#oCardY").textContent = Math.round(sp.cardY * 100) + "%";
-    $$("[data-for]").forEach(el => el.hidden = el.dataset.for !== sp.mode);
-    $("#spModeHint").textContent = { card: "การ์ดลอยกลางจอทับคลิปของคุณ คลิปไม่ถูกตัด เฟรมวิดีโอเท่าเดิม", full: "ภาพประกอบเต็มจอเฉพาะช่วงที่ AI เลือก สลับกับหน้าคุณแบบ B-roll", split: "แบ่งจอครึ่งหนึ่งเป็นภาพประกอบ อีกครึ่งเป็นคลิปของคุณ" }[sp.mode];
+    $$("[data-for]").forEach(el => el.hidden = !el.dataset.for.split(" ").includes(sp.mode));
+    $("#spModeHint").textContent = { card: "การ์ดลอยกลางจอทับคลิปของคุณ คลิปไม่ถูกตัด เฟรมวิดีโอเท่าเดิม", full: "ภาพประกอบเต็มจอเฉพาะช่วงที่ AI เลือก สลับกับหน้าคุณแบบ B-roll", split: "แบ่งจอครึ่งหนึ่งเป็นภาพประกอบ อีกครึ่งเป็นคลิปของคุณ", mix: "ผสมหลายแบบในคลิปเดียว: เต็มจอ แบ่งจอ การ์ดกลางจอ สลับกันอัตโนมัติ เลือกเองรายฉากได้ในรายการฉาก" }[sp.mode];
   }
-  const capPosFor = sp => sp.mode === "split" ? (sp.orient === "h" ? 86 : 50) : 84;
+  const capPosFor = sp => sp.mode === "mix" ? 80 : sp.mode === "split" ? (sp.orient === "h" ? 86 : 50) : 84;
   const pkPaint = () => { $("#pkOff").hidden = !p.pack; $("#pkStat").textContent = p.pack ? `ใช้ "${p.pack.name}" อยู่ · ${p.split.scenes.filter(x => x.type === "custom").length} ฉาก` : ""; };
   pkPaint();
   const pkFileOf = () => new File([packRequest(p)], `subwai-${(p.name || "clip").replace(/[^\w\u0E00-\u0E7F-]+/g, "_").slice(0, 40)}.txt`, { type: "text/plain" });
   $("#pkSend").onclick = async () => {
     if (!p.captions.length) { toast("ยังไม่มีซับในคลิปนี้"); return; }
     const f = pkFileOf();
-    try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: "สคริปต์สำหรับ Claude" }); $("#pkStat").textContent = "ส่งแล้ว รอ Claude ส่งไฟล์ชุดกราฟิกกลับมา แล้วกด ③ นำเข้า"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: "สคริปต์สำหรับ Claude" }); $("#pkStat").textContent = "ส่งแล้ว รอ Claude ส่งไฟล์ชุดกราฟิกกลับมา แล้วกด ② นำเข้า"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
     const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
     $("#pkStat").textContent = "บันทึกไฟล์สคริปต์แล้ว แนบไฟล์นี้ในแชตกับ Claude";
   };
@@ -4113,6 +4205,7 @@ async function viewEditor(id) {
         <div class="scn-b">
           <span class="hint mono">${fmtT(sc.start)}–${fmtT(sc.end)} · ${sc.media ? (sc.media.kind === "video" ? "คลิปของคุณ" : "รูปของคุณ") : SCENE_TYPES[sc.type] || ""}</span>
           <b class="scn-title">${esc(sc.media ? sc.media.name : (sc.title || sc.value || sc.a || "ฉาก"))}</b>
+          ${p.split.mode === "mix" ? `<div class="scn-acts scn-look">${[["", "อัตโนมัติ (" + LOOKS3[lookOf(p, sc)] + ")"], ["full", "เต็มจอ"], ["split", "แบ่งจอ"], ["card", "การ์ด"]].map(([v, n]) => `<button class="mini" data-s="look" data-v="${v}" aria-pressed="${(sc.look || "") === v}">${n}</button>`).join("")}</div>` : ""}
           <div class="scn-acts"><button class="mini" data-s="go">ดูฉากนี้</button>${p.split.mode !== "split" ? `<button class="mini" data-s="show">${sc.show === false ? "แสดงฉากนี้" : "ซ่อน (เห็นหน้าคุณ)"}</button>` : ""}${sc.media ? "" : `<button class="mini" data-s="edit">แก้ข้อความ</button>`}<label class="mini" for="spf_${sc.id}">${sc.media ? "เปลี่ยนรูป/คลิป" : "ใส่รูป/คลิปเอง"}</label><input type="file" id="spf_${sc.id}" data-s="file" accept="image/*,video/*" hidden>${sc.media ? `<button class="mini" data-s="unmedia">กลับไปใช้แอนิเมชัน</button>` : ""}${!sc.media ? (sc.photo ? `<button class="mini" data-s="phnext">เปลี่ยนรูป</button><button class="mini" data-s="phdel">เอารูปออก</button>` : `<button class="mini" data-s="phadd">ใส่รูปประกอบ</button>`) : ""}<button class="mini del" data-s="del">ลบฉาก</button></div>
         </div>
         <div class="scn-ed" hidden>
@@ -4152,6 +4245,7 @@ async function viewEditor(id) {
       setScenePhoto(p, sc, a === "phnext").then(ok => { if (!ok) toast("ไม่พบรูปที่เหมาะ ลองคำค้นอื่น", 3000); changed(); renderScenes(); seekTo(sc.start); draw(); })
         .catch(err => { toast(err.message, 4000); renderScenes(); });
     }
+    else if (a === "look") { sc.look = b.dataset.v || undefined; changed(); renderScenes(); seekTo(sc.start + 0.5); draw(); }
     else if (a === "show") { sc.show = sc.show === false; changed(); renderScenes(); seekTo(sc.start); draw(); }
     else if (a === "del") {
       if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบฉาก"; } }, 3000); return; }
