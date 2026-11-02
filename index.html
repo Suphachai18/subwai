@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (20) · รวมหลายคลิป + เอฟเฟกต์อัตโนมัติ</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (21) · ตัดเนียน + เอ็มม่าในเอฟเฟกต์</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2783,12 +2783,12 @@ const FX_THEMES = {
   clean: { n: "ขาวดำเรียบ", paper: "#FFFFFF", ink: "#141414", acc: "#E8452C", soft: "#EEEEEE", tape: "rgba(0,0,0,.10)", font: '"IBM Plex Sans Thai", "Kanit", sans-serif', num: '"Kanit", sans-serif' }
 };
 const FX_KINDS = {
-  label: "ป้ายกระดาษ", quote: "โน้ตคำสำคัญ", headline: "พาดหัวเต็มจอ", list: "เช็กลิสต์", vs: "ควร / ไม่ควร",
+  wipe: "กระดาษปาดเปลี่ยนช่วง", label: "ป้ายกระดาษ", quote: "โน้ตคำสำคัญ", headline: "พาดหัวเต็มจอ", list: "เช็กลิสต์", vs: "ควร / ไม่ควร",
   number: "ตัวเลขเด้ง", rec: "ซูมกล้อง REC", spot: "สปอตไลต์", cta: "ชวนคอมเมนต์", flash: "แฟลชเปลี่ยนช่วง"
 };
-const FX_SFX = { label: "pop", quote: "ding", headline: "whoosh", list: "pop", vs: "hit", number: "kaching", rec: "hit", spot: "boom", cta: "sparkle", flash: "whoosh" };
+const FX_SFX = { wipe: "whoosh", label: "pop", quote: "ding", headline: "whoosh", list: "pop", vs: "hit", number: "kaching", rec: "hit", spot: "boom", cta: "sparkle", flash: "whoosh" };
 const fxTheme = p => FX_THEMES[p.fxTheme] || FX_THEMES.ss59;
-const fxAt = (p, t) => (p.fx || []).filter(f => t >= f.t0 - 0.05 && t < f.t1 + 0.45);
+const fxAt = (p, t) => (p.fx || []).filter(f => f.k === "wipe" ? (f.cut && t >= f.cut[0] - 0.6 && t < f.cut[1] + 0.6) : t >= f.t0 - 0.05 && t < f.t1 + 0.45);
 const fxEnv = (f, t, inD = 0.38, outD = 0.3) => ({ i: clamp01((t - f.t0) / inD), o: clamp01((f.t1 + outD - t) / outD) });
 const fxSpring = x => { x = Math.max(0, x); return x >= 1.4 ? 1 : 1 - Math.exp(-7 * x) * Math.cos(9 * x); };
 const fxRand = (seed, i) => { const s = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return s - Math.floor(s); };
@@ -2827,17 +2827,397 @@ function fxText(ctx, T, lines, x, y, px, weight, color, lh = 1.28, align = "left
 function fxTick(ctx, x, y, s, k, col) { if (k <= 0) return; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = s * 0.16; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.setLineDash([s * 2, s * 2]); ctx.lineDashOffset = s * 2 * (1 - clamp01(k)); ctx.beginPath(); ctx.moveTo(x - s * 0.4, y); ctx.lineTo(x - s * 0.1, y + s * 0.3); ctx.lineTo(x + s * 0.45, y - s * 0.35); ctx.stroke(); ctx.restore(); }
 function fxCross(ctx, x, y, s, k, col) { if (k <= 0) return; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = s * 0.16; ctx.lineCap = "round"; const a = clamp01(k * 2), b = clamp01(k * 2 - 1); ctx.beginPath(); ctx.moveTo(x - s * 0.35, y - s * 0.35); ctx.lineTo(x - s * 0.35 + s * 0.7 * a, y - s * 0.35 + s * 0.7 * a); if (b > 0) { ctx.moveTo(x + s * 0.35, y - s * 0.35); ctx.lineTo(x + s * 0.35 - s * 0.7 * b, y - s * 0.35 + s * 0.7 * b); } ctx.stroke(); ctx.restore(); }
 /* place a card that springs in with a little tilt and drops out */
-function fxPlace(ctx, f, t, cx, cy, rot, fn, inD = 0.38) {
-  const e = fxEnv(f, t, inD), s = fxSpring(e.i), out = e.o; if (s <= 0.001 || out <= 0) return;
-  ctx.save(); ctx.globalAlpha *= Math.min(1, e.i * 3) * out; ctx.translate(cx, cy + (1 - out) * 18); ctx.rotate(rot * (0.4 + 0.6 * s)); ctx.scale(0.55 + 0.45 * s, 0.55 + 0.45 * s); fn(); ctx.restore();
+/* Emma and the deities as paper stickers (สิทธิศักติ 59 brand characters) */
+const SS59 = (() => {
+  const A = { clamp: clamp01, ease: { out: x => 1 - Math.pow(1 - clamp01(x), 3), back: x => easeOutBack(clamp01(x)), inOut: x => (x = clamp01(x), x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2) },
+    font: (w, px, fam) => `${w} ${px}px "${fam || "IBM Plex Sans Thai"}", "Kanit", sans-serif`, img: () => null, rrect: (c, x, y, w, h, r) => rrect(c, x, y, w, h, r) };
+/* ===== สไตล์ประจำช่อง สิทธิศักติ 59 · กระดาษตัดแปะ (Paper cut-out) =====
+   พื้นกระดาษครีม + กริดจาง · กรมท่า + ส้มอิฐ · ฟอนต์มินิมอล · เลขอารบิก · เอ็มม่าเป็นตัวละครเล่าเรื่อง */
+const C = { navy: "#1F2C4C", navy2: "#34446A", brick: "#B8613E", brick2: "#D0825F", paper: "#F3ECDF", card: "#FBF7EE", mute: "rgba(31,44,76,.55)",
+  skin: "#F3CFB3", skin2: "#E7B898", hair: "#5A3A2A", hair2: "#9B6B45", top: "#22262F", gold: "#C9A25A", blush: "rgba(226,120,110,.35)", rose: "#E9B7B5" };
+const FONT = (typeof globalThis !== "undefined" && globalThis.__SSFONT) || "IBM Plex Sans Thai";
+
+/* deterministic random so every frame is identical on every device */
+function rng(seed) { let a = (seed * 2654435761) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const STEP = 1 / 12;                                    /* stop-motion: things move on 12 fps "twos" */
+const q = t => Math.floor(t / STEP) * STEP;
+const ez = (A, x) => A.ease.out(A.clamp(x));
+const pop = (A, x) => A.ease.back(A.clamp(x));
+
+function geo(W, H) {
+  const tall = H / W > 1.3, s = Math.min(W, H);
+  const g = { W, H, s, tall, m: s * 0.06 };
+  g.top = tall ? H * 0.07 : s * 0.06; g.bot = tall ? H * 0.72 : H - s * 0.05;   /* keep clear of subtitles at the bottom of a tall frame */
+  g.x = g.m; g.w = W - 2 * g.m; g.h = g.bot - g.top;
+  if (g.w > g.h * 1.45) { const w = g.h * 1.45; g.x = (W - w) / 2; g.w = w; }
+  g.u = Math.min(g.w / 100, g.h / 70); g.cx = g.x + g.w / 2; g.Y = k => g.top + g.h * k;
+  return g;
+}
+/* paper + faint grid */
+function paper(ctx, W, H, A) {
+  ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
+  const tx = A.img("paper"); if (tx) { const k = Math.max(W / tx.width, H / tx.height); ctx.drawImage(tx, (W - tx.width * k) / 2, (H - tx.height * k) / 2, tx.width * k, tx.height * k); }
+  const s = Math.min(W, H), step = s / 14, lw = Math.max(1, s * 0.0011);
+  ctx.save(); ctx.fillStyle = "rgba(31,44,76,.055)";
+  for (let x = (W / 2) % step; x < W; x += step) ctx.fillRect(Math.round(x), 0, lw, H);
+  for (let y = (H / 2) % step; y < H; y += step) ctx.fillRect(0, Math.round(y), W, lw);
+  ctx.restore();
+}
+/* a torn / hand-cut paper shape */
+function cutPath(ctx, x, y, w, h, seed, rough = 1) {
+  const r = rng(seed), j = Math.min(w, h) * 0.018 * rough, pts = [];
+  const side = (x0, y0, x1, y1) => { const n = Math.max(3, Math.round(Math.hypot(x1 - x0, y1 - y0) / (Math.min(w, h) * 0.12))); for (let i = 0; i < n; i++) { const k = i / n; pts.push([x0 + (x1 - x0) * k + (r() - 0.5) * j, y0 + (y1 - y0) * k + (r() - 0.5) * j]); } };
+  side(x, y, x + w, y); side(x + w, y, x + w, y + h); side(x + w, y + h, x, y + h); side(x, y + h, x, y);
+  ctx.beginPath(); pts.forEach(([a, b], i) => i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)); ctx.closePath();
+}
+function shadowOn(ctx, s, k = 1) { ctx.shadowColor = "rgba(31,44,76," + (0.22 * k) + ")"; ctx.shadowBlur = s * 0.018; ctx.shadowOffsetX = s * 0.004; ctx.shadowOffsetY = s * 0.008; }
+function shadowOff(ctx) { ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; }
+/* paper piece that is "placed" on the board: drops in, settles with a tiny hand-placed tilt */
+function place(ctx, A, t, t0, cx, cy, rot, seed, fn, o = {}) {
+  const tt = q(t) - t0; if (tt < 0) return false;
+  const k = pop(A, tt / 0.42), from = o.from || "up", r = rng(seed)(), d = Math.min(ctx.canvas.width, ctx.canvas.height) * 0.06;
+  const dx = from === "left" ? -d * (1 - k) * 3 : from === "right" ? d * (1 - k) * 3 : 0, dy = from === "up" ? -d * (1 - k) : from === "down" ? d * (1 - k) * 2 : 0;
+  const boil = (rng(seed * 31 + Math.floor(q(t) * 6))() - 0.5) * 0.006;  /* hand-made jitter */
+  ctx.save(); ctx.globalAlpha *= A.clamp(tt / 0.12); ctx.translate(cx + dx, cy + dy); ctx.rotate(rot + (1 - k) * (r - 0.5) * 0.3 + boil); const z = 1 + (1 - A.ease.out(A.clamp(tt / 0.3))) * 0.08; ctx.scale(z, z); fn(); ctx.restore();
+  return true;
+}
+function tape(ctx, x, y, w, h, rot, seed) {
+  const r = rng(seed); ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.fillStyle = "rgba(226,214,186,.78)"; ctx.beginPath();
+  ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(w / 2, -h / 2);
+  for (let i = 0; i <= 4; i++) ctx.lineTo(w / 2 + (i % 2 ? -1 : 1) * h * 0.08 * r(), -h / 2 + h * i / 4);
+  ctx.lineTo(-w / 2, h / 2); for (let i = 4; i >= 0; i--) ctx.lineTo(-w / 2 + (i % 2 ? 1 : -1) * h * 0.08 * r(), -h / 2 + h * i / 4);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+/* text helpers: whole lines, left-placed (no textAlign tricks) */
+function lines(ctx, A, text, maxW, px, w) { const ls = String(text).split("\n"); let size = px; ctx.font = A.font(w, size, FONT); const wm = Math.max(...ls.map(l => ctx.measureText(l).width)); if (wm > maxW) size *= maxW / wm; return { ls, size }; }
+function txt(ctx, A, text, x, y, maxW, px, w, color, o = {}) {
+  const { ls, size } = lines(ctx, A, text, maxW, px, w), lh = size * (o.lh || 1.32);
+  ctx.font = A.font(w, size, FONT); ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillStyle = color;
+  const y0 = y - (ls.length - 1) * lh / 2, out = [];
+  ls.forEach((l, i) => { const lw = ctx.measureText(l).width, x0 = o.center ? x - lw / 2 : x; ctx.fillStyle = color; ctx.fillText(l, x0, y0 + i * lh);
+    if (o.hot) { const k = l.indexOf(o.hot); if (k >= 0) { const hx = x0 + ctx.measureText(l.slice(0, k)).width, hw = ctx.measureText(o.hot).width; ctx.save(); ctx.beginPath(); ctx.rect(hx, y0 + i * lh - size, hw, size * 2); ctx.clip(); ctx.fillStyle = o.hotColor || C.brick; ctx.fillText(l, x0, y0 + i * lh); ctx.restore(); } }
+    out.push({ x0, y: y0 + i * lh, w: lw }); });
+  return { size, rows: out, h: ls.length * lh };
+}
+/* label = cut paper with text on it */
+function label(ctx, A, text, px, w, fg, bg, seed, o = {}) {
+  const { ls, size } = lines(ctx, A, text, o.maxW || 1e9, px, w), lh = size * 1.3; ctx.font = A.font(w, size, FONT);
+  const tw = Math.max(...ls.map(l => ctx.measureText(l).width)), pw = tw + size * (o.padX || 1.3), ph = ls.length * lh + size * (o.padY || 0.7);
+  ctx.save(); shadowOn(ctx, Math.min(ctx.canvas.width, ctx.canvas.height)); ctx.fillStyle = bg; cutPath(ctx, -pw / 2, -ph / 2, pw, ph, seed); ctx.fill(); shadowOff(ctx); ctx.restore();
+  ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  ls.forEach((l, i) => { const lw = ctx.measureText(l).width, x0 = o.left ? -pw / 2 + size * (o.padX || 1.3) / 2 : -lw / 2, y = -((ls.length - 1) * lh) / 2 + i * lh;
+    ctx.fillStyle = fg; ctx.fillText(l, x0, y + size * 0.04);
+    if (o.hot) { const k = l.indexOf(o.hot); if (k >= 0) { const hx = x0 + ctx.measureText(l.slice(0, k)).width, hw = ctx.measureText(o.hot).width; ctx.save(); ctx.beginPath(); ctx.rect(hx, y - size, hw, size * 2); ctx.clip(); ctx.fillStyle = o.hotColor || C.brick; ctx.fillText(l, x0, y + size * 0.04); ctx.restore(); } } });
+  return { w: pw, h: ph };
+}
+/* little tarot card (paper) */
+function tarot(ctx, w, face, seed) {
+  const h = w * 1.6; ctx.save(); shadowOn(ctx, w * 6, 0.9); ctx.fillStyle = face ? C.card : C.navy; cutPath(ctx, -w / 2, -h / 2, w, h, seed, 0.6); ctx.fill(); shadowOff(ctx);
+  ctx.strokeStyle = face ? C.brick : C.brick2; ctx.lineWidth = Math.max(1, w * 0.035); ctx.strokeRect(-w * 0.38, -h * 0.42, w * 0.76, h * 0.84);
+  if (face) { ctx.fillStyle = C.brick; ctx.beginPath(); ctx.arc(0, -h * 0.05, w * 0.18, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = C.card; ctx.beginPath(); ctx.arc(w * 0.06, -h * 0.08, w * 0.15, 0, Math.PI * 2); ctx.fill(); }
+  else { ctx.beginPath(); ctx.moveTo(0, -h * 0.16); ctx.lineTo(w * 0.17, 0); ctx.lineTo(0, h * 0.16); ctx.lineTo(-w * 0.17, 0); ctx.closePath(); ctx.stroke(); }
+  ctx.restore();
+}
+
+/* ---------- Emma, a paper puppet. bust in local units: 100 tall, origin at the bottom centre ---------- */
+const EMMA_CACHE = new Map();
+function emmaParts(g, pose, st) {
+  const E = { skin: "#F6D5BF", skin2: "#E3AE92", hair: "#4A2D23", hair2: "#7B4F37", top: "#22305A", trim: "#B8613E", lip: "#DC7B83", eye: "#2A1D20" };
+  const ell = (x, y, rx, ry, fill, rot = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+  const stroke = (col, w) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = "round"; g.lineJoin = "round"; };
+  const arm = (pts, w = 6.4) => { stroke(E.skin, w); g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); };
+  const cap = (x0, y0, x1, y1, w) => { stroke(E.skin, w); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); };
+  /* hands with all five fingers. ang = direction the fingers point (0 = up) */
+  const openHand = (x, y, ang, s = 1) => { g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s);
+    [[-2.5, 3.3], [-0.85, 4], [0.85, 3.8], [2.5, 3.1]].forEach(([fx, L]) => { cap(fx, -1.5, fx * 1.12, -1.5 - L, 1.75); });
+    cap(-3.1, 0.8, -5.4, -1.6, 1.9); ell(0, 0.2, 3.7, 3.3, E.skin);
+    stroke(E.skin2, 0.35); g.beginPath(); [-1.7, 0, 1.7].forEach(fx => { g.moveTo(fx * 1.06, -2.4); g.lineTo(fx * 1.1, -4.4); }); g.stroke(); g.restore(); };
+  const fist = (x, y, ang, s = 1) => { g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s);
+    ell(0, 0, 3.9, 3.4, E.skin); stroke(E.skin2, 0.35); g.beginPath(); [-2.6, -0.9, 0.9, 2.6].forEach(fx => g.arc(fx, -2.2, 0.85, Math.PI, 0)); g.stroke();
+    [-2.6, -0.9, 0.9, 2.6].forEach(fx => ell(fx, -2.4, 0.95, 0.95, E.skin)); stroke(E.skin2, 0.35); g.beginPath(); [-1.75, 0, 1.75].forEach(fx => { g.moveTo(fx, -3.2); g.lineTo(fx, -1.6); }); g.stroke();
+    cap(-3.4, 0.6, -1.2, -0.6, 1.9); g.restore(); };
+  const tilt = { cards: -0.05, show: 0.06, point: 0.07, think: -0.1, no: st.shake, yes: 0.08, pray: 0, wave: 0.06 }[pose] || 0;
+  const head = fn => { g.save(); g.translate(0, -31); g.rotate(tilt); g.translate(0, 36); fn(); g.restore(); };
+  const ombre = (y) => { g.save(); g.clip(); g.fillStyle = E.hair2; g.fillRect(-40, y, 80, 40); g.restore(); };
+  /* 1. long hair behind: two neat straight panels with rounded tips */
+  head(() => { g.beginPath(); g.moveTo(0, -84); g.bezierCurveTo(-19, -84, -28.5, -71, -28, -56); g.bezierCurveTo(-27.8, -44, -26.5, -30, -25, -21); g.quadraticCurveTo(-24, -15, -20, -16); g.quadraticCurveTo(-17.5, -17, -17.5, -22);
+    g.lineTo(17.5, -22); g.quadraticCurveTo(17.5, -17, 20, -16); g.quadraticCurveTo(24, -15, 25, -21); g.bezierCurveTo(26.5, -30, 27.8, -44, 28, -56); g.bezierCurveTo(28.5, -71, 19, -84, 0, -84); g.closePath(); g.fillStyle = E.hair; g.fill(); });
+  /* body + navy top */
+  g.fillStyle = E.skin; g.fillRect(-4.5, -33, 9, 10); g.fillStyle = "rgba(200,140,110,.25)"; g.fillRect(-4.5, -33, 9, 3);
+  g.beginPath(); g.moveTo(-20, 0); g.bezierCurveTo(-21, -12, -17, -21, -9, -24); g.lineTo(9, -24); g.bezierCurveTo(17, -21, 21, -12, 20, 0); g.closePath(); g.fillStyle = E.skin; g.fill();
+  g.beginPath(); g.moveTo(-9.5, -24); g.quadraticCurveTo(0, -18.5, 9.5, -24); g.bezierCurveTo(14, -16, 16, -9, 17, 0); g.lineTo(-17, 0); g.bezierCurveTo(-16, -9, -14, -16, -9.5, -24); g.closePath(); g.fillStyle = E.top; g.fill();
+  stroke(E.trim, 1.3); g.beginPath(); g.moveTo(-9.5, -24); g.quadraticCurveTo(0, -18.5, 9.5, -24); g.stroke();
+  g.fillStyle = E.trim; for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(0, -17 + i * 3.6, 1.7, Math.PI * 0.05, Math.PI * 0.95); g.fill(); g.beginPath(); g.arc(0, -17 + i * 3.6, 1.7, Math.PI * 1.05, Math.PI * 1.95); g.fill(); }
+  stroke(C.gold, 0.7); g.beginPath(); g.moveTo(-5.5, -23.5); g.quadraticCurveTo(-2.5, -17.5, 0, -17.2); g.quadraticCurveTo(2.5, -17.5, 5.5, -23.5); g.stroke();
+  head(() => {
+    /* 2. little half-up knot on top with a brick bow */
+    ell(-3, -84.5, 6.4, 5.2, E.hair);
+    g.save(); g.translate(-3, -88.5); ell(-3.4, 0, 3.6, 2.4, C.brick, 0.15); ell(3.4, 0, 3.6, 2.4, C.brick, -0.15); ell(0, 0, 1.6, 1.6, "#9C4A2C"); g.restore();
+    /* face */
+    g.beginPath(); g.moveTo(0, -76); g.bezierCurveTo(14, -76, 23.5, -67, 23.5, -55); g.bezierCurveTo(23.5, -44, 15, -35.5, 0, -35.5); g.bezierCurveTo(-15, -35.5, -23.5, -44, -23.5, -55); g.bezierCurveTo(-23.5, -67, -14, -76, 0, -76); g.fillStyle = E.skin; g.fill();
+    ell(-14, -45.5, 4.6, 2.8, "rgba(236,130,130,.36)"); ell(14, -45.5, 4.6, 2.8, "rgba(236,130,130,.36)");
+    stroke("rgba(75,46,36,.6)", 1.05); for (const sx of [-9, 9]) { g.beginPath(); g.moveTo(sx - 3.4, -62); g.quadraticCurveTo(sx, -63.6, sx + 3.4, -62); g.stroke(); }
+    for (const sx of [-9, 9]) {
+      if (st.blink) { stroke(E.eye, 1.4); g.beginPath(); g.moveTo(sx - 3, -51.8); g.quadraticCurveTo(sx, -50.4, sx + 3, -51.8); g.stroke(); continue; }
+      ell(sx, -52, 3.2, 3.9, E.eye); ell(sx, -51.2, 2.1, 2.4, "#5A3A33"); ell(sx + 1.1, -53.4, 1.25, 1.25, "#FFFFFF"); ell(sx - 1, -50.3, 0.6, 0.6, "#FFFFFF");
+      const o = Math.sign(sx); stroke(E.eye, 1.2); g.beginPath(); g.moveTo(sx - 3.8 * o, -53.4); g.quadraticCurveTo(sx, -57, sx + 3.8 * o, -53.8); g.lineTo(sx + 5 * o, -55.2); g.stroke();
+    }
+    stroke("rgba(196,154,116,.9)", 0.75);
+    for (const sx of [-9.2, 9.2]) { const w = 7.2, h = 6.4, cy = -52.3; g.beginPath(); g.moveTo(sx - w, cy - h * 0.38); g.lineTo(sx - w * 0.5, cy - h); g.lineTo(sx + w * 0.55, cy - h); g.lineTo(sx + w, cy - h * 0.35); g.lineTo(sx + w * 0.82, cy + h * 0.62); g.lineTo(sx + w * 0.38, cy + h); g.lineTo(sx - w * 0.42, cy + h); g.lineTo(sx - w * 0.9, cy + h * 0.55); g.closePath(); g.stroke(); }
+    g.beginPath(); g.moveTo(-1.6, -56); g.quadraticCurveTo(0, -57.2, 1.6, -56); g.stroke();
+    stroke(E.skin2, 0.9); g.beginPath(); g.moveTo(-0.6, -46.6); g.quadraticCurveTo(0.5, -45.6, 1.2, -46.2); g.stroke();
+    if (st.mouth) { g.fillStyle = "#A2424B"; g.beginPath(); g.moveTo(-3.2, -42.8); g.quadraticCurveTo(0, -37.6, 3.2, -42.8); g.closePath(); g.fill(); ell(0, -40.2, 1.5, 0.8, "#E58A92"); }
+    else { g.fillStyle = E.lip; g.beginPath(); g.moveTo(-3.4, -42.8); g.quadraticCurveTo(0, -39.4, 3.4, -42.8); g.quadraticCurveTo(0, -41.6, -3.4, -42.8); g.fill(); }
+    /* 3. front hair: one smooth dome, neat side part, swept back behind the ears (forehead and eyes clear) */
+    g.beginPath(); g.moveTo(-24, -52); g.bezierCurveTo(-27, -73, -13, -83.5, 3, -83); g.bezierCurveTo(19, -83.5, 27.5, -72, 24, -52);
+    g.bezierCurveTo(22.5, -62, 18, -68.5, 9, -70.2); g.quadraticCurveTo(5.5, -71.4, 4, -73.2); g.quadraticCurveTo(2, -70.6, -2, -70.4); g.bezierCurveTo(-13, -70, -21, -63, -24, -52); g.closePath(); g.fillStyle = E.hair; g.fill();
+    /* glossy "halo" shine, three soft dashes */
+    stroke("rgba(255,236,224,.42)", 1.6); [[1.22, 1.3], [1.36, 1.46], [1.55, 1.64]].forEach(([a0, a1]) => { g.beginPath(); g.arc(3, -62, 17.5, Math.PI * a0, Math.PI * a1); g.stroke(); });
+    stroke(C.gold, 1); g.beginPath(); g.arc(-23.8, -45, 1.8, 0, Math.PI * 2); g.stroke();
+    /* 4. one smooth lock over her left shoulder, outside the face, ending in a neat curl */
+    g.beginPath(); g.moveTo(23, -56); g.bezierCurveTo(29, -50, 28.5, -38, 26, -28); g.bezierCurveTo(24, -19, 25, -10, 22, -4); g.bezierCurveTo(20, 0, 15, 0, 15, -4);
+    g.bezierCurveTo(15, -7, 18, -8, 19.5, -6.5); g.bezierCurveTo(21, -12, 20, -20, 21.5, -28); g.bezierCurveTo(23, -38, 23.5, -47, 21.5, -52); g.closePath(); g.fillStyle = E.hair; g.fill(); ombre(-16);
+    stroke("rgba(255,236,224,.35)", 1.1); g.beginPath(); g.moveTo(26, -46); g.bezierCurveTo(25.5, -40, 24.5, -34, 23.8, -28); g.stroke();
+  });
+  /* arms + hands */
+  const L = [-17, -19], R = [17, -19], a = st.swing, rest = () => { arm([L, [-16, -4], [-7, -7]]); fist(-7, -7.5, 1.35, 1.15); };
+  if (pose === "cards") { arm([L, [-16, -5], [-6.5, -10]]); arm([R, [16, -5], [6.5, -10]]);
+    g.save(); g.translate(0, -16); [-0.34, 0, 0.34].forEach((r, i) => { g.save(); g.rotate(r); g.translate(0, -5); g.scale(0.09, 0.09); tarot(g, 100, false, 7 + i); g.restore(); }); g.restore();
+    fist(-6.2, -11, 0.25, 1.15); fist(6.2, -11, -0.25, 1.15); }
+  else if (pose === "show") { rest(); arm([R, [25, -16], [26 + a, -33]]); g.save(); g.translate(27 + a, -42); g.rotate(0.14); g.scale(0.115, 0.115); tarot(g, 100, true, 11); g.restore(); fist(26 + a, -35, 0.1, 1.2); }
+  else if (pose === "point") { rest(); arm([R, [24, -14], [30 + a, -23]]); openHand(33.5 + a, -26, 1.0, 1.35); }
+  else if (pose === "think") { arm([R, [16, -4], [7, -7]]); fist(7, -7.5, -1.35, 1.15); arm([L, [-14, -9], [-9, -29]]); fist(-8.5, -32, 0.35, 1.15); }
+  else if (pose === "no") { const o = a * 0.35; arm([L, [-13, -4], [9 + o, -17]]); arm([R, [13, -4], [-9 - o, -17]]); openHand(11.5 + o, -20, 0.6, 1.25); openHand(-11.5 - o, -20, -0.6, 1.25); }
+  else if (pose === "yes") { rest(); arm([R, [25, -14], [26, -27 + a]]);
+    g.save(); g.translate(29, -39 + a); g.rotate(0.12); ell(0, 0, 7, 7, C.brick); stroke(C.card, 1.9); g.beginPath(); g.moveTo(-3.2, 0.2); g.lineTo(-0.9, 2.6); g.lineTo(3.5, -2.6); g.stroke(); g.restore(); fist(26.5, -30 + a, 0.1, 1.2); }
+  else if (pose === "pray") { arm([L, [-13, -5], [-2.6, -15]]); arm([R, [13, -5], [2.6, -15]]);
+    ell(-1.3, -20, 2.5, 5.8, E.skin, 0.06); ell(1.3, -20, 2.5, 5.8, E.skin, -0.06); stroke(E.skin2, 0.35); g.beginPath(); g.moveTo(0, -25.5); g.lineTo(0, -15); [-23.5, -21.5].forEach(y => { g.moveTo(-2.6, y); g.lineTo(-0.8, y - 0.3); g.moveTo(2.6, y); g.lineTo(0.8, y - 0.3); }); g.stroke(); }
+  else if (pose === "wave") { rest(); g.save(); g.translate(21, -20); g.rotate(0.12 + a * 0.2); arm([[-3, 4], [8, -12]]); openHand(9.5, -17, 0.35, 1.45); g.restore(); }
+}
+/* Lord Shiva, same chibi paper-sticker style: blue skin, jata bun with crescent moon, ash tilak + third eye, rudraksha, snake, trishul, blessing hand */
+function shivaParts(g, pose, st) {
+  const S = { skin: "#93B8E0", skin2: "#7AA2CF", hair: "#2A2540", ash: "#F4EEE2", bead: "#7A4630", snake: "#3E6E6A" };
+  const ell = (x, y, rx, ry, fill, rot = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+  const arm = (pts, w = 7) => { g.strokeStyle = S.skin; g.lineWidth = w; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); };
+  /* trishul behind the right shoulder */
+  g.save(); g.translate(27, 0); g.rotate(0.06 + st.swing * 0.01);
+  g.fillStyle = C.gold; g.fillRect(-1.2, -100, 2.4, 96);
+  g.strokeStyle = C.gold; g.lineWidth = 2.2; g.lineCap = "round"; g.beginPath(); g.moveTo(-8, -110); g.quadraticCurveTo(-8, -98, 0, -97); g.quadraticCurveTo(8, -98, 8, -110); g.moveTo(0, -97); g.lineTo(0, -114); g.stroke();
+  ell(0, -96, 2.6, 2.6, C.gold); /* small damaru */ g.fillStyle = C.brick; g.beginPath(); g.moveTo(-5, -88); g.lineTo(5, -88); g.lineTo(-5, -78); g.lineTo(5, -78); g.closePath(); g.fill(); g.restore();
+  /* hair falling behind + bun */
+  g.beginPath(); g.moveTo(0, -84); g.bezierCurveTo(-18, -84, -28, -72, -27, -55); g.bezierCurveTo(-27, -40, -26, -28, -24, -18); g.lineTo(24, -18); g.bezierCurveTo(26, -28, 27, -40, 27, -55); g.bezierCurveTo(28, -72, 18, -84, 0, -84); g.closePath(); g.fillStyle = S.hair; g.fill();
+  ell(0, -88, 10.5, 9, S.hair); ell(0, -96, 6.5, 5.5, S.hair);
+  g.fillStyle = C.gold; g.fillRect(-9, -86, 18, 2.2);
+  ell(-13.5, -92, 4.2, 4.2, "#F7E7B0"); ell(-11.4, -93.6, 3.6, 3.6, S.hair);  /* crescent moon */
+  /* body: bare blue chest, brick sash, rudraksha, snake */
+  g.beginPath(); g.moveTo(-22, 0); g.bezierCurveTo(-23, -14, -19, -24, -10, -27); g.lineTo(10, -27); g.bezierCurveTo(19, -24, 23, -14, 22, 0); g.closePath(); g.fillStyle = S.skin; g.fill();
+  g.fillStyle = C.brick; g.beginPath(); g.moveTo(-20, -2); g.lineTo(-14, 0); g.lineTo(16, -25); g.lineTo(11, -27); g.closePath(); g.fill();
+  g.fillStyle = "#F0D9A8"; g.fillRect(-22, -6, 44, 6);
+  for (let i = 0; i <= 12; i++) { const an = Math.PI * (0.15 + 0.7 * i / 12); ell(Math.cos(an) * 9, -28 + Math.sin(an) * 10, 1.25, 1.25, S.bead); }
+  g.strokeStyle = S.snake; g.lineWidth = 2.6; g.lineCap = "round"; g.beginPath(); g.moveTo(-12, -24); g.bezierCurveTo(-6, -31, 6, -31, 12, -24); g.bezierCurveTo(15, -21, 14, -16, 11, -17); g.stroke(); ell(10.5, -17.5, 2.2, 1.6, S.snake, 0.5);
+  /* head */
+  ell(0, -55, 21, 19.5, S.skin);
+  ell(-12.5, -48.5, 3.6, 2.2, "rgba(214,110,120,.28)"); ell(12.5, -48.5, 3.6, 2.2, "rgba(214,110,120,.28)");
+  g.strokeStyle = C.navy; g.lineWidth = 1.5; g.lineCap = "round";
+  for (const sx of [-8, 8]) { g.beginPath(); g.arc(sx, -54.5, 3, Math.PI * 0.12, Math.PI * 0.88); g.stroke(); }   /* calm, eyes softly closed */
+  g.strokeStyle = "#7E3B3A"; g.lineWidth = 1.3; g.beginPath(); g.arc(0, -46.4, 2.8, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
+  g.strokeStyle = S.ash; g.lineWidth = 1.2; for (const y of [-66, -63.6, -61.2]) { g.beginPath(); g.moveTo(-8, y); g.quadraticCurveTo(0, y - 1, 8, y); g.stroke(); }
+  ell(0, -63.6, 1.1, 2.1, C.brick);                   /* third eye */
+  /* hair frame on the forehead */
+  g.beginPath(); g.moveTo(-21, -52); g.bezierCurveTo(-23, -70, -12, -78, 0, -77.5); g.bezierCurveTo(12, -78, 23, -70, 21, -52); g.bezierCurveTo(19, -64, 12, -71, 0, -71); g.bezierCurveTo(-12, -71, -19, -64, -21, -52); g.fillStyle = S.hair; g.fill();
+  ell(-21.5, -46, 1.8, 2.6, C.gold); ell(21.5, -46, 1.8, 2.6, C.gold);
+  /* arms: blessing hand (abhaya) left, right hand on the trishul */
+  arm([[-19, -21], [-26, -10], [-24, -30 + st.swing * 0.5]]); ell(-24, -35 + st.swing * 0.5, 4.2, 5.4, S.skin);
+  g.strokeStyle = S.skin2; g.lineWidth = 0.6; g.beginPath(); g.moveTo(-25.5, -38 + st.swing * 0.5); g.lineTo(-25.5, -33 + st.swing * 0.5); g.moveTo(-22.6, -38 + st.swing * 0.5); g.lineTo(-22.6, -33 + st.swing * 0.5); g.stroke();
+  arm([[19, -21], [26, -8], [27.5, -26]]); ell(27.5, -27, 4.2, 3.8, S.skin);
+}
+/* ---------- deities, same chibi paper-sticker style ---------- */
+function H(g) {
+  const ell = (x, y, rx, ry, fill, rot = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+  const poly = (pts, fill) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fillStyle = fill; g.fill(); };
+  const line = (pts, col, w) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); };
+  const arm = (pts, col, w = 7) => line(pts, col, w);
+  const crown = (y, w, h, col = C.gold) => { poly([[-w, y], [-w, y - h * 0.45], [-w * 0.55, y - h * 0.7], [-w * 0.3, y - h * 0.5], [0, y - h], [w * 0.3, y - h * 0.5], [w * 0.55, y - h * 0.7], [w, y - h * 0.45], [w, y]], col); ell(0, y - h * 0.42, w * 0.13, w * 0.13, C.brick); };
+  const eyes = (y, kind, col = C.navy) => { for (const sx of [-8, 8]) { if (kind === "calm") line([[sx - 3, y], [sx, y + 1.6], [sx + 3, y]], col, 1.4); else { ell(sx, y, 2.3, 2.8, col); ell(sx + 0.8, y - 1, 0.8, 0.8, "#fff"); line([[sx - 3, y - 2.2], [sx, y - 3.8], [sx + 3.2, y - 2.6]], col, 0.9); } } };
+  const smile = (y, col = "#B5505A") => { g.strokeStyle = col; g.lineWidth = 1.3; g.lineCap = "round"; g.beginPath(); g.arc(0, y - 1.8, 2.8, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke(); };
+  const blush = (y, a = 0.3) => { ell(-12.5, y, 3.8, 2.3, `rgba(232,120,120,${a})`); ell(12.5, y, 3.8, 2.3, `rgba(232,120,120,${a})`); };
+  const lotus = (x, y, s, col = "#E99AA8") => { g.save(); g.translate(x, y); g.scale(s, s); [-0.9, -0.45, 0, 0.45, 0.9].forEach(r => { g.save(); g.rotate(r); ell(0, -5, 2.4, 5.4, col); g.restore(); }); ell(0, 0.5, 5.5, 1.8, "#6E9A6B"); g.restore(); };
+  const torso = (col) => { g.beginPath(); g.moveTo(-22, 0); g.bezierCurveTo(-23, -14, -19, -24, -10, -27); g.lineTo(10, -27); g.bezierCurveTo(19, -24, 23, -14, 22, 0); g.closePath(); g.fillStyle = col; g.fill(); };
+  return { ell, poly, line, arm, crown, eyes, smile, blush, lotus, torso };
+}
+function goddessParts(g, o, st) {
+  const { ell, poly, line, arm, crown, eyes, smile, blush, lotus, torso } = H(g), a = st.swing;
+  /* hair */
+  if (o.wild) { g.beginPath(); g.moveTo(0, -82); for (let i = 0; i <= 16; i++) { const an = Math.PI * (1.05 + i / 16 * 0.9), R = i % 2 ? 31 : 36; g.lineTo(Math.cos(an) * R * 0.95, -50 + Math.sin(an) * R * 1.05); } g.lineTo(32, -4); g.lineTo(-32, -4); g.closePath(); g.fillStyle = o.hair; g.fill();
+    for (let i = 0; i <= 10; i++) { const x = -32 + i * 6.4; poly([[x - 3.5, -28], [x, -2 - (i % 2) * 5], [x + 3.5, -28]], o.hair); } }
+  else { g.beginPath(); g.moveTo(0, -80); g.bezierCurveTo(-18, -80, -28, -68, -27, -52); g.bezierCurveTo(-27, -36, -26, -22, -24, -10); g.lineTo(24, -10); g.bezierCurveTo(26, -22, 27, -36, 27, -52); g.bezierCurveTo(28, -68, 18, -80, 0, -80); g.closePath(); g.fillStyle = o.hair; g.fill(); }
+  /* body + sari drape with gold border */
+  torso(o.skin); poly([[-17, 0], [-15, -18], [-9, -26], [9, -26], [15, -18], [17, 0]], o.blouse || o.sari);
+  poly([[-22, 0], [-20, -10], [14, -27], [20, -24], [-6, 0]], o.sari); line([[-21, -9], [15.5, -26]], C.gold, 1.6);
+  for (let i = 0; i < 3; i++) { g.strokeStyle = C.gold; g.lineWidth = 1; g.beginPath(); g.ellipse(0, -27 + i * 2.4, 7 + i * 1.8, 3 + i * 1.6, 0, 0.1, Math.PI - 0.1); g.stroke(); }
+  if (o.garland) for (let i = 0; i <= 10; i++) { const an = Math.PI * (0.1 + 0.8 * i / 10); ell(Math.cos(an) * 13, -27 + Math.sin(an) * 15, 2.2, 2.2, o.garland); ell(Math.cos(an) * 13, -27 + Math.sin(an) * 15, 0.8, 0.8, "#F4D27A"); }
+  /* head */
+  ell(0, -53.5, 21, 19.5, o.skin); blush(-46.5, o.dark ? 0.18 : 0.3);
+  eyes(-52, o.eyes || "open", o.dark ? "#141A2C" : C.navy);
+  if (o.thirdEye) ell(0, -63, 1.1, 2.2, C.brick); else ell(0, -62.5, 1.2, 1.2, "#C23B3B");
+  if (o.tongue) { g.fillStyle = "#D8434D"; g.beginPath(); g.ellipse(0, -41.5, 2.6, 3.6, 0, 0, Math.PI * 2); g.fill(); line([[-3.2, -44], [3.2, -44]], "#8E2B33", 1.1); } else smile(-44, o.dark ? "#E2A1A6" : "#C2566A");
+  /* hair frame + crown + big earrings */
+  g.beginPath(); g.moveTo(-21, -50); g.bezierCurveTo(-23, -68, -12, -76, 0, -75.5); g.bezierCurveTo(12, -76, 23, -68, 21, -50); g.bezierCurveTo(19, -61, 12, -68, 0, -68.5); g.bezierCurveTo(-12, -68, -19, -61, -21, -50); g.fillStyle = o.hair; g.fill();
+  crown(-70, 14, 20); ell(-21.5, -43.5, 2.4, 3.2, C.gold); ell(21.5, -43.5, 2.4, 3.2, C.gold);
+  /* arms: blessing hand + held item */
+  arm([[-19, -21], [-26, -10], [-24, -29 + a * 0.5]], o.skin); ell(-24, -34 + a * 0.5, 4.2, 5.4, o.skin);
+  if (o.coins) for (let i = 0; i < 4; i++) { const y = -24 + ((st.step * 3 + i * 7) % 26); ell(-24 + (i % 2 ? 3 : -2), y, 1.8, 1.8, C.gold); ell(-24 + (i % 2 ? 3 : -2), y, 0.7, 0.7, "#B88A3A"); }
+  arm([[19, -21], [26, -8], [27, -24]], o.skin); ell(27, -26, 4.2, 3.8, o.skin);
+  if (o.hold === "lotus") lotus(28, -34, 1.05, o.lotus);
+  if (o.hold === "sword") { g.save(); g.translate(27, -27); g.rotate(-0.25); line([[0, 0], [0, 6]], C.gold, 2.4); line([[-3.5, 0], [3.5, 0]], C.gold, 2); g.beginPath(); g.moveTo(-1.6, 0); g.quadraticCurveTo(-3, -16, 2, -30); g.quadraticCurveTo(2.5, -14, 1.6, 0); g.closePath(); g.fillStyle = "#D7DCE4"; g.fill(); g.restore(); }
+}
+function lakshmiParts(g, pose, st) { goddessParts(g, { skin: "#F5D1B5", hair: "#2B1E1E", sari: "#C23E3E", blouse: "#E0A43A", hold: "lotus", lotus: "#EE9DB0", coins: true }, st); }
+function umaParts(g, pose, st) { goddessParts(g, { skin: "#F5D1B5", hair: "#2B1E1E", sari: "#3F7E62", blouse: "#B8613E", hold: "lotus", lotus: "#F2B6C6" }, st); }
+function kaliParts(g, pose, st) { goddessParts(g, { skin: "#3D4C7E", hair: "#14141C", sari: "#B83A35", blouse: "#B83A35", wild: true, dark: true, thirdEye: true, tongue: true, hold: "sword", garland: "#D8434D" }, st); }
+function ganeshaParts(g, pose, st) {
+  const { ell, poly, line, arm, crown, eyes, blush, torso } = H(g), sk = "#F0B29A", sk2 = "#E39C83", a = st.swing;
+  /* big ears flap a little */
+  for (const sx of [-1, 1]) { g.save(); g.translate(sx * 19, -54); g.rotate(sx * (0.12 + a * 0.02)); ell(sx * 9, 2, 13, 15, sk2); ell(sx * 9, 2, 9, 11, "#F6C6B4"); g.restore(); }
+  /* round belly body */
+  torso(sk); ell(0, -4, 17, 14, sk); poly([[-22, 0], [-20, -10], [14, -27], [20, -24], [-6, 0]], "#E0A43A"); line([[-21, -9], [15.5, -26]], C.brick, 1.4);
+  for (let i = 0; i < 2; i++) { g.strokeStyle = C.gold; g.lineWidth = 1; g.beginPath(); g.ellipse(0, -27 + i * 2.6, 8 + i * 2, 3.4 + i * 1.8, 0, 0.1, Math.PI - 0.1); g.stroke(); }
+  /* head + trunk + tusk */
+  ell(0, -54, 19.5, 19, sk); blush(-48, 0.3); eyes(-55, "open", C.navy);
+  g.strokeStyle = sk; g.lineWidth = 8.5; g.lineCap = "round"; g.beginPath(); g.moveTo(0, -48); g.bezierCurveTo(1, -36, -3, -30, 4 + a * 0.5, -26); g.stroke();
+  g.strokeStyle = sk2; g.lineWidth = 0.7; for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(-3.6, -44 + i * 4.4); g.lineTo(3.6, -43.6 + i * 4.4); g.stroke(); }
+  poly([[6, -45], [10, -42], [7.5, -40]], "#FFF6E6");
+  ell(0, -63.5, 1.2, 2.4, C.brick); line([[-6, -66], [6, -66]], "#FFF6E6", 1.1);
+  crown(-70, 13, 22);
+  /* hands: blessing + modak (sweet) */
+  arm([[-19, -21], [-26, -10], [-24, -29 + a * 0.5]], sk); ell(-24, -34 + a * 0.5, 4.2, 5.4, sk);
+  arm([[19, -21], [26, -8], [24, -16]], sk); ell(24, -19, 4.4, 4, sk); ell(24, -25, 4.6, 4, "#F2B84B"); line([[21, -26], [24, -29.5], [27, -26]], "#D99A2B", 0.8);
+}
+function nagaParts(g, pose, st) {
+  const { ell, poly, line, eyes } = H(g), sc = "#2E7F6E", sc2 = "#256A5C", belly = "#F3E7C4", a = st.swing;
+  /* coiled body */
+  g.strokeStyle = sc; g.lineWidth = 15; g.lineCap = "round"; g.beginPath(); g.moveTo(-26, -4); g.bezierCurveTo(-30, -16, -6, -18, 8, -10); g.bezierCurveTo(22, -2, 30, -10, 26, -20); g.stroke();
+  g.lineWidth = 13; g.beginPath(); g.moveTo(26, -20); g.bezierCurveTo(22, -30, 6, -28, 2, -36); g.stroke();
+  g.strokeStyle = belly; g.lineWidth = 4; g.beginPath(); g.moveTo(-24, -2); g.bezierCurveTo(-27, -12, -6, -13, 8, -6); g.bezierCurveTo(20, 0, 26, -6, 24, -16); g.stroke();
+  g.fillStyle = sc2; for (let i = 0; i < 12; i++) { const x = -22 + i * 4.4, y = -12 + Math.sin(i * 0.9) * 3; g.beginPath(); g.arc(x, y - 3, 1.3, 0, Math.PI); g.fill(); }
+  /* flame crest (Thai naga) */
+  for (let i = -3; i <= 3; i++) { g.save(); g.translate(i * 4.6, -68 + Math.abs(i) * 2.2); g.rotate(i * 0.22); poly([[-3.4, 4], [0, -13 - (i === 0 ? 5 : 0) + a * 0.3], [3.4, 4]], i % 2 ? C.gold : "#E3B758"); g.restore(); }
+  /* head */
+  ell(0, -50, 20, 17, sc); ell(0, -41, 13, 7, belly);
+  eyes(-53, "open", "#16302A"); ell(-12.5, -46, 3.2, 2, "rgba(240,150,150,.3)"); ell(12.5, -46, 3.2, 2, "rgba(240,150,150,.3)");
+  ell(0, -60.5, 3, 2.2, C.gold); ell(0, -60.5, 1.2, 1.2, C.brick);
+  line([[-4, -41.5], [0, -39.5], [4, -41.5]], "#16302A", 1.1); poly([[-2.2, -40.6], [-1.6, -38], [-1, -40.4]], "#fff"); poly([[2.2, -40.6], [1.6, -38], [1, -40.4]], "#fff");
+  g.fillStyle = sc2; for (const [x, y] of [[-12, -57], [-6, -61], [6, -61], [12, -57], [-16, -50], [16, -50]]) { g.beginPath(); g.arc(x, y, 1.4, 0, Math.PI); g.fill(); }
+}
+function garudaParts(g, pose, st) {
+  const { ell, poly, line, crown, eyes, torso } = H(g), red = "#C8473B", red2 = "#A9382E", a = st.swing;
+  /* golden wings spread behind */
+  for (const sx of [-1, 1]) { g.save(); g.scale(sx, 1); g.translate(18, -30); g.rotate(-0.45 - a * 0.03); for (let i = 0; i < 5; i++) { poly([[0, 0], [12 + i * 4, -8 - i * 6], [6 + i * 3, 2 - i * 2]], i % 2 ? C.gold : "#E3B758"); } g.restore(); }
+  torso(red); poly([[-14, 0], [-10, -22], [10, -22], [14, 0]], "#E3B758");
+  for (let i = 0; i < 3; i++) line([[-8, -16 + i * 6], [0, -12 + i * 6], [8, -16 + i * 6]], C.gold, 1.2);
+  /* arms raised beside the head (Thai Garuda pose) */
+  for (const sx of [-1, 1]) { line([[sx * 19, -22], [sx * 30, -30], [sx * 28, -46 + a * 0.4]], red, 7); ell(sx * 28, -50 + a * 0.4, 4, 4.6, red); line([[sx * 24, -38], [sx * 32, -38]], C.gold, 1.5); }
+  /* head + beak + chada crown */
+  ell(0, -52, 18.5, 17.5, red);
+  ell(-11.5, -47, 3.2, 2, "rgba(255,190,170,.35)"); ell(11.5, -47, 3.2, 2, "rgba(255,190,170,.35)");
+  eyes(-53, "open", "#1E1416");
+  g.fillStyle = "#F0B840"; g.beginPath(); g.moveTo(-5, -46); g.quadraticCurveTo(0, -48, 5, -46); g.quadraticCurveTo(3, -38, 0, -36); g.quadraticCurveTo(-1.5, -40, -5, -46); g.fill();
+  line([[-5, -45.5], [0, -44], [5, -45.5]], "#C98F25", 0.8);
+  poly([[-15, -64], [-14, -72], [-8, -76], [0, -96], [8, -76], [14, -72], [15, -64]], C.gold); poly([[-15, -64], [15, -64], [13, -61], [-13, -61]], "#E3B758"); ell(0, -71, 2, 2, C.brick);
+  ell(-18.5, -50, 2.4, 3.4, C.gold); ell(18.5, -50, 2.4, 3.4, C.gold);
+}
+const DEITY = { emma: null, shiva: shivaParts, ganesha: ganeshaParts, lakshmi: lakshmiParts, uma: umaParts, kali: kaliParts, naga: nagaParts, garuda: garudaParts };
+/* the sticker: white cut edge + soft paper shadow, cached per pose and frame-step */
+function emma(ctx, A, x, y, size, pose, t, o = {}) {
+  const st = Math.floor(q(t) * 12), wiggle = [0, 1, 0, -1][Math.floor(q(t) * 4) % 4];
+  const talking = o.talk && Math.floor(q(t) * 6) % 2 === 1, blink = (st % 47) < 2;
+  const state = { step: st, swing: (o.who && o.who !== "emma") ? wiggle * 1.5 : (pose === "wave" || pose === "no") ? wiggle * 3 : (pose === "point" || pose === "show") ? Math.abs(wiggle) : 0, shake: pose === "no" ? wiggle * 0.05 : 0, mouth: talking ? 1 : 0, blink };
+  const px = Math.max(40, Math.round(size)), key = [o.who || "emma", pose, px, state.swing, state.shake, state.mouth, blink].join("|");
+  let cv = EMMA_CACHE.get(key);
+  if (!cv) {
+    const sc = px / 100, pad = 10, cw = Math.ceil(124 * sc), ch = Math.ceil((o.who && o.who !== "emma" ? 124 : 112) * sc);
+    const a = document.createElement("canvas"); a.width = cw; a.height = ch; const g = a.getContext("2d");
+    g.translate(cw / 2, ch - 4 * sc); g.scale(sc, sc); ((o.who && DEITY[o.who]) || emmaParts)(g, pose, state);
+    const w = document.createElement("canvas"); w.width = cw; w.height = ch; const gw = w.getContext("2d");
+    const white = document.createElement("canvas"); white.width = cw; white.height = ch; const gx = white.getContext("2d"); gx.drawImage(a, 0, 0); gx.globalCompositeOperation = "source-in"; gx.fillStyle = "#FFFDF8"; gx.fillRect(0, 0, cw, ch);
+    const r = Math.max(2, 2.2 * sc); for (let i = 0; i < 12; i++) { const an = i / 12 * Math.PI * 2; gw.drawImage(white, Math.cos(an) * r, Math.sin(an) * r); }
+    gw.drawImage(a, 0, 0); cv = { c: w, cw, ch, sc };
+    if (EMMA_CACHE.size > 160) EMMA_CACHE.clear(); EMMA_CACHE.set(key, cv);
+  }
+  const k = o.at != null ? pop(A, (q(t) - o.at) / 0.45) : 1; if (k <= 0) return;
+  ctx.save(); ctx.translate(x, y + (1 - k) * size * 0.25); ctx.rotate((o.rot || 0) + (rng(Math.floor(q(t) * 6) + 5)() - 0.5) * 0.008); if (o.flip) ctx.scale(-1, 1);
+  shadowOn(ctx, size * 2.4, 0.9); ctx.globalAlpha *= A.clamp(k * 2); ctx.drawImage(cv.c, -cv.cw / 2, -cv.ch + 4 * cv.sc); shadowOff(ctx); ctx.restore();
+}
+/* brick underline cut from paper */
+function strip(ctx, A, x, y, w, h, t, t0, color = C.brick, seed = 3) { const k = A.ease.inOut(A.clamp((q(t) - t0) / 0.35)); if (k <= 0) return; ctx.save(); ctx.fillStyle = color; cutPath(ctx, x, y - h / 2, w * k, h, seed, 0.5); ctx.fill(); ctx.restore(); }
+/* the reading table Emma leans on: a navy paper strip with a brick edge */
+function desk(ctx, A, g, t) { /* no strip: the character is a free-standing paper cut-out */ }
+
+const NUMFONT = "Mali";
+/* cute number badge: brick paper circle with a rounded numeral */
+function badge(ctx, A, n, r, seed = 51, o = {}) {
+  ctx.save(); shadowOn(ctx, r * 12, 0.8); ctx.fillStyle = o.bg || C.brick; ctx.beginPath();
+  const rr = rng(seed); for (let i = 0; i <= 18; i++) { const an = i / 18 * Math.PI * 2, R = r * (1 + (rr() - 0.5) * 0.05); i ? ctx.lineTo(Math.cos(an) * R, Math.sin(an) * R) : ctx.moveTo(Math.cos(an) * R, Math.sin(an) * R); }
+  ctx.closePath(); ctx.fill(); shadowOff(ctx);
+  ctx.font = A.font(700, r * 1.15, NUMFONT); ctx.textBaseline = "middle"; ctx.textAlign = "left"; const w = ctx.measureText(String(n)).width; ctx.fillStyle = o.fg || C.card; ctx.fillText(String(n), -w / 2, r * 0.06);
+  ctx.restore();
+}
+/* big numeral as a die-cut sticker: rounded font, cream cut edge, soft shadow */
+function bigNum(ctx, A, n, px, color = C.brick) {
+  ctx.save(); ctx.font = A.font(700, px, NUMFONT); ctx.textBaseline = "middle"; ctx.textAlign = "left"; const w = ctx.measureText(String(n)).width;
+  ctx.lineJoin = "round"; ctx.strokeStyle = "#FFFDF8"; ctx.lineWidth = px * 0.12; shadowOn(ctx, px * 3, 0.9); ctx.strokeText(String(n), -w / 2, 0); shadowOff(ctx);
+  ctx.fillStyle = color; ctx.fillText(String(n), -w / 2, 0); ctx.restore();
+}
+
+  return { draw: (ctx, x, y, size, pose, t, o) => emma(ctx, A, x, y, size, pose, t, o) };
+})();
+const FX_WHO = ["emma", "shiva", "ganesha", "lakshmi", "uma", "kali", "naga", "garuda"], FX_POSE = ["point", "think", "no", "yes", "cards", "show", "pray", "wave"];
+/* stop-motion time: paper things move on twos (12 fps), like a hand-animated cut-out */
+const fxQ = (p, t) => p.fxTheme === "ss59" ? Math.floor(t * 12) / 12 : t;
+let fxCurP = null;
+function fxPlace(ctx, f, t, cx, cy, rot, fn, inD = 0.38, p = fxCurP) {
+  const tq = p ? fxQ(p, t) : t, e = fxEnv(f, tq, inD), s = fxSpring(e.i), out = e.o; if (s <= 0.001 || out <= 0) return;
+  const seed = hashStr(f.id || "x") % 97, boil = p && p.fxTheme === "ss59" ? (fxRand(seed, Math.floor(t * 6)) - 0.5) * 0.014 : 0, fly = 1 - out;
+  ctx.save(); ctx.globalAlpha *= Math.min(1, e.i * 3) * Math.min(1, out * 1.6);
+  ctx.translate(cx + fly * fly * 60 * (seed % 2 ? 1 : -1), cy - fly * fly * 90); ctx.rotate(rot * (0.4 + 0.6 * s) + boil + fly * 0.25 * (seed % 2 ? 1 : -1)); ctx.scale(0.55 + 0.45 * s, 0.55 + 0.45 * s); fn(); ctx.restore();
+}
+/* hand-drawn marker doodles */
+function fxUnderline(ctx, x, y, w, k, col, u, seed) { if (k <= 0) return; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.1 * u; ctx.lineCap = "round"; ctx.beginPath(); const n = 8; for (let i = 0; i <= n * clamp01(k); i++) { const xx = x + w * i / n, yy = y + Math.sin(i * 1.3 + seed) * 0.45 * u; i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); ctx.restore(); }
+function fxSparks(ctx, w, h, t, t0, col, u, seed) {
+  const e = t - t0; if (e < 0.2) return; const st = Math.floor(t * 6);
+  [[-w / 2 - 2 * u, -h / 2 - 1 * u, 2.2], [w / 2 + 1.5 * u, -h / 2 + 2 * u, 1.6], [w / 2 - 3 * u, h / 2 + 2.5 * u, 1.3]].forEach(([x, y, r], i) => {
+    const k = clamp01((e - 0.2 - i * 0.12) / 0.2) * (0.8 + 0.2 * ((st + i) % 2)); if (k <= 0) return;
+    ctx.save(); ctx.fillStyle = col; ctx.translate(x, y); ctx.rotate((st + i) % 2 ? 0.2 : -0.1); const R = r * u * k; ctx.beginPath(); ctx.moveTo(0, -R); ctx.quadraticCurveTo(0, 0, R, 0); ctx.quadraticCurveTo(0, 0, 0, R); ctx.quadraticCurveTo(0, 0, -R, 0); ctx.quadraticCurveTo(0, 0, 0, -R); ctx.fill(); ctx.restore(); });
+}
+/* the host or a deity pops up beside the card */
+function fxChar(ctx, W, H, p, f, t) {
+  if (p.fxTheme !== "ss59" || !f.who) return; const e = fxEnv(f, t, 0.45, 0.3); if (e.i <= 0 || e.o <= 0) return;
+  const port = H > W, size = port ? H * 0.17 : H * 0.3, x = port ? W * 0.16 : W * 0.1, y = port ? H * 0.64 : H * 0.97;
+  ctx.save(); ctx.globalAlpha *= Math.min(1, e.o * 1.5);
+  try { SS59.draw(ctx, x, y + (1 - e.o) * size * 0.4, size, f.who === "emma" ? (f.pose || "point") : "bless", t, { who: f.who, at: f.t0 + 0.12, talk: f.who === "emma" }); } catch (err) { console.error(err); }
+  ctx.restore();
+}
+/* a torn sheet of paper sweeps across a big cut, so the jump is hidden like in a hand-edited video */
+function fxWipe(ctx, W, H, p, f, t) {
+  const c = f.cut; if (!c) return; const d = keptBefore(p, t) - keptBefore(p, c[0]); if (d < -0.34 || d > 0.34) return;
+  const T = fxTheme(p), x = (d + 0.34) / 0.68, e = x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2, sw = W * 1.7, left = W - e * (W + sw), u = Math.min(W, H) / 100, seed = hashStr(f.id) % 97;
+  ctx.save(); ctx.translate(left, 0); ctx.rotate(-0.03);
+  const edge = side => { const pts = []; for (let i = 0; i <= 18; i++) pts.push([side + (fxRand(seed + side, i) - 0.5) * 3 * u, -H * 0.1 + H * 1.2 * i / 18]); return pts; };
+  const L = edge(0), R = edge(sw).reverse();
+  ctx.fillStyle = "rgba(20,24,40,.25)"; ctx.beginPath(); [...L, ...R].forEach(([a, b], i) => i ? ctx.lineTo(a + 1.5 * u, b) : ctx.moveTo(a + 1.5 * u, b)); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = T.paper; ctx.beginPath(); [...L, ...R].forEach(([a, b], i) => i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)); ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.clip(); ctx.strokeStyle = rgba(T.ink, 0.06); ctx.lineWidth = Math.max(1, 0.15 * u); for (let gx = 0; gx < sw; gx += 6 * u) { ctx.beginPath(); ctx.moveTo(gx, -H * 0.1); ctx.lineTo(gx, H * 1.1); ctx.stroke(); } for (let gy = -H * 0.1; gy < H * 1.1; gy += 6 * u) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(sw, gy); ctx.stroke(); }
+  if (f.text) { ctx.font = `600 ${6 * u}px ${T.font}`; ctx.fillStyle = T.ink; ctx.textBaseline = "middle"; ctx.textAlign = "left"; const tw = ctx.measureText(f.text).width; ctx.fillText(f.text, sw / 2 - tw / 2, H * 0.5); ctx.fillStyle = T.acc; ctx.fillRect(sw / 2 - tw / 2, H * 0.5 + 4.5 * u, tw * 0.4, 1.2 * u); }
+  ctx.restore(); ctx.restore();
 }
 function drawFx(ctx, W, H, p, t) {
-  const list = fxAt(p, t); if (!list.length) return;
+  const list = fxAt(p, t); if (!list.length) return; fxCurP = p;
   const T = fxTheme(p), u = Math.min(W, H) / 100, port = H > W, topY = port ? H * 0.15 : H * 0.17, maxW = port ? W * 0.82 : W * 0.5;
   for (const f of list) {
     const seed = hashStr(f.id || f.text || "x") % 997;
     ctx.save();
     try {
+      if (f.k === "wipe") { fxWipe(ctx, W, H, p, f, t); ctx.restore(); continue; }
+      fxChar(ctx, W, H, p, f, t);
       if (f.k === "flash") {
         const e = t - f.t0; if (e >= 0 && e < 0.32) { ctx.fillStyle = `rgba(255,252,245,${0.85 * (1 - e / 0.32)})`; ctx.fillRect(0, 0, W, H); }
       } else if (f.k === "spot") {
@@ -2870,7 +3250,8 @@ function drawFx(ctx, W, H, p, t) {
           fxPaper(ctx, -w / 2, -h / 2, w, h, T, seed);
           if (kick) { ctx.font = `600 ${3.6 * u}px ${T.font}`; const kw = ctx.measureText(kick).width + 3 * u; ctx.fillStyle = T.acc; ctx.fillRect(-w / 2 + 4.5 * u, -h / 2 + 2.2 * u, kw, 5.4 * u); fxText(ctx, T, [kick], -w / 2 + 6 * u, -h / 2 + 5 * u, 3.6 * u, 600, T.paper); }
           fxText(ctx, T, L, -w / 2 + 4.5 * u, -h / 2 + 2.5 * u + kh + px * 0.62, px, 600, T.ink);
-          fxTape(ctx, -w * 0.32, -h / 2, 11 * u, 3 * u, -0.5, T);
+          fxUnderline(ctx, -w / 2 + 4.5 * u, h / 2 - 1.8 * u, Math.min(lw, w - 9 * u) * 0.7, clamp01((fxQ(p, t) - f.t0 - 0.35) / 0.35), T.acc, u, seed);
+          fxTape(ctx, -w * 0.32, -h / 2, 11 * u, 3 * u, -0.5, T); fxSparks(ctx, w, h, fxQ(p, t), f.t0, T.acc, u, seed);
           if (cta) { const b = Math.sin((t - f.t0) * 6) * 1.2 * u; ctx.save(); ctx.translate(w / 2 - 6 * u, h / 2 + 5 * u + b); ctx.strokeStyle = T.acc; ctx.lineWidth = 1.1 * u; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(0, -4 * u); ctx.lineTo(0, 4 * u); ctx.moveTo(-3 * u, 1.2 * u); ctx.lineTo(0, 4 * u); ctx.lineTo(3 * u, 1.2 * u); ctx.stroke(); ctx.restore(); }
         });
       } else if (f.k === "quote") {
@@ -2928,9 +3309,9 @@ async function aiEffects(p) {
   if (caps.length < 2) throw new Error("ซับน้อยเกินไปสำหรับใส่เอฟเฟกต์");
   const lines = caps.map((c, i) => ({ i, s: +c.start.toFixed(1), e: +c.end.toFixed(1), text: c.text }));
   const final = (p.edit && p.edit.on) ? keptDuration(p) : p.duration || caps[caps.length - 1].end;
-  const want = Math.max(2, Math.min(14, Math.round(final / 9)));
+  const want = Math.max(2, Math.min(8, Math.round(final / 13)));
   const sys = `You are the motion designer of a professional short-video team (${LEN[p.lang] || "Thai"} talking-head clips: tarot readings and small-business explainers).
-Read the subtitle lines (index, start, end, text) and place about ${want} on-screen effects that make the story clearer and match its emotion. Leave breathing room: never overlap two effects, keep at least one line between effects, never cover the first second.
+Read the subtitle lines (index, start, end, text) and place at most ${want} on-screen effects (fewer is better: only the moments that really matter) that make the story clearer and match its emotion. Leave breathing room: never overlap two effects, keep at least one line between effects, never cover the first second.
 Effect kinds:
 - "label": short sticker title for a new topic or key idea (text <= 22 chars, optional "sub" kicker <= 14 chars such as "ข้อ 1" or "สำคัญ").
 - "quote": the key sentence or advice worth remembering, rewritten short (<= 40 chars).
@@ -2942,7 +3323,8 @@ Effect kinds:
 - "spot": spotlight on the speaker for a serious warning or emotional moment; "text" <= 18 chars.
 - "cta": only at the end when the speaker invites comments, follows or bookings; "text" <= 24 chars.
 - "flash": a quick paper-white flash to mark a jump to a new section (no text). Use sparingly.
-Write every text in the language of the clip, in your own concise words (do not paste whole lines), Arabic numerals only. Vary the kinds; pick the kind by meaning and mood.
+${p.fxTheme === "ss59" ? `Brand characters (paper stickers) can pop up beside an effect: add "who" = "emma" (the host, use her most) with "pose" one of point|think|no|yes|cards|show|pray|wave chosen by the mood (no = warning or wrong way, yes = right way, think = question, point = key fact, cards/show = tarot reading, pray = blessing, wave = greeting or ending), or a deity "shiva"|"ganesha"|"lakshmi"|"uma"|"kali"|"naga"|"garuda" only when the line talks about that deity. Use a character on about half of the effects, never on "headline", "rec", "spot" or "flash".
+` : ""}Write every text in the language of the clip, in your own concise words (do not paste whole lines), Arabic numerals only. Vary the kinds; pick the kind by meaning and mood.
 Return JSON: {"fx":[{"k":"label","from":3,"to":4,"text":"...","sub":"...","items":[]}]} where from/to are line indexes the effect stays on screen for.`;
   const out = await chatJSON([{ role: "system", content: sys }, { role: "user", content: JSON.stringify({ lines }) }], { maxTok: 4000 });
   const fx = []; let lastEnd = -1;
@@ -2955,14 +3337,21 @@ Return JSON: {"fx":[{"k":"label","from":3,"to":4,"text":"...","sub":"...","items
     if (x.k === "list" && items.length < 2) continue;
     if (x.k === "list" || x.k === "vs") { const lastIt = items[items.length - 1]; if (lastIt) t1 = Math.max(t1, Math.min(lastIt.t + 2.2, t0 + 9)); }
     if (x.k !== "flash" && x.k !== "list" && x.k !== "vs" && !String(x.text || "").trim() && x.k !== "rec") continue;
-    fx.push({ id: uid(), k: x.k, t0: +t0.toFixed(2), t1: +t1.toFixed(2), text: String(x.text || "").trim().slice(0, 80), sub: String(x.sub || "").trim().slice(0, 40), items });
+    const who = FX_WHO.includes(x.who) && !["headline", "rec", "spot", "flash"].includes(x.k) ? x.who : "", pose = FX_POSE.includes(x.pose) ? x.pose : "point";
+    fx.push({ id: uid(), k: x.k, t0: +t0.toFixed(2), t1: +t1.toFixed(2), text: String(x.text || "").trim().slice(0, 80), sub: String(x.sub || "").trim().slice(0, 40), items, who, pose });
     lastEnd = t1;
   }
   if (!fx.length) throw new Error("AI ยังไม่ได้เลือกเอฟเฟกต์ ลองกดใหม่อีกครั้ง");
+  /* paper wipes over the biggest removed retakes, spaced out */
+  if (p.edit && p.edit.on) { let lastK = -99; const fin = keptDuration(p);
+    for (const c of p.edit.cuts.filter(c => c[1] - c[0] >= 1.5 && c[0] > 1 && c[1] < (p.duration || 1e9) - 0.5).sort((a, b) => a[0] - b[0])) {
+      const k = keptBefore(p, c[0]); if (k - lastK < 14 || fin - k < 3 || fx.some(f => Math.abs(keptBefore(p, f.t0) - k) < 1.2)) continue;
+      fx.push({ id: uid(), k: "wipe", cut: [c[0], c[1]], t0: c[0] - 0.4, t1: c[0] - 0.4, text: "", sub: "", items: [] }); lastK = k; } }
+  fx.sort((a, b) => a.t0 - b.t0);
   p.fx = fx;
   /* one sound per effect, unless a sound is already there */
   p.sfx = p.sfx.filter(s => s.src !== "fx");
-  for (const f of fx) { const key = FX_SFX[f.k]; if (key && !p.sfx.some(s => Math.abs(s.t - f.t0) < 0.35)) p.sfx.push({ id: uid(), key: "b:" + key, t: f.t0, vol: key === "boom" ? 0.55 : 0.75, src: "fx" }); }
+  for (const f of fx) { const key = FX_SFX[f.k]; if (key && !p.sfx.some(s => Math.abs(s.t - f.t0) < 0.35)) p.sfx.push({ id: uid(), key: "b:" + key, t: f.k === "wipe" ? +(f.cut[0] - 0.12).toFixed(2) : f.t0, vol: key === "boom" ? 0.3 : 0.42, src: "fx" }); }
   p.sfx.sort((a, b) => a.t - b.t);
   return fx.length;
 }
@@ -3011,16 +3400,36 @@ async function aiAutoEdit(p, opt = {}) {
     if (/^[\d]+$/.test(a) || /^(หนึ่ง|สอง|สาม|สี่|ห้า|1|2|3|4|5)+$/.test(a) || /^(คัท|cut|เอาใหม่|ไม่ได้|อ่ะ|อะ)+$/.test(a)) { pre.push({ i, why: "offscript" }); return; }
     for (let j = i + 1; j < caps.length && j <= i + 4 && caps[j].start - c.end < 25; j++) { const b = norm(caps[j].text); if (a.length >= 4 && b.length >= a.length * 0.6 && (dice(a, b) >= 0.55 || (a.length >= 6 && b.startsWith(a.slice(0, 6)) && b.length >= a.length))) { pre.push({ i, why: "retake" }); return; } }
   });
+  const allW = ((p.raw && p.raw.words) || []).filter(w => isFinite(w.start) && isFinite(w.end) && String(w.word || "").trim());
+  const CNT = /^(\d{1,4}|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five|สามสี่|สามสองหนึ่ง|หนึ่งสองสาม)$/i, SEQ = /^(12|123|1234|21|321|4321|34|234|54321)$/;
+  const countIns = [];
+  for (let i = 0; i < allW.length; i++) {
+    const a = norm(allW[i].word); if (!CNT.test(a)) continue;
+    let j = i; while (j + 1 < allW.length && CNT.test(norm(allW[j + 1].word)) && allW[j + 1].start - allW[j].end < 0.9) j++;
+    const gapB = i ? allW[i].start - allW[i - 1].end : 9, gapA = j + 1 < allW.length ? allW[j + 1].start - allW[j].end : 9;
+    if (j > i || SEQ.test(a) || /สามสี่|สามสองหนึ่ง|หนึ่งสองสาม/.test(a) || (gapB > 0.5 && gapA > 0.5)) countIns.push([allW[i].start - 0.06, allW[j].end + 0.12]);
+    i = j;
+  }
+  /* a count-in means "take again": earlier lines that the new take repeats are dropped */
+  const restarts = [];
+  for (const [cs, ce] of countIns) {
+    const after = caps.map((c, i) => i).filter(i => caps[i].start >= ce - 0.2).slice(0, 6), before = caps.map((c, i) => i).filter(i => caps[i].end <= cs + 0.3);
+    const bi = before.length ? before[before.length - 1] : -1; restarts.push(bi);
+    for (let k = before.length - 1; k >= 0 && k >= before.length - 6; k--) { const i = before[k], a = norm(caps[i].text); if (!a) continue;
+      if (after.some(j => dice(a, norm(caps[j].text)) >= 0.35)) { if (!pre.some(d => d.i === i)) pre.push({ i, why: "retake" }); } else if (k < before.length - 1) break; }
+  }
+  caps.forEach((c, i) => { const ws = allW.filter(w => w.start >= c.start - 0.05 && w.start < c.end + 0.02); if (ws.length && ws.every(w => countIns.some(r => w.start >= r[0] - 0.01 && w.end <= r[1] + 0.01)) && !pre.some(d => d.i === i)) pre.push({ i, why: "offscript" }); });
   const cache = opt.reuse && p.edit && p.edit.ai;
   if (cache) { drop = cache.drop.filter(d => caps[d.i]); emph = cache.emph.filter(i => caps[i]); }
   else if (opt.ai !== false) {
     const sys = `You are the editor of short talking-head videos for social media (${LEN[p.lang] || "Thai"}). The input is the raw recording as numbered subtitle lines with start/end seconds, in order.
 Decide which lines to REMOVE so the final video plays as one clean, natural take:
 - "retake": an earlier attempt of something that is said again later (same sentence or idea restarted, stumbled, cut off). Always keep the LAST complete attempt, drop the earlier ones.
-- "offscript": talk that is not part of the content: counting in ("3 4", "หนึ่ง สอง สาม"), "cut", talking to the camera person, asking what was said, someone else giving instructions, testing the mic, laughing breaks, "ไม่ได้ เอาใหม่".
+- "offscript": talk that is not part of the content: counting in ("3 4", "3 2 1", "สาม สี่", "หนึ่ง สอง สาม"), "cut", talking to the camera person, asking what was said, someone else giving instructions, testing the mic, laughing breaks, "ไม่ได้ เอาใหม่".
 - "filler": lines that only contain hesitation sounds (เอ่อ อ่า อืม) or nothing meaningful.
 Never drop content just because it is short. When unsure, keep it.
 Also pick "emph": up to 20% of the kept lines that carry the key point (the question, the answer, the punchline) for a punch-in zoom.
+The speaker counted in (e.g. "3 4", "3 2 1", "สาม สี่") right after these line indexes, which means she restarted there: the attempt just before each count-in is usually a failed take that must be dropped, and the count-in itself is always dropped: ${JSON.stringify(restarts)}
 Lines already flagged by a simple check (you may add more, and you may keep a flagged line if it is clearly needed): ${JSON.stringify(pre)}
 Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
     let out = {};
@@ -3041,7 +3450,7 @@ Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
   caps.forEach((c, i) => {
     if (dropped.has(i)) return;
     const ws = words.filter(w => w.start >= c.start - 0.05 && w.start < c.end + 0.02);
-    if (ws.length) ws.filter(w => !FILL.test(norm(w.word))).forEach(w => keeps.push([w.start, Math.min(Math.max(w.end, w.start + 0.08), w.start + 0.75)])); /* speech engines often stretch a word over the pause after it */ else keeps.push([c.start, c.end]);
+    if (ws.length) ws.filter(w => !FILL.test(norm(w.word)) && !countIns.some(r => w.start >= r[0] - 0.01 && w.end <= r[1] + 0.01)).forEach(w => keeps.push([w.start, Math.min(Math.max(w.end, w.start + 0.08), w.start + 0.75)])); /* speech engines often stretch a word over the pause after it */ else keeps.push([c.start, c.end]);
   });
   keeps.sort((a, b) => a[0] - b[0]);
   const pace = opt.pace || (p.edit && p.edit.pace) || "tight";
@@ -3100,7 +3509,7 @@ async function aiEmphasis(p, withSfx) {
     picks.sort((a, b) => a.c.start - b.c.start).forEach(({ c, w, s }) => {
       const t = wordTime(p, c, w);
       if (t - last < 2.2 || p.sfx.some(x => Math.abs(x.t - t) < 1)) return;
-      p.sfx.push({ id: uid(), key: "b:" + s, t, vol: s === "boom" ? 0.6 : 0.8, src: "kw" }); last = t;
+      p.sfx.push({ id: uid(), key: "b:" + s, t, vol: s === "boom" ? 0.3 : 0.45, src: "kw" }); last = t;
     });
     p.sfx.sort((a, b) => a.t - b.t);
   }
@@ -4255,7 +4664,7 @@ async function viewEditor(id) {
   const grow = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
   const WHY = { retake: "เทคซ้ำ", offscript: "นอกบท", filler: "คำติดปาก", silence: "เงียบ", manual: "ตัดเอง" };
   const capCut = c => { if (!p.edit || !p.edit.on) return ""; const m = (c.start + c.end) / 2; if (!cutAt(p, m) || !cutAt(p, c.start + 0.02)) return ""; const d = (p.edit.dropped || []).find(x => x.id === c.id); return d ? (WHY[d.why] || "ตัดออก") : "ตัดออก"; };
-  const fxChips = c => (p.fx || []).filter(f => f.t0 >= c.start - 0.01 && f.t0 < c.end).map(f => `<button type="button" class="mini fxchip" data-fx="${f.id}">✨ ${FX_KINDS[f.k]}${f.text ? ": " + esc(f.text) : ""}</button>`).join("");
+  const fxChips = c => (p.fx || []).filter(f => f.k !== "wipe" && f.t0 >= c.start - 0.01 && f.t0 < c.end).map(f => `<button type="button" class="mini fxchip" data-fx="${f.id}">✨ ${FX_KINDS[f.k]}${f.text ? ": " + esc(f.text) : ""}</button>`).join("");
   const rowHTML = c => {
     const fx = p.sfx.filter(x => x.t >= c.start && x.t < c.end).map(x => sfxName(x.key)).join(", ");
     return `<button type="button" class="ln-t mono" data-open aria-label="ตั้งค่าบรรทัดเวลา ${fmtT(c.start)}">${fmtT(c.start)}</button><textarea class="ln-in" data-f="text" rows="1" enterkeyhint="enter" aria-label="ข้อความซับ" placeholder="พิมพ์ซับ…">${esc(c.text)}</textarea>${p.tr.lang ? `<textarea class="ln-in tr" data-f="tr" rows="1" aria-label="คำแปล" placeholder="คำแปลภาษา${LNAME[p.tr.lang]}">${esc(c.tr || "")}</textarea>` : ""}${c.hl && c.hl.length ? `<span class="ln-sfx">เน้น: ${esc(c.hl.join(", "))}</span>` : ""}${fx ? `<span class="ln-sfx">♪ ${esc(fx)}</span>` : ""}`;
@@ -5015,14 +5424,17 @@ async function viewEditor(id) {
       frame(); rec.start(1000); await ac.resume(); await v.play();
       let rafE = 0, jumping = false;
       const total = keptDuration(p) || v.duration;
+      let fading = false;
+      const fadeTo = (g, tc) => { try { og.gain.cancelScheduledValues(ac.currentTime); og.gain.setTargetAtTime(g, ac.currentTime, tc); } catch {} };
       const jump = c => { /* hop over a removed piece with the recorder paused, so the cut is seamless */
         jumping = true; try { rec.pause(); } catch {} v.pause();
         v.currentTime = c[1] + 0.005;
-        once(v, "seeked").then(() => { frame(); return v.play(); }).then(() => { try { rec.resume(); } catch {} jumping = false; }).catch(() => { jumping = false; });
+        once(v, "seeked").then(() => { frame(); return v.play(); }).then(() => { try { rec.resume(); } catch {} fadeTo(p.audio.orig, 0.012); fading = false; jumping = false; }).catch(() => { jumping = false; });
       };
       const tick = () => {
         if (!jumping) {
           const c = cutAt(p, v.currentTime + 0.02);
+          if (!c && !fading && cutAt(p, v.currentTime + 0.07)) { fading = true; fadeTo(0, 0.012); }
           if (c) { if (c[1] >= v.duration - 0.05) { job.done && job.done(); return; } jump(c); }
           else { frame(); schedule(); }
         }
