@@ -368,7 +368,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (12) · ลากซับง่ายขึ้น + เต็มจอจริง</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (13) · ลบฉากแล้วกลับเป็นหน้าคุณ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -4293,9 +4293,15 @@ async function viewEditor(id) {
     else if (a === "show") { sc.show = sc.show === false; changed(); renderScenes(); seekTo(sc.start); draw(); }
     else if (a === "del") {
       if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "แตะอีกครั้งเพื่อลบ"; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "ลบฉาก"; } }, 3000); return; }
-      const list = p.split.scenes, i = list.indexOf(sc); list.splice(i, 1);
-      if (list[i - 1]) list[i - 1].end = sc.end; else if (list[i]) list[i].start = sc.start;
-      changed(); renderScenes();
+      const list = p.split.scenes, i = list.indexOf(sc);
+      if (p.split.mode === "split") { list.splice(i, 1); if (list[i - 1]) list[i - 1].end = sc.end; else if (list[i]) list[i].start = sc.start; }
+      else {
+        /* the time goes back to your own face; neighbouring scenes keep their timing (so their animation stays in sync) */
+        list.splice(i, 1, { id: uid(), start: sc.start, end: sc.end, type: "big", show: false, gap: true, title: "", items: [], media: null });
+        for (let k = list.length - 1; k > 0; k--) if (list[k].gap && list[k - 1].gap) { list[k - 1].end = list[k].end; list.splice(k, 1); }
+      }
+      try { addTransSfx(p); } catch {}
+      changed(); renderScenes(); seekTo(sc.start); draw(); toast("ลบฉากแล้ว ช่วงนั้นจะเห็นหน้าคุณแทน · กด ↶ เพื่อเอาคืน", 2600);
     }
   });
   $("#scenes").addEventListener("change", e => { const inp = e.target.closest('input[data-s="file"]'); if (!inp) return; const sc = scOf(inp), f = inp.files[0]; inp.value = ""; attachMedia(sc, f); });
