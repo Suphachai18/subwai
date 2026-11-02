@@ -364,7 +364,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (5) · ภาพแอนิเมชันประกอบ 22 แบบ</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (6) · คำแปลอ่านชัด ปรับสีและขอบได้</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1078,12 +1078,12 @@ function drawCaption(ctx, W, H, cap, p, t) {
   if (!blocks.length) return;
   ctx.save();
   ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-  const font = px => `${st.weight} ${px}px "${st.font}", ${FALLBACK}`;
+  const font = (px, prim = true) => `${prim ? st.weight : Math.min(st.weight, 600)} ${px}px "${st.font}", ${FALLBACK}`;
 
   // layout rows of words
   const rows = [];
   for (const b of blocks) {
-    ctx.font = font(b.px);
+    ctx.font = font(b.px, b.prim);
     for (const ln of wrapLines(ctx, b.text, W * 0.88, b.lang)) {
       const toks = tokens(ln, b.lang).map(s => ({ s, w: ctx.measureText(s).width, sp: !s.trim() }));
       rows.push({ b, toks, w: toks.reduce((a, x) => a + x.w, 0), px: b.px, lh: b.px * 1.42 });
@@ -1154,7 +1154,7 @@ function drawCaption(ctx, W, H, cap, p, t) {
     return { show: tk.s };
   };
   rows.forEach(rw => {
-    ctx.font = font(rw.px);
+    ctx.font = font(rw.px, rw.b.prim);
     const yy = rw.y + rw.px * 0.04;
     let x = cx - rw.w / 2;
     const items = rw.toks.map(tk => { const it = { tk, x, ...(tk.sp ? { show: "" } : state(tk)) }; if (tk.kw && !it.color && !it.hbox) it.color = st.kwColor || "#FFE14D";
@@ -1167,11 +1167,11 @@ function drawCaption(ctx, W, H, cap, p, t) {
     items.forEach(it => { if (it.hbox && it.show) withPop(it, () => { const p2 = rw.px * 0.14; ctx.fillStyle = st.hl; rrect(ctx, it.x - p2, rw.y - rw.px * 0.66, it.tk.w + p2 * 2, rw.px * 1.32, rw.px * 0.2); ctx.fill(); }); });
     if (st.dshadow) {
       const off = rw.px * 0.075;
-      ctx.fillStyle = st.dshadow; ctx.strokeStyle = st.dshadow; ctx.lineWidth = rw.px * st.stroke * 0.04;
+      ctx.fillStyle = st.dshadow; ctx.strokeStyle = st.dshadow; ctx.lineWidth = rw.px * (rw.b.prim ? st.stroke : (st.stroke2 != null ? st.stroke2 : st.stroke * 0.5)) * 0.04;
       items.forEach(it => { if (it.show && !it.hbox) withPop(it, () => { if (st.stroke > 0) ctx.strokeText(it.show, it.x + off, yy + off); ctx.fillText(it.show, it.x + off, yy + off); }); });
     }
     if (st.stroke > 0) {
-      ctx.strokeStyle = st.strokeColor; ctx.lineWidth = rw.px * st.stroke * 0.04;
+      ctx.strokeStyle = st.strokeColor; ctx.lineWidth = rw.px * (rw.b.prim ? st.stroke : (st.stroke2 != null ? st.stroke2 : st.stroke * 0.5)) * 0.04;
       items.forEach(it => { if (it.show && !it.hbox) withPop(it, () => ctx.strokeText(it.show, it.x, yy)); });
     }
     items.forEach(it => {
@@ -3031,8 +3031,9 @@ async function viewEditor(id) {
             <div class="row"><label class="sw"><input type="checkbox" id="sShadow"> เงานุ่ม</label></div>
             <div class="row"><label class="sw"><input type="checkbox" id="sGlow"> แสงเรือง</label><input type="color" id="sGlowC" aria-label="สีแสงเรือง"><label class="sw" style="margin-left:12px"><input type="checkbox" id="sDsh"> เงาทึบ</label><input type="color" id="sDshC" aria-label="สีเงาทึบ"></div>
           </div></details>
-          <details class="box" id="tr2Box"><summary>ภาษาที่สอง</summary><div class="in">
+          <details class="box" id="tr2Box" open><summary>คำแปล (ภาษาที่สอง): สี ขนาด ขอบ</summary><div class="in">
             <div class="ctl"><label for="sSize2">ขนาด</label><input type="range" id="sSize2" min="40" max="110" step="1"><output id="oSize2"></output></div>
+            <div class="ctl"><label for="sStroke2">ขอบคำแปล</label><input type="range" id="sStroke2" min="0" max="10" step="0.5"><output id="oStroke2"></output></div>
             <div class="field"><span class="lab">สีคำแปล</span>${swatches("color2")}</div>
             <div class="seg" id="sOrder"><button type="button" data-v="below">คำแปลอยู่ใต้</button><button type="button" data-v="above">คำแปลอยู่บน</button></div>
           </div></details>
@@ -3660,6 +3661,7 @@ async function viewEditor(id) {
     $("#sBox").checked = s.box; $("#sBoxO").value = s.boxOpacity; $("#sBoxC").value = s.boxColor; $("#sShadow").checked = s.shadow;
     $("#sGlow").checked = !!s.glow; if (s.glow) $("#sGlowC").value = s.glow; $("#sDsh").checked = !!s.dshadow; if (s.dshadow) $("#sDshC").value = s.dshadow;
     $("#sSize2").value = s.size2; $("#oSize2").textContent = s.size2 + "%";
+    { const v = s.stroke2 != null ? s.stroke2 : s.stroke * 0.5; $("#sStroke2").value = v; $("#oStroke2").textContent = v ? v : "ไม่มี"; }
     $$("#sOrder button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === s.order));
     $$("#lookRow .look").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === s.look));
     const w = fontW(s.font), bold = s.weight >= 600;
@@ -3680,13 +3682,13 @@ async function viewEditor(id) {
   });
   const bindS = (sel, key, conv = v => v, ev = "input") => $(sel).addEventListener(ev, e => {
     const el = e.target; p.style[key] = conv(el.type === "checkbox" ? el.checked : el.value);
-    if (!["size", "pos", "size2", "order", "kw", "kwPop", "kwBig"].includes(key)) p.style.look = "";
+    if (!["size", "pos", "size2", "order", "kw", "kwPop", "kwBig", "stroke2", "color2"].includes(key)) p.style.look = "";
     syncStyleUI(); changed({ typing: el.type === "range" });
   });
   bindS("#sSize", "size", Number); bindS("#sPos", "pos", Number); bindS("#sKw", "kw"); bindS("#sKwPop", "kwPop"); bindS("#sKwBig", "kwBig");
   bindS("#sStroke", "stroke", Number); bindS("#sStrokeC", "strokeColor");
   bindS("#sBox", "box"); bindS("#sBoxO", "boxOpacity", Number); bindS("#sBoxC", "boxColor"); bindS("#sShadow", "shadow");
-  bindS("#sSize2", "size2", Number);
+  bindS("#sSize2", "size2", Number); bindS("#sStroke2", "stroke2", Number);
   const fxToggle = (chk, col, key) => { const f = () => { p.style[key] = $(chk).checked ? $(col).value : ""; p.style.look = ""; syncStyleUI(); changed(); }; $(chk).onchange = f; $(col).oninput = () => { $(chk).checked = true; f(); }; };
   fxToggle("#sGlow", "#sGlowC", "glow"); fxToggle("#sDsh", "#sDshC", "dshadow");
   $$("#sOrder button").forEach(b => b.onclick = () => { p.style.order = b.dataset.v; syncStyleUI(); changed(); });
