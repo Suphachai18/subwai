@@ -68,7 +68,7 @@ textarea.input{min-height:72px;resize:vertical}
 .notice{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 16px;border:1px solid var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 8%,var(--surface));margin-bottom:18px}
 .notice p{margin:0;flex:1;min-width:200px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
-.pcard{display:grid;grid-template-rows:auto 1fr;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden;cursor:pointer;text-align:left;padding:0}
+.pwrap{position:relative} .pdel{position:absolute;top:8px;right:8px;z-index:2;width:38px;height:38px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:16px;cursor:pointer;display:grid;place-items:center} .pcard{display:grid;grid-template-rows:auto 1fr;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden;cursor:pointer;text-align:left;padding:0}
 .pcard:hover{border-color:var(--muted)}
 .thumb{aspect-ratio:16/10;background:var(--raise);display:grid;place-items:center;overflow:hidden;position:relative}
 .thumb img{width:100%;height:100%;object-fit:cover}
@@ -368,7 +368,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (15) · ซิงก์ Google Drive พร้อมใช้</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (16) · ลบโปรเจกต์จากหน้าแรกได้</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2958,10 +2958,10 @@ async function viewHome() {
       <div class="dcard"><img src="${d.thumb || ""}" alt=""><div class="meta"><b>${esc(d.name || d.fileName || "วิดีโอ")}</b><span class="hint">${d.raw ? "ถอดเสียงเสร็จแล้ว รอทำต่อ" : "เลือกวิดีโอไว้แล้ว ยังไม่ได้สร้างซับ"}${d.duration ? " · " + fmtDur(d.duration) : ""}</span></div>
       <button class="btn primary small" data-resume="${d.id}">ทำต่อ</button><button class="btn small" data-ddel="${d.id}" aria-label="ลบงานค้าง">ลบ</button></div>`).join("")}</div></div>` : ""}
     ${projects.length ? `<div class="grid">${projects.map(p => `
-      <button class="pcard" data-id="${p.id}">
+      <div class="pwrap"><button class="pdel" data-pdel="${p.id}" aria-label="ลบโปรเจกต์ ${esc(p.name)}" title="ลบโปรเจกต์">🗑</button><button class="pcard" data-id="${p.id}">
         <div class="thumb">${p.thumb ? `<img src="${p.thumb}" alt="">` : ""}<span class="dur mono">${fmtDur(p.duration)}</span></div>
         <div class="meta"><b>${esc(p.name)}</b><span class="hint">${p.captions.length} บรรทัด${p.tr && p.tr.lang ? " · " + (LNAME[p.lang] || "") + "+" + LNAME[p.tr.lang] : ""}${p.sfx && p.sfx.length ? " · เอฟเฟกต์ " + p.sfx.length : ""} · ${new Date(p.createdAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span></div>
-      </button>`).join("")}</div>`
+      </button></div>`).join("")}</div>`
       : drafts.length ? "" : `<div class="empty"><span class="sample">ซับขึ้นแบบนี้ อ่านง่าย<small>Subtitles look like this</small></span><p class="muted" style="margin:0;max-width:42ch">ยังไม่มีโปรเจกต์ เลือกวิดีโอจากเครื่อง AI จะถอดเสียง แปลเป็นภาษาที่สองได้ ใส่ซาวด์เอฟเฟกต์ แล้วดาวน์โหลดวิดีโอที่ฝังซับแล้ว</p><button class="btn primary" id="newp2">สร้างโปรเจกต์แรก</button></div>`}
   `;
   $("#newp").onclick = () => setView(viewNew);
@@ -2973,6 +2973,9 @@ async function viewHome() {
   const n2 = $("#newp2"); if (n2) n2.onclick = () => setView(viewNew);
   const nk = $("#nkey"); if (nk) nk.onclick = openSettings;
   $$(".pcard").forEach(b => b.onclick = () => setView(() => viewEditor(b.dataset.id)));
+  $$("[data-pdel]").forEach(b => b.onclick = async e => { e.stopPropagation();
+    const p = all.find(x => x.id === b.dataset.pdel); if (!confirm(`ลบโปรเจกต์ "${p ? p.name : ""}"?\nวิดีโอ ซับ และกราฟิกของงานนี้จะถูกลบ${Cloud.enabled() ? " (รวมใน Google Drive ด้วย)" : ""} กู้คืนไม่ได้`)) return;
+    await DB.del(b.dataset.pdel); toast("ลบโปรเจกต์แล้ว"); setView(viewHome); });
   $$("[data-resume]").forEach(b => b.onclick = () => setView(() => viewNew(b.dataset.resume)));
   $$("[data-ddel]").forEach(b => b.onclick = async () => { if (!confirm("ลบงานที่ค้างไว้นี้?")) return; await DB.del(b.dataset.ddel); setView(viewHome); });
 }
