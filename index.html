@@ -96,7 +96,10 @@ input.input,select.input,textarea.input{max-width:100%}
 .drop .up{width:56px;height:56px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center}
 .fileinfo{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 .fileinfo img{width:80px;height:56px;object-fit:cover;border-radius:6px;background:var(--raise)}
-.fileinfo div{min-width:0;flex:1}
+.fileinfo div{min-width:0;flex:1} .fileinfo .col-btns{flex:0 0 auto;display:grid;gap:6px}
+.clips{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)} .clips ol{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.clips li{display:flex;align-items:center;gap:6px;padding:6px 4px;border-bottom:1px solid var(--line)} .clips .cnum{width:22px;text-align:center;color:var(--muted)} .clips .cn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:grid}
+.clips .row{gap:8px;justify-content:space-between} .jbar{height:6px;border-radius:3px;background:var(--raise);overflow:hidden} .jbar i{display:block;height:100%;width:0;background:var(--fg);transition:width .2s}
 #fsave{display:block;margin-top:2px}
 .fileinfo b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
@@ -146,7 +149,7 @@ input.input,select.input,textarea.input{max-width:100%}
 .cloudchip{min-height:34px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
 .cloudchip.ok{color:var(--ok)} .cloudchip.warn{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,var(--surface))} .cloudchip.busy{color:var(--muted)}
 .aibar{display:grid;gap:10px;padding:12px;border:1px solid var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
-.cutbox{display:grid;gap:8px;margin-bottom:12px} .cutbox .row{flex-wrap:wrap;gap:8px} .ln.cut .ln-in{opacity:.45;text-decoration:line-through} .ln.cut .ln-t::after{content:" ✂";} .aibar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.cutbox{display:grid;gap:8px;margin-bottom:12px} .fxrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:6px} .fxrow select{width:auto;min-width:0;max-width:44vw} .fxrow .btn{white-space:normal;line-height:1.25} .mini.fxchip{color:var(--fg);background:var(--raise);border-radius:999px;margin:2px 4px 0 0;text-align:left} .ln .mini[data-cutline]{opacity:.55} .cutbox .row{flex-wrap:wrap;gap:8px} .ln.cut .ln-in{opacity:.45;text-decoration:line-through} .ln.cut .ln-t::after{content:" ✂";} .aibar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .aibar,.aibar>*{min-width:0;max-width:100%}
 .aibar .btn{white-space:normal;text-align:center;line-height:1.3;padding-block:8px}
 .ls-acts{flex-wrap:wrap}
@@ -368,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (19) · แก้ Gemini 404 + ตัดต่ออัตโนมัติ</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (20) · รวมหลายคลิป + เอฟเฟกต์อัตโนมัติ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -521,6 +524,8 @@ function normalize(p) {
   if (p.split.fx == null) p.split.fx = 50;
   if (p.split.fy == null) p.split.fy = p.height > p.width ? 32 : 50;
   if (p.split.zoom == null) p.split.zoom = 1;
+  p.fx = p.fx || [];
+  p.fxTheme = p.fxTheme || settings.fxTheme || "ss59";
   return p;
 }
 
@@ -1322,6 +1327,7 @@ function renderFrame(ctx, W, H, v, p, t, media) {
     const zm = zoomAt(p, t);
     try { if (zm) { ctx.save(); ctx.translate(W * zm.cx, H * zm.cy); ctx.scale(zm.z, zm.z); ctx.translate(-W * zm.cx, -H * zm.cy); } drawVideo(ctx, W, H, v, p, null); if (zm) ctx.restore(); } catch { if (zm) ctx.restore(); }
     if (sp && sp.on) { try { drawSceneLayer(ctx, p, W, H, t, media, v); } catch (e) { console.error(e); } }
+    try { drawFx(ctx, W, H, p, t); } catch (e) { console.error(e); }
   }
   const c = captionAt(p.captions, t); if (c) { try { drawCaption(ctx, W, H, c, p, t); } catch (e) { console.error(e); } }
 }
@@ -2632,18 +2638,353 @@ function wordTime(p, c, w) {
   return +(c.start + (c.end - c.start) * pre / tot).toFixed(2);
 }
 const EMPH_SFX = { hit: "punchy default for an important word", pop: "light or fun word", sparkle: "benefit, beauty or wow", ding: "tip or idea", kaching: "price, money or saving", whoosh: "speed, change or movement", boom: "big reveal or shocking fact (use rarely)" };
+/* ================= join several camera clips into one video =================
+   Same camera settings (the usual case for clips shot on one phone): copy the compressed frames into one MP4, no quality loss, takes seconds.
+   Different settings or formats: play them one after another into a recorder (takes as long as the clips). */
+const MP4MUX_URL = "https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.js";
+const loadScript = src => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("โหลดตัวรวมคลิปไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่")); document.head.appendChild(s); });
+async function mp4Index(file) {
+  const rd = async (a, b) => new Uint8Array(await file.slice(a, b).arrayBuffer());
+  let pos = 0, moov = null;
+  while (pos + 8 <= file.size) {
+    const h = await rd(pos, pos + 16), dv = new DataView(h.buffer); let size = dv.getUint32(0);
+    const type = String.fromCharCode(h[4], h[5], h[6], h[7]);
+    if (size === 1) size = Number(dv.getBigUint64(8)); else if (size === 0) size = file.size - pos;
+    if (size < 8) break;
+    if (type === "moov") { moov = await rd(pos, pos + size); break; }
+    pos += size;
+  }
+  if (!moov) throw new Error("NOMP4");
+  const B = moov, dv = new DataView(B.buffer, B.byteOffset, B.byteLength);
+  const u32 = a => dv.getUint32(a), i32 = a => dv.getInt32(a), u16 = a => dv.getUint16(a), fourcc = a => String.fromCharCode(B[a], B[a + 1], B[a + 2], B[a + 3]);
+  const kids = (a, b) => { const out = []; let p = a; while (p + 8 <= b) { let s = u32(p), hl = 8; const t = fourcc(p + 4); if (s === 1) { s = Number(dv.getBigUint64(p + 8)); hl = 16; } else if (s === 0) s = b - p; if (s < 8 || p + s > b) break; out.push({ t, s: p, a: p + hl, b: p + s }); p += s; } return out; };
+  const one = (box, ...path) => { let cur = box; for (const t of path) { cur = cur && kids(cur.a, cur.b).find(k => k.t === t); } return cur; };
+  const scan = (a, b, t) => { for (let p = a; p + 4 <= b; p++) if (B[p] === t.charCodeAt(0) && fourcc(p) === t) return p - 4; return -1; };
+  const root = { a: (u32(0) === 1 ? 16 : 8), b: B.length }, tracks = [];
+  for (const trak of kids(root.a, root.b).filter(k => k.t === "trak")) {
+    const hdlr = one(trak, "mdia", "hdlr"), mdhd = one(trak, "mdia", "mdhd"), stbl = one(trak, "mdia", "minf", "stbl"), tkhd = one(trak, "tkhd");
+    if (!hdlr || !mdhd || !stbl) continue;
+    const kind = fourcc(hdlr.a + 8); if (kind !== "vide" && kind !== "soun") continue;
+    const ts = B[mdhd.a] === 1 ? u32(mdhd.a + 20) : u32(mdhd.a + 12);
+    const stsd = one(stbl, "stsd"), ent = stsd && kids(stsd.a + 8, stsd.b)[0]; if (!ent) continue;
+    const T = { kind, ts, fmt: ent.t, samples: [] };
+    if (kind === "vide") {
+      T.w = u16(ent.s + 32); T.h = u16(ent.s + 34);
+      const cfg = kids(ent.s + 86, ent.b).find(k => k.t === "avcC" || k.t === "hvcC"); if (!cfg) continue;
+      T.codec = cfg.t === "avcC" ? "avc" : "hevc"; T.desc = B.slice(cfg.a, cfg.b);
+      if (tkhd) { const m = tkhd.a + (B[tkhd.a] === 1 ? 52 : 40), a = i32(m), b = i32(m + 4); const r = Math.round(Math.atan2(b, a) * 180 / Math.PI); T.rot = ((r % 360) + 360) % 360; }
+    } else {
+      const e = scan(ent.a, ent.b, "esds"); if (e < 0) continue;
+      let p = e + 12; const end = Math.min(ent.b, e + u32(e));
+      const len = () => { let n = 0, c; do { c = B[p++]; n = (n << 7) | (c & 127); } while (c & 128 && p < end); return n; };
+      while (p < end) { const tag = B[p++], n = len(); if (tag === 3) { const fl = B[p + 2]; p += 3 + (fl & 128 ? 2 : 0) + (fl & 64 ? 1 + B[p + 3] : 0) + (fl & 32 ? 2 : 0); } else if (tag === 4) p += 13; else if (tag === 5) { T.desc = B.slice(p, p + n); break; } else p += n; }
+      if (!T.desc) continue;
+      const SR = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350], x = (T.desc[0] << 8) | T.desc[1];
+      T.codec = "aac"; T.sr = SR[(x >> 7) & 15] || 48000; T.ch = ((x >> 3) & 15) || 2;
+    }
+    /* sample table */
+    const stts = one(stbl, "stts"), ctts = one(stbl, "ctts"), stss = one(stbl, "stss"), stsz = one(stbl, "stsz"), stsc = one(stbl, "stsc"), stco = one(stbl, "stco") || one(stbl, "co64");
+    if (!stts || !stsz || !stsc || !stco) continue;
+    const n = u32(stsz.a + 8), fixed = u32(stsz.a + 4), S = T.samples;
+    for (let i = 0; i < n; i++) S.push({ size: fixed || u32(stsz.a + 12 + i * 4), key: !stss, dts: 0, cto: 0, dur: 0, off: 0 });
+    let k = 0, t = 0; for (let i = 0, c = u32(stts.a + 4); i < c; i++) { const cnt = u32(stts.a + 8 + i * 8), d = u32(stts.a + 12 + i * 8); for (let j = 0; j < cnt && k < n; j++, k++) { S[k].dts = t; S[k].dur = d; t += d; } }
+    if (ctts) { k = 0; for (let i = 0, c = u32(ctts.a + 4); i < c; i++) { const cnt = u32(ctts.a + 8 + i * 8), o = i32(ctts.a + 12 + i * 8); for (let j = 0; j < cnt && k < n; j++, k++) S[k].cto = o; } }
+    if (stss) for (let i = 0, c = u32(stss.a + 4); i < c; i++) { const s = S[u32(stss.a + 8 + i * 4) - 1]; if (s) s.key = true; }
+    const big = stco.t === "co64", nch = u32(stco.a + 4), chunkOff = i => big ? Number(dv.getBigUint64(stco.a + 8 + i * 8)) : u32(stco.a + 8 + i * 4);
+    const sc = []; for (let i = 0, c = u32(stsc.a + 4); i < c; i++) sc.push([u32(stsc.a + 8 + i * 12) - 1, u32(stsc.a + 12 + i * 12)]);
+    k = 0; for (let e = 0; e < sc.length; e++) { const last = e + 1 < sc.length ? sc[e + 1][0] : nch; for (let ch = sc[e][0]; ch < last && k < n; ch++) { let o = chunkOff(ch); for (let j = 0; j < sc[e][1] && k < n; j++, k++) { S[k].off = o; o += S[k].size; } } }
+    T.dur = t / ts;
+    tracks.push(T);
+  }
+  return { v: tracks.find(t => t.kind === "vide"), a: tracks.find(t => t.kind === "soun") };
+}
+const sameBytes = (a, b) => a && b && a.length === b.length && a.every((x, i) => x === b[i]);
+async function joinCopy(files, onProg) {
+  const idx = []; for (const f of files) idx.push(await mp4Index(f));
+  const v0 = idx[0].v; if (!v0) throw new Error("NOMP4");
+  if (!idx.every(x => x.v && x.v.codec === v0.codec && x.v.w === v0.w && x.v.h === v0.h && (x.v.rot || 0) === (v0.rot || 0) && sameBytes(x.v.desc, v0.desc))) throw new Error("DIFF");
+  const a0 = idx[0].a, withAudio = !!a0 && idx.every(x => x.a && x.a.sr === a0.sr && x.a.ch === a0.ch && sameBytes(x.a.desc, a0.desc));
+  if (!window.Mp4Muxer) await loadScript(MP4MUX_URL);
+  let out = new Blob([]), pend = [], pendN = 0, end = 0;
+  const flush = () => { if (pend.length) { out = new Blob([out, ...pend]); pend = []; pendN = 0; } };
+  const target = new Mp4Muxer.StreamTarget({ onData: (data, pos) => {
+    const d = data.slice();
+    if (pos === end) { pend.push(d); pendN += d.length; end += d.length; if (pendN > 32e6) flush(); return; }
+    flush(); out = new Blob([out.slice(0, pos), d, out.slice(pos + d.length)]); end = Math.max(end, pos + d.length);
+  } });
+  const mux = new Mp4Muxer.Muxer({ target, fastStart: false, firstTimestampBehavior: "offset",
+    video: { codec: v0.codec, width: v0.w, height: v0.h, rotation: [0, 90, 180, 270].includes(v0.rot) ? v0.rot : 0 },
+    audio: withAudio ? { codec: "aac", numberOfChannels: a0.ch, sampleRate: a0.sr } : undefined });
+  const vMeta = { decoderConfig: { codec: v0.codec === "avc" ? "avc1" : "hvc1", codedWidth: v0.w, codedHeight: v0.h, description: v0.desc } };
+  const aMeta = withAudio ? { decoderConfig: { codec: "mp4a.40.2", numberOfChannels: a0.ch, sampleRate: a0.sr, description: a0.desc } } : null;
+  const total = idx.reduce((s, x) => s + x.v.samples.reduce((q, y) => q + y.size, 0) + (withAudio ? x.a.samples.reduce((q, y) => q + y.size, 0) : 0), 0);
+  let done = 0, base = 0, firstV = true, firstA = true, lastA = -1; const cuts = [];
+  for (let c = 0; c < files.length; c++) {
+    const f = files[c], V = idx[c].v, A = withAudio ? idx[c].a : null, clipDur = V.dur;
+    /* start the clip at its first shown frame */
+    const vMin = Math.min(...V.samples.map(s => s.dts + s.cto));
+    const list = V.samples.map(s => ({ s, v: true, t: (s.dts - vMin) / V.ts }));
+    if (A) A.samples.forEach(s => { const t = s.dts / A.ts; if (t < clipDur) list.push({ s, v: false, t }); });
+    list.sort((x, y) => x.s.off - y.s.off);
+    let win = null, wa = 0;
+    for (const it of list) {
+      const s = it.s;
+      if (!win || s.off < wa || s.off + s.size > wa + win.length) { wa = s.off; win = new Uint8Array(await f.slice(wa, wa + Math.max(s.size, 8e6)).arrayBuffer()); }
+      const data = win.slice(s.off - wa, s.off - wa + s.size);
+      if (it.v) {
+        const ts = Math.round((base + (s.dts + s.cto - vMin) / V.ts) * 1e6), cto = Math.round(s.cto / V.ts * 1e6), dur = Math.round(s.dur / V.ts * 1e6);
+        mux.addVideoChunkRaw(data, s.key ? "key" : "delta", ts, dur, firstV ? vMeta : undefined, cto); firstV = false;
+      } else {
+        const ts = Math.round((base + s.dts / A.ts) * 1e6); if (ts <= lastA) continue; lastA = ts;
+        mux.addAudioChunkRaw(data, "key", ts, Math.round(s.dur / A.ts * 1e6), firstA ? aMeta : undefined); firstA = false;
+      }
+      done += s.size; if (onProg && (done & 0xfffff) < s.size) onProg(done / total);
+    }
+    base += clipDur; cuts.push(base);
+  }
+  mux.finalize(); flush();
+  return { blob: out.slice(0, end, "video/mp4"), joins: cuts.slice(0, -1) };
+}
+/* fallback: play the clips one after another into a recorder */
+async function joinRecord(files, onProg, pre = {}) {
+  const mime = pickMime(); if (mime == null) throw new Error("เครื่องนี้รวมคลิปต่างชนิดกันไม่ได้ ลองรวมในแอปรูปภาพก่อน");
+  const v = pre.v || document.createElement("video"); v.playsInline = true; v.preload = "auto"; v.style.cssText = "position:fixed;left:-9999px;width:2px;height:2px"; document.body.appendChild(v);
+  const metas = []; for (const f of files) metas.push(await probeVideo(f).catch(() => null));
+  const m0 = metas.find(Boolean) || { width: 1080, height: 1920 }, k = Math.min(1, 1920 / Math.max(m0.width, m0.height));
+  const cv = document.createElement("canvas"); cv.width = Math.round(m0.width * k / 2) * 2; cv.height = Math.round(m0.height * k / 2) * 2;
+  const g = cv.getContext("2d"), AC = window.AudioContext || window.webkitAudioContext, ac = pre.ac || new AC(), dest = ac.createMediaStreamDestination();
+  ac.createMediaElementSource(v).connect(dest); await ac.resume().catch(() => {});
+  const stream = new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: 12e6 }), parts = [];
+  rec.ondataavailable = e => e.data.size && parts.push(e.data);
+  const total = metas.reduce((s, m) => s + ((m && m.duration) || 0), 0) || 1; let base = 0; const joins = [];
+  let raf = 0; const paint = () => { if (v.videoWidth) { g.fillStyle = "#000"; g.fillRect(0, 0, cv.width, cv.height); const s = Math.min(cv.width / v.videoWidth, cv.height / v.videoHeight), w = v.videoWidth * s, h = v.videoHeight * s; g.drawImage(v, (cv.width - w) / 2, (cv.height - h) / 2, w, h); } if (onProg) onProg(Math.min(0.99, (base + (v.currentTime || 0)) / total)); raf = requestAnimationFrame(paint); };
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const url = URL.createObjectURL(files[i]); v.src = url; await once(v, "loadeddata");
+      if (i === 0) { paint(); rec.start(1000); } else rec.resume();
+      await v.play(); await once(v, "ended"); rec.pause(); base += v.duration || 0; joins.push(base); URL.revokeObjectURL(url);
+    }
+    const stopped = once(rec, "stop"); rec.stop(); await stopped;
+  } finally { cancelAnimationFrame(raf); v.remove(); ac.close().catch(() => {}); }
+  return { blob: new Blob(parts, { type: (mime || "video/mp4").split(";")[0] }), joins: joins.slice(0, -1) };
+}
+async function joinClips(files, onProg, pre) {
+  try { const r = await joinCopy(files, onProg); if (pre && pre.ac) pre.ac.close().catch(() => {}); return { ...r, fast: true }; }
+  catch (e) { if (!/^(NOMP4|DIFF)$/.test(e.message) && !/RangeError|Invalid|Timestamp/i.test(e.message + e.name)) throw e; console.warn("join copy failed:", e); }
+  return { ...(await joinRecord(files, onProg, pre)), fast: false };
+}
+
+/* ================= Effects pack (Round B): cut-paper overlays chosen by AI from what is being said =================
+   p.fx = [{ id, k, t0, t1, text, sub, items:[{t,text}] }] in source time. Drawn over the video, under the subtitles. */
+const FX_THEMES = {
+  ss59: { n: "สิทธิศักติ 59", paper: "#F4EDE0", ink: "#1F2C4C", acc: "#B8613E", soft: "#E7DCC8", tape: "rgba(214,196,160,.82)", font: '"IBM Plex Sans Thai", "Kanit", sans-serif', num: '"Mali", "IBM Plex Sans Thai", sans-serif' },
+  golf: { n: "Golf Hub", paper: "#FFFFFF", ink: "#0E2148", acc: "#2E5BCC", soft: "#E3E9F5", tape: "rgba(14,33,72,.16)", font: '"IBM Plex Sans Thai", "Kanit", sans-serif', num: '"Kanit", sans-serif' },
+  clean: { n: "ขาวดำเรียบ", paper: "#FFFFFF", ink: "#141414", acc: "#E8452C", soft: "#EEEEEE", tape: "rgba(0,0,0,.10)", font: '"IBM Plex Sans Thai", "Kanit", sans-serif', num: '"Kanit", sans-serif' }
+};
+const FX_KINDS = {
+  label: "ป้ายกระดาษ", quote: "โน้ตคำสำคัญ", headline: "พาดหัวเต็มจอ", list: "เช็กลิสต์", vs: "ควร / ไม่ควร",
+  number: "ตัวเลขเด้ง", rec: "ซูมกล้อง REC", spot: "สปอตไลต์", cta: "ชวนคอมเมนต์", flash: "แฟลชเปลี่ยนช่วง"
+};
+const FX_SFX = { label: "pop", quote: "ding", headline: "whoosh", list: "pop", vs: "hit", number: "kaching", rec: "hit", spot: "boom", cta: "sparkle", flash: "whoosh" };
+const fxTheme = p => FX_THEMES[p.fxTheme] || FX_THEMES.ss59;
+const fxAt = (p, t) => (p.fx || []).filter(f => t >= f.t0 - 0.05 && t < f.t1 + 0.45);
+const fxEnv = (f, t, inD = 0.38, outD = 0.3) => ({ i: clamp01((t - f.t0) / inD), o: clamp01((f.t1 + outD - t) / outD) });
+const fxSpring = x => { x = Math.max(0, x); return x >= 1.4 ? 1 : 1 - Math.exp(-7 * x) * Math.cos(9 * x); };
+const fxRand = (seed, i) => { const s = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return s - Math.floor(s); };
+/* how much the REC effect pushes the camera in */
+function fxZoom(p, t) {
+  for (const f of p.fx || []) if (f.k === "rec" && t >= f.t0 && t < f.t1 + 0.3) { const e = fxEnv(f, t, 0.25, 0.3), k = Math.min(e.i, e.o); return 1 + 0.32 * (k * k * (3 - 2 * k)); }
+  return 1;
+}
+function fxWrap(ctx, text, maxW) {
+  const out = [];
+  for (const para of String(text || "").split("\n")) {
+    const S = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter("th", { granularity: "word" }) : null;
+    const toks = S ? [...S.segment(para)].map(x => x.segment) : para.split(/(\s+)/);
+    let line = "";
+    for (const tk of toks) { const nx = line + tk; if (line && ctx.measureText(nx.trim()).width > maxW) { out.push(line.trim()); line = tk.trimStart(); } else line = nx; }
+    if (line.trim()) out.push(line.trim());
+  }
+  return out.length ? out : [""];
+}
+/* cut-paper card with a soft drop shadow and slightly uneven scissor edges */
+function fxPaper(ctx, x, y, w, h, T, seed, fill) {
+  const pts = [], n = 7, j = Math.min(w, h) * 0.012;
+  for (let i = 0; i <= n; i++) pts.push([x + w * i / n, y + (fxRand(seed, i) - 0.5) * j]);
+  for (let i = 1; i <= n; i++) pts.push([x + w + (fxRand(seed, i + 20) - 0.5) * j, y + h * i / n]);
+  for (let i = n - 1; i >= 0; i--) pts.push([x + w * i / n, y + h + (fxRand(seed, i + 40) - 0.5) * j]);
+  for (let i = n - 1; i > 0; i--) pts.push([x + (fxRand(seed, i + 60) - 0.5) * j, y + h * i / n]);
+  const path = () => { ctx.beginPath(); pts.forEach(([a, b], i) => i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)); ctx.closePath(); };
+  ctx.save(); ctx.fillStyle = "rgba(20,24,40,.22)"; ctx.translate(Math.min(w, h) * 0.018, Math.min(w, h) * 0.03); path(); ctx.fill(); ctx.restore();
+  ctx.fillStyle = fill || T.paper; path(); ctx.fill();
+}
+function fxTape(ctx, cx, cy, w, h, rot, T) { ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); ctx.fillStyle = T.tape; ctx.fillRect(-w / 2, -h / 2, w, h); ctx.restore(); }
+function fxText(ctx, T, lines, x, y, px, weight, color, lh = 1.28, align = "left", fam) {
+  ctx.font = `${weight} ${px}px ${fam || T.font}`; ctx.fillStyle = color; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  lines.forEach((s, i) => { const w = ctx.measureText(s).width; ctx.fillText(s, align === "center" ? x - w / 2 : x, y + i * px * lh); });
+}
+function fxTick(ctx, x, y, s, k, col) { if (k <= 0) return; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = s * 0.16; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.setLineDash([s * 2, s * 2]); ctx.lineDashOffset = s * 2 * (1 - clamp01(k)); ctx.beginPath(); ctx.moveTo(x - s * 0.4, y); ctx.lineTo(x - s * 0.1, y + s * 0.3); ctx.lineTo(x + s * 0.45, y - s * 0.35); ctx.stroke(); ctx.restore(); }
+function fxCross(ctx, x, y, s, k, col) { if (k <= 0) return; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = s * 0.16; ctx.lineCap = "round"; const a = clamp01(k * 2), b = clamp01(k * 2 - 1); ctx.beginPath(); ctx.moveTo(x - s * 0.35, y - s * 0.35); ctx.lineTo(x - s * 0.35 + s * 0.7 * a, y - s * 0.35 + s * 0.7 * a); if (b > 0) { ctx.moveTo(x + s * 0.35, y - s * 0.35); ctx.lineTo(x + s * 0.35 - s * 0.7 * b, y - s * 0.35 + s * 0.7 * b); } ctx.stroke(); ctx.restore(); }
+/* place a card that springs in with a little tilt and drops out */
+function fxPlace(ctx, f, t, cx, cy, rot, fn, inD = 0.38) {
+  const e = fxEnv(f, t, inD), s = fxSpring(e.i), out = e.o; if (s <= 0.001 || out <= 0) return;
+  ctx.save(); ctx.globalAlpha *= Math.min(1, e.i * 3) * out; ctx.translate(cx, cy + (1 - out) * 18); ctx.rotate(rot * (0.4 + 0.6 * s)); ctx.scale(0.55 + 0.45 * s, 0.55 + 0.45 * s); fn(); ctx.restore();
+}
+function drawFx(ctx, W, H, p, t) {
+  const list = fxAt(p, t); if (!list.length) return;
+  const T = fxTheme(p), u = Math.min(W, H) / 100, port = H > W, topY = port ? H * 0.15 : H * 0.17, maxW = port ? W * 0.82 : W * 0.5;
+  for (const f of list) {
+    const seed = hashStr(f.id || f.text || "x") % 997;
+    ctx.save();
+    try {
+      if (f.k === "flash") {
+        const e = t - f.t0; if (e >= 0 && e < 0.32) { ctx.fillStyle = `rgba(255,252,245,${0.85 * (1 - e / 0.32)})`; ctx.fillRect(0, 0, W, H); }
+      } else if (f.k === "spot") {
+        const e = fxEnv(f, t, 0.5, 0.4), k = Math.min(e.i, e.o), cx = W * 0.5, cy = H * (port ? 0.36 : 0.42), r = Math.min(W, H) * (port ? 0.42 : 0.36);
+        const g = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r * 1.6); g.addColorStop(0, "rgba(8,10,20,0)"); g.addColorStop(1, `rgba(8,10,20,${0.78 * k})`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        if (f.text) fxPlace(ctx, f, t - 0.15, W / 2, topY * 0.75, -0.02, () => { ctx.font = `600 ${7.2 * u}px ${T.font}`; const L = fxWrap(ctx, f.text, maxW), w = Math.max(...L.map(s => ctx.measureText(s).width)) + 7 * u, h = L.length * 7.2 * u * 1.28 + 4 * u; fxPaper(ctx, -w / 2, -h / 2, w, h, T, seed, T.acc); fxText(ctx, T, L, 0, -h / 2 + 2 * u + 3.6 * u, 7.2 * u, 600, T.paper, 1.28, "center"); });
+      } else if (f.k === "rec") {
+        const e = fxEnv(f, t, 0.25, 0.3), k = Math.min(e.i, e.o); ctx.globalAlpha *= k;
+        const m = 6 * u, L = 9 * u; ctx.strokeStyle = "rgba(255,255,255,.92)"; ctx.lineWidth = 0.7 * u; ctx.lineCap = "round";
+        [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, sx, sy]) => { ctx.beginPath(); ctx.moveTo(x, y + sy * L); ctx.lineTo(x, y); ctx.lineTo(x + sx * L, y); ctx.stroke(); });
+        const on = Math.floor((t - f.t0) * 2) % 2 === 0; ctx.fillStyle = on ? "#FF3B30" : "rgba(255,59,48,.25)"; ctx.beginPath(); ctx.arc(m + 4 * u, m + 6 * u, 1.5 * u, 0, Math.PI * 2); ctx.fill();
+        ctx.font = `600 ${3.6 * u}px "IBM Plex Mono", monospace`; ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText("REC", m + 7 * u, m + 6 * u);
+        const tc = Math.max(0, t - f.t0), ss = String(Math.floor(tc)).padStart(2, "0"), ff = String(Math.floor((tc % 1) * 30)).padStart(2, "0"); const tcs = `00:00:${ss}:${ff}`; ctx.fillText(tcs, W - m - ctx.measureText(tcs).width - 2 * u, m + 6 * u);
+        if (f.text) { ctx.font = `600 ${5.4 * u}px ${T.font}`; const s = f.text, w = ctx.measureText(s).width + 5 * u; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(W / 2 - w / 2, m + 12 * u, w, 8 * u); ctx.fillStyle = "#fff"; ctx.fillText(s, W / 2 - w / 2 + 2.5 * u, m + 16 * u); }
+      } else if (f.k === "headline") {
+        const e = fxEnv(f, t, 0.3, 0.3); ctx.fillStyle = rgba(T.ink, 0.62 * Math.min(e.i, e.o)); ctx.fillRect(0, 0, W, H);
+        const px = (port ? 11.5 : 9) * u; ctx.font = `600 ${px}px ${T.font}`; const L = fxWrap(ctx, f.text, port ? W * 0.84 : W * 0.6), y0 = H * 0.42 - (L.length - 1) * px * 0.62;
+        L.forEach((s, i) => { const ff = { ...f, t0: f.t0 + 0.12 * i }; const e2 = fxEnv(ff, t, 0.28), k = fxSpring(e2.i); if (k <= 0.001) return;
+          ctx.save(); ctx.globalAlpha *= Math.min(1, e2.i * 3) * e2.o; ctx.translate(W / 2, y0 + i * px * 1.24); ctx.scale(1.35 - 0.35 * k, 1.35 - 0.35 * k);
+          const hot = i === L.length - 1 && L.length > 1; if (hot) { const w = ctx.measureText(s).width + 4 * u; ctx.fillStyle = T.acc; ctx.fillRect(-w / 2, -px * 0.62, w, px * 1.24); }
+          fxText(ctx, T, [s], 0, 0, px, 600, hot ? T.paper : "#FFFFFF", 1, "center"); ctx.restore(); });
+        if (L.length === 1) { const k = clamp01((t - f.t0 - 0.25) / 0.35), w = (ctx.measureText(L[0]).width + 4 * u) * (1 - Math.pow(1 - k, 3)); ctx.fillStyle = T.acc; ctx.fillRect(W / 2 - w / 2, y0 + px * 0.72, w, 1.6 * u); }
+        if (f.sub) fxText(ctx, T, [f.sub], W / 2, y0 + L.length * px * 1.24 + 2 * u, 4.6 * u, 500, "rgba(255,255,255,.85)", 1, "center");
+      } else if (f.k === "label" || f.k === "cta") {
+        const cta = f.k === "cta", rot = (fxRand(seed, 3) - 0.5) * 0.07;
+        fxPlace(ctx, f, t, W / 2, topY, rot, () => {
+          ctx.font = `600 ${6.4 * u}px ${T.font}`; const L = fxWrap(ctx, f.text, maxW - 8 * u), px = 6.4 * u, lw = Math.max(...L.map(s => ctx.measureText(s).width));
+          const kick = f.sub || (cta ? "คอมเมนต์บอกกันหน่อย" : ""), kh = kick ? 6.6 * u : 0, w = Math.max(lw, kick ? lw * 0.6 : 0) + 9 * u, h = L.length * px * 1.28 + 5 * u + kh;
+          fxPaper(ctx, -w / 2, -h / 2, w, h, T, seed);
+          if (kick) { ctx.font = `600 ${3.6 * u}px ${T.font}`; const kw = ctx.measureText(kick).width + 3 * u; ctx.fillStyle = T.acc; ctx.fillRect(-w / 2 + 4.5 * u, -h / 2 + 2.2 * u, kw, 5.4 * u); fxText(ctx, T, [kick], -w / 2 + 6 * u, -h / 2 + 5 * u, 3.6 * u, 600, T.paper); }
+          fxText(ctx, T, L, -w / 2 + 4.5 * u, -h / 2 + 2.5 * u + kh + px * 0.62, px, 600, T.ink);
+          fxTape(ctx, -w * 0.32, -h / 2, 11 * u, 3 * u, -0.5, T);
+          if (cta) { const b = Math.sin((t - f.t0) * 6) * 1.2 * u; ctx.save(); ctx.translate(w / 2 - 6 * u, h / 2 + 5 * u + b); ctx.strokeStyle = T.acc; ctx.lineWidth = 1.1 * u; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(0, -4 * u); ctx.lineTo(0, 4 * u); ctx.moveTo(-3 * u, 1.2 * u); ctx.lineTo(0, 4 * u); ctx.lineTo(3 * u, 1.2 * u); ctx.stroke(); ctx.restore(); }
+        });
+      } else if (f.k === "quote") {
+        fxPlace(ctx, f, t, W / 2, topY + 4 * u, (fxRand(seed, 5) - 0.5) * 0.05, () => {
+          const px = 5.6 * u; ctx.font = `500 ${px}px ${T.font}`; const L = fxWrap(ctx, f.text, maxW - 12 * u), lw = Math.max(...L.map(s => ctx.measureText(s).width)), w = lw + 14 * u, h = L.length * px * 1.34 + 9 * u;
+          fxPaper(ctx, -w / 2, -h / 2, w, h, T, seed);
+          ctx.fillStyle = rgba(T.ink, 0.07); for (let i = 1; i <= L.length; i++) ctx.fillRect(-w / 2 + 4 * u, -h / 2 + 3.4 * u + i * px * 1.34, w - 8 * u, Math.max(1, 0.18 * u));
+          ctx.font = `700 ${12 * u}px ${T.num}`; ctx.fillStyle = T.acc; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText("“", -w / 2 + 2 * u, -h / 2 + 4 * u);
+          fxText(ctx, T, L, -w / 2 + 9 * u, -h / 2 + 4.5 * u + px * 0.62, px, 500, T.ink, 1.34);
+          fxTape(ctx, 0, -h / 2, 13 * u, 3.2 * u, 0.03, T);
+        });
+      } else if (f.k === "number") {
+        fxPlace(ctx, f, t, W / 2, topY + 2 * u, -0.04, () => {
+          const raw = String(f.text || ""), m = raw.match(/[\d.,]+/), target = m ? parseFloat(m[0].replace(/,/g, "")) : NaN, prog = clamp01((t - f.t0 - 0.15) / 0.8);
+          let shown = raw; if (isFinite(target) && m) { const dec = (m[0].split(".")[1] || "").length, val = target * (1 - Math.pow(1 - prog, 3)); shown = raw.replace(m[0], val.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
+          const px = 13 * u; ctx.font = `700 ${px}px ${T.num}`; const w = ctx.measureText(shown).width + 12 * u, h = px * 1.3 + (f.sub ? 6 * u : 0) + 3 * u;
+          fxPaper(ctx, -w / 2, -h / 2, w, h, T, seed, T.acc);
+          fxText(ctx, T, [shown], 0, -h / 2 + 1.5 * u + px * 0.66, px, 700, T.paper, 1, "center", T.num);
+          if (f.sub) fxText(ctx, T, [f.sub], 0, h / 2 - 4 * u, 4 * u, 500, T.paper, 1, "center");
+        });
+      } else if (f.k === "list") {
+        const items = (f.items || []).slice(0, 5), px = 5 * u;
+        fxPlace(ctx, f, t, W / 2, topY + 6 * u, 0.012, () => {
+          ctx.font = `500 ${px}px ${T.font}`; const wrapped = items.map(it => fxWrap(ctx, it.text, maxW - 18 * u)), lw = Math.max(ctx.measureText(f.text || "").width * 1.15, ...wrapped.flat().map(s => ctx.measureText(s).width));
+          const rowH = wrapped.map(L => L.length * px * 1.25 + 2.6 * u), w = lw + 18 * u, head = f.text ? 9 * u : 3 * u, h = head + rowH.reduce((a, b) => a + b, 0) + 3 * u;
+          fxPaper(ctx, -w / 2, -h / 2, w, h, T, seed);
+          if (f.text) fxText(ctx, T, [f.text], -w / 2 + 5 * u, -h / 2 + 5 * u, 5.6 * u, 600, T.acc);
+          let y = -h / 2 + head;
+          items.forEach((it, i) => { const k = clamp01((t - it.t) / 0.35); ctx.save(); ctx.globalAlpha *= 0.28 + 0.72 * clamp01(k * 2);
+            const cy = y + rowH[i] / 2; ctx.fillStyle = k > 0 ? T.acc : T.soft; ctx.beginPath(); ctx.arc(-w / 2 + 8 * u, cy, 3 * u, 0, Math.PI * 2); ctx.fill();
+            if (k > 0) fxTick(ctx, -w / 2 + 8 * u, cy, 3.4 * u, k, T.paper); else fxText(ctx, T, [String(i + 1)], -w / 2 + 8 * u, cy, 3.6 * u, 700, T.ink, 1, "center", T.num);
+            fxText(ctx, T, wrapped[i], -w / 2 + 13.5 * u, cy - (wrapped[i].length - 1) * px * 0.625, px, 500, T.ink, 1.25); ctx.restore(); y += rowH[i]; });
+          fxTape(ctx, w * 0.3, -h / 2, 12 * u, 3 * u, 0.4, T);
+        });
+      } else if (f.k === "vs") {
+        const it = f.items || [], a = it[0] || { text: f.text, t: f.t0 }, b = it[1] || { text: f.sub || "", t: f.t0 + 1 }, cw = port ? W * 0.42 : W * 0.26, px = 4.8 * u;
+        [[a, -1, false], [b, 1, true]].forEach(([x, side, good]) => {
+          const ff = { ...f, t0: Math.max(f.t0, x.t || f.t0) }; if (!x.text) return;
+          fxPlace(ctx, ff, t, W / 2 + side * (cw / 2 + 1.5 * u), topY + 4 * u, side * 0.03, () => {
+            ctx.font = `500 ${px}px ${T.font}`; const L = fxWrap(ctx, x.text, cw - 7 * u), h = L.length * px * 1.3 + 13 * u;
+            fxPaper(ctx, -cw / 2, -h / 2, cw, h, T, seed + side, good ? T.paper : T.soft);
+            const k = clamp01((t - ff.t0 - 0.2) / 0.4); ctx.fillStyle = good ? T.acc : T.ink; ctx.beginPath(); ctx.arc(0, -h / 2 + 5.5 * u, 3.3 * u, 0, Math.PI * 2); ctx.fill();
+            (good ? fxTick : fxCross)(ctx, 0, -h / 2 + 5.5 * u, 3.6 * u, k, T.paper);
+            fxText(ctx, T, L, 0, -h / 2 + 11.5 * u + px * 0.3, px, 500, T.ink, 1.3, "center");
+          });
+        });
+      }
+    } catch (e) { console.error(e); }
+    ctx.restore();
+  }
+}
+/* AI reads the kept lines and chooses where an effect helps the story */
+async function aiEffects(p) {
+  const caps = p.captions.filter(c => String(c.text || "").trim() && !(cutAt(p, (c.start + c.end) / 2) && cutAt(p, c.start + 0.02)));
+  if (caps.length < 2) throw new Error("ซับน้อยเกินไปสำหรับใส่เอฟเฟกต์");
+  const lines = caps.map((c, i) => ({ i, s: +c.start.toFixed(1), e: +c.end.toFixed(1), text: c.text }));
+  const final = (p.edit && p.edit.on) ? keptDuration(p) : p.duration || caps[caps.length - 1].end;
+  const want = Math.max(2, Math.min(14, Math.round(final / 9)));
+  const sys = `You are the motion designer of a professional short-video team (${LEN[p.lang] || "Thai"} talking-head clips: tarot readings and small-business explainers).
+Read the subtitle lines (index, start, end, text) and place about ${want} on-screen effects that make the story clearer and match its emotion. Leave breathing room: never overlap two effects, keep at least one line between effects, never cover the first second.
+Effect kinds:
+- "label": short sticker title for a new topic or key idea (text <= 22 chars, optional "sub" kicker <= 14 chars such as "ข้อ 1" or "สำคัญ").
+- "quote": the key sentence or advice worth remembering, rewritten short (<= 40 chars).
+- "headline": big full-screen statement for the strongest punchline or hook (<= 20 chars, 2-4 words). Use at most twice.
+- "list": the speaker lists or counts things; "text" is the list title, "items" are [{"i": line index when the item is said, "text": <= 26 chars}], 2-5 items.
+- "vs": a wrong way vs a right way, a question not to ask vs a better one, before vs after; "items" = [{"i":..., "text": wrong/before}, {"i":..., "text": right/after}].
+- "number": a number, price, percent or count that matters; "text" = the number with unit (Arabic digits only, e.g. "3 คำถาม", "59%", "฿ 129,000"), optional "sub".
+- "rec": dramatic camera push-in with REC frame for a surprising reveal, twist or confession; optional "text" <= 16 chars.
+- "spot": spotlight on the speaker for a serious warning or emotional moment; "text" <= 18 chars.
+- "cta": only at the end when the speaker invites comments, follows or bookings; "text" <= 24 chars.
+- "flash": a quick paper-white flash to mark a jump to a new section (no text). Use sparingly.
+Write every text in the language of the clip, in your own concise words (do not paste whole lines), Arabic numerals only. Vary the kinds; pick the kind by meaning and mood.
+Return JSON: {"fx":[{"k":"label","from":3,"to":4,"text":"...","sub":"...","items":[]}]} where from/to are line indexes the effect stays on screen for.`;
+  const out = await chatJSON([{ role: "system", content: sys }, { role: "user", content: JSON.stringify({ lines }) }], { maxTok: 4000 });
+  const fx = []; let lastEnd = -1;
+  for (const x of (Array.isArray(out.fx) ? out.fx : [])) {
+    if (!x || !FX_KINDS[x.k]) continue;
+    const a = caps[Math.max(0, Math.min(caps.length - 1, +x.from || 0))], b = caps[Math.max(0, Math.min(caps.length - 1, +x.to || +x.from || 0))]; if (!a || !b) continue;
+    let t0 = Math.max(a.start, 0.8), t1 = Math.max(b.end, t0 + (x.k === "flash" ? 0.35 : 1.8)); if (x.k === "headline") t1 = Math.min(t1, t0 + 3.2); t1 = Math.min(t1, t0 + 7);
+    if (t0 < lastEnd + 0.3) continue;
+    const items = (Array.isArray(x.items) ? x.items : []).map(it => ({ t: caps[+it.i] ? caps[+it.i].start : t0, text: String(it.text || "").trim().slice(0, 60) })).filter(it => it.text).sort((m, n) => m.t - n.t);
+    if (x.k === "list" && items.length < 2) continue;
+    if (x.k === "list" || x.k === "vs") { const lastIt = items[items.length - 1]; if (lastIt) t1 = Math.max(t1, Math.min(lastIt.t + 2.2, t0 + 9)); }
+    if (x.k !== "flash" && x.k !== "list" && x.k !== "vs" && !String(x.text || "").trim() && x.k !== "rec") continue;
+    fx.push({ id: uid(), k: x.k, t0: +t0.toFixed(2), t1: +t1.toFixed(2), text: String(x.text || "").trim().slice(0, 80), sub: String(x.sub || "").trim().slice(0, 40), items });
+    lastEnd = t1;
+  }
+  if (!fx.length) throw new Error("AI ยังไม่ได้เลือกเอฟเฟกต์ ลองกดใหม่อีกครั้ง");
+  p.fx = fx;
+  /* one sound per effect, unless a sound is already there */
+  p.sfx = p.sfx.filter(s => s.src !== "fx");
+  for (const f of fx) { const key = FX_SFX[f.k]; if (key && !p.sfx.some(s => Math.abs(s.t - f.t0) < 0.35)) p.sfx.push({ id: uid(), key: "b:" + key, t: f.t0, vol: key === "boom" ? 0.55 : 0.75, src: "fx" }); }
+  p.sfx.sort((a, b) => a.t - b.t);
+  return fx.length;
+}
+
 /* ================= auto edit: drop silences, retakes and off-script talk; punch-in zooms =================
    Everything stays in source time: p.edit.cuts are the removed ranges [s, e]. Preview and export skip them. */
 function cutAt(p, t) { const E = p.edit; if (!E || !E.on) return null; for (const c of E.cuts) if (t >= c[0] && t < c[1]) return c; return null; }
 function keptBefore(p, t) { const E = p.edit; let k = t; if (E && E.on) for (const c of E.cuts) { if (c[0] >= t) break; k -= Math.min(t, c[1]) - c[0]; } return Math.max(0, k); }
 function keptDuration(p) { return keptBefore(p, p.duration || 0); }
 function zoomAt(p, t) {
-  const E = p.edit; if (!E || !E.on || E.zoom === false) return null;
-  let run = 0; for (const c of E.cuts) { if (c[1] <= t) run++; else break; }
-  let z = [1, 1.12, 1, 1.2][run % 4];
-  if ((E.emph || []).some(r => t >= r[0] && t < r[1])) z = Math.max(z, 1.28);
+  const E = p.edit; let z = 1;
+  if (E && E.on && E.zoom !== false) {
+    const strong = E.zoom === "strong";
+    let run = 0; for (const c of E.cuts) { if (c[1] <= t) run++; else break; }
+    /* a small punch-in that changes only on a cut, so it hides the jump instead of moving the camera */
+    z = strong ? [1, 1.1, 1, 1.16][run % 4] : (run % 4 === 2 ? 1.05 : 1);
+    const pk = strong ? 1.2 : 1.08;
+    for (const r of E.emph || []) { if (t < r[0] || t > r[1]) continue; const k = clamp01(Math.min(t - r[0], r[1] - t) / 0.8), e = k * k * (3 - 2 * k); z = Math.max(z, z + (pk - z) * e); }
+  }
+  z *= fxZoom(p, t);
   if (z <= 1.001) return null;
-  return { z, cx: (E.cx ?? 50) / 100, cy: (E.cy ?? 36) / 100 };
+  return { z, cx: (E && E.cx != null ? E.cx : 50) / 100, cy: (E && E.cy != null ? E.cy : 36) / 100 };
 }
 /* loudness every 20 ms, to find real pauses (word timestamps from speech engines are often stretched) */
 async function audioEnvelope(blob) {
@@ -2660,7 +3001,19 @@ async function aiAutoEdit(p, opt = {}) {
   if (!caps.length) throw new Error("ยังไม่มีซับให้ตัด");
   const lines = caps.map((c, i) => ({ i, s: +c.start.toFixed(1), e: +c.end.toFixed(1), text: c.text }));
   let drop = [], emph = [];
-  if (opt.ai !== false) {
+  /* sure-fire cleanups before asking the AI: count-ins and earlier attempts of the same sentence */
+  const norm = x => String(x || "").toLowerCase().replace(/[\s.,!?…"'“”()\-]/g, "");
+  const grams = x => { const g = new Map(); for (let i = 0; i < x.length - 1; i++) { const k = x.slice(i, i + 2); g.set(k, (g.get(k) || 0) + 1); } return g; };
+  const dice = (a, b) => { if (a.length < 2 || b.length < 2) return 0; const A = grams(a), B = grams(b); let n = 0; for (const [k, v] of A) n += Math.min(v, B.get(k) || 0); return 2 * n / (a.length - 1 + b.length - 1); };
+  const pre = [];
+  caps.forEach((c, i) => {
+    const a = norm(c.text);
+    if (/^[\d]+$/.test(a) || /^(หนึ่ง|สอง|สาม|สี่|ห้า|1|2|3|4|5)+$/.test(a) || /^(คัท|cut|เอาใหม่|ไม่ได้|อ่ะ|อะ)+$/.test(a)) { pre.push({ i, why: "offscript" }); return; }
+    for (let j = i + 1; j < caps.length && j <= i + 4 && caps[j].start - c.end < 25; j++) { const b = norm(caps[j].text); if (a.length >= 4 && b.length >= a.length * 0.6 && (dice(a, b) >= 0.55 || (a.length >= 6 && b.startsWith(a.slice(0, 6)) && b.length >= a.length))) { pre.push({ i, why: "retake" }); return; } }
+  });
+  const cache = opt.reuse && p.edit && p.edit.ai;
+  if (cache) { drop = cache.drop.filter(d => caps[d.i]); emph = cache.emph.filter(i => caps[i]); }
+  else if (opt.ai !== false) {
     const sys = `You are the editor of short talking-head videos for social media (${LEN[p.lang] || "Thai"}). The input is the raw recording as numbered subtitle lines with start/end seconds, in order.
 Decide which lines to REMOVE so the final video plays as one clean, natural take:
 - "retake": an earlier attempt of something that is said again later (same sentence or idea restarted, stumbled, cut off). Always keep the LAST complete attempt, drop the earlier ones.
@@ -2668,6 +3021,7 @@ Decide which lines to REMOVE so the final video plays as one clean, natural take
 - "filler": lines that only contain hesitation sounds (เอ่อ อ่า อืม) or nothing meaningful.
 Never drop content just because it is short. When unsure, keep it.
 Also pick "emph": up to 20% of the kept lines that carry the key point (the question, the answer, the punchline) for a punch-in zoom.
+Lines already flagged by a simple check (you may add more, and you may keep a flagged line if it is clearly needed): ${JSON.stringify(pre)}
 Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
     let out = {};
     try { out = await chatJSON([{ role: "system", content: sys }, { role: "user", content: JSON.stringify({ lines }) }], { maxTok: 4000 }); }
@@ -2675,18 +3029,23 @@ Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
     const ok = new Set(["retake", "offscript", "filler"]);
     drop = (Array.isArray(out.drop) ? out.drop : []).filter(d => d && Number.isInteger(d.i) && caps[d.i]).map(d => ({ i: d.i, why: ok.has(d.why) ? d.why : "offscript" }));
     emph = (Array.isArray(out.emph) ? out.emph : []).filter(i => Number.isInteger(i) && caps[i] && !drop.some(d => d.i === i));
+    if (opt.aiError) drop = pre.slice();
+    else for (const d of pre) if (!drop.some(x => x.i === d.i) && d.why === "offscript") drop.push(d);
   }
+  const aiPick = { drop: drop.map(d => ({ ...d })), emph: emph.slice() };
   const dropped = new Set(drop.map(d => d.i));
+  const FILL = /^(เอ่อ+|เออ+|อ่า+|อ้า+|อืม+|อือ+|เอิ่ม+|อึ่ม+|uh+|um+|erm+|ah+|hmm+)$/i;
   const words = ((p.raw && p.raw.words) || []).filter(w => isFinite(w.start) && isFinite(w.end) && String(w.word || "").trim());
   /* speech pieces we keep: words inside kept lines, or whole lines when there are no word times */
   const keeps = [];
   caps.forEach((c, i) => {
     if (dropped.has(i)) return;
     const ws = words.filter(w => w.start >= c.start - 0.05 && w.start < c.end + 0.02);
-    if (ws.length) ws.forEach(w => keeps.push([w.start, Math.min(Math.max(w.end, w.start + 0.08), w.start + 0.75)])); /* speech engines often stretch a word over the pause after it */ else keeps.push([c.start, c.end]);
+    if (ws.length) ws.filter(w => !FILL.test(norm(w.word))).forEach(w => keeps.push([w.start, Math.min(Math.max(w.end, w.start + 0.08), w.start + 0.75)])); /* speech engines often stretch a word over the pause after it */ else keeps.push([c.start, c.end]);
   });
   keeps.sort((a, b) => a[0] - b[0]);
-  const PAD = opt.pad ?? 0.12, GAP = opt.gap ?? 0.45, dur = p.duration || (keeps.length ? keeps[keeps.length - 1][1] : 0);
+  const pace = opt.pace || (p.edit && p.edit.pace) || "tight";
+  const PAD = opt.pad ?? (pace === "tight" ? 0.08 : 0.14), GAP = opt.gap ?? (pace === "tight" ? 0.3 : 0.5), dur = p.duration || (keeps.length ? keeps[keeps.length - 1][1] : 0);
   const runs = [];
   for (const [s, e] of keeps) { const r = runs[runs.length - 1]; if (r && s - r[1] <= GAP) r[1] = Math.max(r[1], e); else runs.push([s, e]); }
   let kept = runs.map(([s, e]) => [Math.max(0, s - PAD), Math.min(dur, e + PAD)]);
@@ -2710,9 +3069,15 @@ Return JSON: {"drop":[{"i":0,"why":"retake|offscript|filler"}],"emph":[3,7]}`;
   const cuts = []; let t = 0;
   for (const [s, e] of kept) { if (s - t > 0.05) cuts.push([+t.toFixed(3), +s.toFixed(3)]); t = e; }
   if (dur - t > 0.05) cuts.push([+t.toFixed(3), +dur.toFixed(3)]);
-  p.edit = { on: true, zoom: p.edit ? p.edit.zoom !== false : true, cx: p.edit && p.edit.cx != null ? p.edit.cx : 50, cy: p.edit && p.edit.cy != null ? p.edit.cy : 36, cuts,
+  p.edit = { on: true, pace, ai: aiPick, zoom: p.edit ? (p.edit.zoom === false ? false : p.edit.zoom === "strong" ? "strong" : "soft") : "soft", cx: p.edit && p.edit.cx != null ? p.edit.cx : 50, cy: p.edit && p.edit.cy != null ? p.edit.cy : 36, cuts,
     emph: emph.map(i => [caps[i].start, caps[i].end]), dropped: drop.map(d => ({ id: caps[d.i].id, why: d.why })), at: Date.now() };
   return { cuts: cuts.length, removed: drop.length, before: dur, after: keptDuration(p), aiError: opt.aiError || "" };
+}
+/* cut a range by hand */
+function addCut(p, s, e) {
+  if (!p.edit) p.edit = { on: true, pace: "tight", zoom: "soft", cx: 50, cy: 36, cuts: [], emph: [], dropped: [], at: Date.now() };
+  const E = p.edit; E.on = true; E.cuts.push([+s.toFixed(3), +e.toFixed(3)]); E.cuts.sort((a, b) => a[0] - b[0]);
+  for (let k = E.cuts.length - 1; k > 0; k--) if (E.cuts[k][0] <= E.cuts[k - 1][1] + 0.02) { E.cuts[k - 1][1] = Math.max(E.cuts[k - 1][1], E.cuts[k][1]); E.cuts.splice(k, 1); }
 }
 /* bring one removed line back */
 function restoreRange(p, s, e) { const E = p.edit; if (!E) return; const out = [];
@@ -3115,10 +3480,12 @@ function viewNew(resumeId) {
         <label class="drop" id="drop" for="vfile">
           <span class="up"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span>
           <b>แตะเพื่อเลือกวิดีโอ หรือลากไฟล์มาวาง</b>
-          <span class="hint">MP4, MOV · แนะนำไม่เกิน 30 นาที</span>
+          <span class="hint">MP4, MOV · เลือกได้หลายคลิป ระบบจะต่อเป็นคลิปเดียวให้ · แนะนำรวมไม่เกิน 30 นาที</span>
         </label>
-        <input type="file" id="vfile" accept="video/*,.mov,.mp4,.m4v,.webm" hidden>
+        <input type="file" id="vfile" accept="video/*,.mov,.mp4,.m4v,.webm" multiple hidden>
+        <input type="file" id="vmore" accept="video/*,.mov,.mp4,.m4v,.webm" multiple hidden>
         <div id="finfo" hidden></div>
+        <div id="clipList" hidden></div>
       </div>
       <div class="two">
         <div class="field"><label for="lang">ภาษาที่พูดในคลิป</label><select class="input" id="lang">${langOptions(settings.lang, `<option value="auto"${settings.lang === "auto" ? " selected" : ""}>ให้ AI ตรวจเอง</option>`)}</select></div>
@@ -3140,7 +3507,8 @@ function viewNew(resumeId) {
       </div>
       <div class="field"><span class="lab">ให้ AI ช่วย</span>
         <label class="sw"><input type="checkbox" id="npFix"> ตรวจและแก้คำที่ถอดเสียงผิด (แม่นขึ้น แนะนำ)</label>
-        <label class="sw"><input type="checkbox" id="npCut"> ✂️ ตัดต่ออัตโนมัติ: ตัดช่วงเงียบ เทคที่พูดซ้ำ คำพูดนอกบท + ซูมสลับจังหวะ</label>
+        <label class="sw"><input type="checkbox" id="npCut"> ✂️ ตัดต่ออัตโนมัติ: ตัดช่วงเงียบ เทคที่พูดซ้ำ คำพูดนอกบท + ซูมนุ่มๆ ตอนเปลี่ยนช็อต</label>
+        <label class="sw"><input type="checkbox" id="npFx"> ✨ ใส่เอฟเฟกต์อัตโนมัติ: AI เลือกป้าย พาดหัว เช็กลิสต์ ควร/ไม่ควร ตัวเลข ซูม REC ตามอารมณ์ของเนื้อหา</label>
         <label class="sw"><input type="checkbox" id="npKw"> เน้นคำสำคัญ (สี + เด้ง) พร้อมเสียงตรงจังหวะคำนั้น</label>
         <label class="sw"><input type="checkbox" id="npSfx"> ใส่เสียงช่วงเปิดคลิปและเปลี่ยนเรื่องเพิ่ม</label>
         <label class="sw"><input type="checkbox" id="npSplit"> ใส่ภาพประกอบ: AI ทำกราฟิกเคลื่อนไหวประกอบสิ่งที่พูด (เหมาะกับคลิปเล่าเรื่อง)</label>
@@ -3155,6 +3523,7 @@ function viewNew(resumeId) {
         <li data-s="fix" hidden><span class="dot"></span><span id="fixLab">AI ตรวจคำผิด</span></li>
         <li data-s="tr" hidden><span class="dot"></span><span id="trLab">แปลภาษา</span></li>
         <li data-s="cut" hidden><span class="dot"></span>AI ตัดต่ออัตโนมัติ</li>
+        <li data-s="fx" hidden><span class="dot"></span>AI ใส่เอฟเฟกต์ตามอารมณ์</li>
         <li data-s="kw" hidden><span class="dot"></span>AI เน้นคำสำคัญ + ใส่เสียง</li>
         <li data-s="sfx" hidden><span class="dot"></span>AI ใส่เอฟเฟกต์เสียง</li>
         <li data-s="split" hidden><span class="dot"></span>AI สร้างแอนิเมชันประกอบ</li>
@@ -3169,7 +3538,7 @@ function viewNew(resumeId) {
   $("#npSfx").checked = settings.autoSfx !== false;
   $("#npFix").checked = settings.autoFix !== false;
   $("#npKw").checked = settings.autoKw !== false;
-  $("#npCut").checked = settings.autoCut !== false;
+  $("#npCut").checked = settings.autoCut !== false; $("#npFx").checked = settings.autoFx !== false;
   $("#npSplit").checked = !!settings.autoSplit;
   let npOrient = settings.splitLook || "card:16:9";
   const syncOrient = () => { $("#npOrient").hidden = !$("#npSplit").checked; $$("#npOrient button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === npOrient)); };
@@ -3209,7 +3578,8 @@ function viewNew(resumeId) {
       saving = probeP.then(() => DB.putVideo(draftId, f)).then(() => { const m = $("#fsave"); if (m) { m.textContent = "✓ บันทึกวิดีโอไว้ในเครื่องแล้ว ถ้าหน้ารีเฟรชกลับมาทำต่อได้ ไม่ต้องอัปโหลดใหม่"; m.className = "hint savedok"; } return true; })
         .catch(() => { const m = $("#fsave"); if (m) m.textContent = "พื้นที่เครื่องไม่พอสำหรับเก็บวิดีโอ ระหว่างทำงานอย่าปิดหรือรีเฟรชหน้านี้"; tempVideos[draftId] = f; return false; });
     } else saving = Promise.resolve(true);
-    const fi = $("#finfo"); fi.hidden = false; fi.innerHTML = `<div class="fileinfo"><img id="fthumb" alt=""><div><b>${esc(f.name)}</b><span class="hint" id="fmeta">${fmtSize(f.size)} · กำลังอ่านไฟล์…</span><span class="hint" id="fsave">${resumed ? "" : "กำลังบันทึกวิดีโอไว้ในเครื่อง…"}</span></div><button class="btn small" id="chg">เปลี่ยน</button></div>`;
+    const fi = $("#finfo"); fi.hidden = false; fi.innerHTML = `<div class="fileinfo"><img id="fthumb" alt=""><div><b>${esc(f.name)}</b><span class="hint" id="fmeta">${fmtSize(f.size)} · กำลังอ่านไฟล์…</span><span class="hint" id="fsave">${resumed ? "" : "กำลังบันทึกวิดีโอไว้ในเครื่อง…"}</span></div><div class="col-btns"><button class="btn small" id="chg">เปลี่ยน</button><button class="btn small" id="addClip">+ คลิป</button></div></div>`;
+    $("#addClip").onclick = e => { e.preventDefault(); $("#vmore").click(); };
     $("#chg").onclick = e => { e.preventDefault(); $("#vfile").click(); };
     if (!$("#pname").value.trim()) $("#pname").value = f.name.replace(/\.[^.]+$/, "");
     try {
@@ -3238,11 +3608,49 @@ function viewNew(resumeId) {
     await takeFile(f, true);
     if (draft.raw) { $("#go").textContent = "ทำต่อ (ถอดเสียงไว้แล้ว)"; toast("ถอดเสียงไว้แล้ว กด “ทำต่อ” ได้เลย", 3500); }
   })();
-  $("#vfile").onchange = e => takeFile(e.target.files[0]);
+  /* several clips → list to order, then join into one video */
+  let clips = [];
+  const pickFiles = list => { const fs = [...(list || [])].filter(f => f && (/^video\//.test(f.type) || /\.(mov|mp4|m4v|webm)$/i.test(f.name))); if (!fs.length) return; if (fs.length === 1 && !clips.length) { takeFile(fs[0]); return; } clips = clips.concat(fs); renderClips(); };
+  function renderClips() {
+    const box = $("#clipList");
+    if (clips.length < 2) { box.hidden = true; box.innerHTML = ""; if (clips.length === 1) { const f = clips[0]; clips = []; takeFile(f); } return; }
+    file = null; $("#finfo").hidden = true; box.hidden = false; refresh();
+    const tot = clips.reduce((a, f) => a + f.size, 0);
+    box.innerHTML = `<div class="clips"><b>รวม ${clips.length} คลิปเป็นวิดีโอเดียว</b><span class="hint">เล่นเรียงจากบนลงล่าง กด ↑ ↓ เพื่อสลับลำดับ · รวม ${fmtSize(tot)}</span>
+      <ol>${clips.map((f, i) => `<li><span class="mono cnum">${i + 1}</span><span class="cn">${esc(f.name)}<span class="hint">${fmtSize(f.size)}</span></span><button type="button" class="mini" data-up="${i}"${i ? "" : " disabled"} aria-label="เลื่อนขึ้น">↑</button><button type="button" class="mini" data-dn="${i}"${i < clips.length - 1 ? "" : " disabled"} aria-label="เลื่อนลง">↓</button><button type="button" class="mini del" data-rm="${i}" aria-label="เอาออก">✕</button></li>`).join("")}</ol>
+      <div class="row"><button type="button" class="btn small" id="clipAdd">+ เพิ่มคลิป</button><button type="button" class="btn primary" id="clipJoin">🔗 รวม ${clips.length} คลิป</button></div>
+      <div class="jbar" id="joinBar" hidden><i id="joinFill"></i></div><span class="hint" id="joinTxt">คลิปจากกล้องเดียวกันรวมได้ในไม่กี่วินาที คุณภาพเท่าต้นฉบับ</span></div>`;
+    box.onclick = e => { const b = e.target.closest("button"); if (!b || busy) return;
+      if (b.dataset.up) { const i = +b.dataset.up; [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]]; renderClips(); }
+      else if (b.dataset.dn) { const i = +b.dataset.dn; [clips[i + 1], clips[i]] = [clips[i], clips[i + 1]]; renderClips(); }
+      else if (b.dataset.rm) { clips.splice(+b.dataset.rm, 1); renderClips(); }
+      else if (b.id === "clipAdd") $("#vmore").click();
+      else if (b.id === "clipJoin") joinNow(b); };
+  }
+  async function joinNow(btn) {
+    /* iPhone only lets audio/video start from a tap: unlock them now in case the slow path is needed */
+    const AC = window.AudioContext || window.webkitAudioContext, pre = {};
+    try { pre.ac = new AC(); pre.ac.resume().catch(() => {}); } catch {}
+    try { pre.v = document.createElement("video"); pre.v.playsInline = true; pre.v.muted = true; pre.v.src = URL.createObjectURL(clips[0]); pre.v.play().then(() => { pre.v.pause(); pre.v.muted = false; }).catch(() => { pre.v.muted = false; }); } catch {}
+    busy = true; refresh(); btn.disabled = true; $("#joinBar").hidden = false;
+    const txt = $("#joinTxt"), n = clips.length; txt.textContent = "กำลังรวมคลิป… อย่าปิดหน้านี้";
+    try {
+      const r = await joinClips(clips, pr => { $("#joinFill").style.width = (pr * 100).toFixed(1) + "%"; txt.textContent = `กำลังรวมคลิป ${Math.round(pr * 100)}% อย่าปิดหน้านี้`; }, pre);
+      const base = $("#pname").value.trim() || clips[0].name.replace(/\.[^.]+$/, "");
+      const f = new File([r.blob], `${base} (รวม ${n} คลิป).mp4`, { type: r.blob.type || "video/mp4" });
+      clips = []; $("#clipList").hidden = true; busy = false;
+      await takeFile(f);
+      toast(r.fast ? `รวม ${n} คลิปแล้ว คุณภาพเท่าต้นฉบับ` : `รวม ${n} คลิปแล้ว (คลิปต่างชนิดกัน จึงอัดใหม่)`, 4000);
+    } catch (e) { toast("รวมคลิปไม่สำเร็จ: " + e.message, 6000); btn.disabled = false; $("#joinBar").hidden = true; txt.textContent = ""; }
+    if (pre.v && pre.v.src && pre.v.src.startsWith("blob:")) { try { URL.revokeObjectURL(pre.v.src); } catch {} }
+    busy = false; refresh();
+  }
+  $("#vmore").onchange = e => { const add = [...e.target.files]; e.target.value = ""; if (!add.length) return; if (file && !clips.length) clips = [file]; pickFiles(add); };
+  $("#vfile").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; clips = []; pickFiles(fs); };
   const drop = $("#drop");
   drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); takeFile(e.dataTransfer.files[0]); });
+  drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); clips = []; pickFiles(e.dataTransfer.files); });
 
   $("#go").onclick = async () => {
     if (!hasKey()) { openSettings(); return; }
@@ -3256,7 +3664,7 @@ function viewNew(resumeId) {
     $('li[data-s="tr"]', steps).hidden = !lang2;
     const autoSfx = $("#npSfx").checked, autoFix = $("#npFix").checked, autoKw = $("#npKw").checked;
     const autoSplit = $("#npSplit").checked, autoCut = $("#npCut").checked;
-    $('li[data-s="cut"]', steps).hidden = !autoCut;
+    $('li[data-s="cut"]', steps).hidden = !autoCut; const autoFx = $("#npFx").checked; $('li[data-s="fx"]', steps).hidden = !autoFx;
     $('li[data-s="split"]', steps).hidden = !autoSplit;
     $('li[data-s="sfx"]', steps).hidden = !autoSfx; $('li[data-s="fix"]', steps).hidden = !autoFix; $('li[data-s="kw"]', steps).hidden = !autoKw;
     if (lang2) $("#trLab").textContent = "แปลเป็นภาษา" + LNAME[lang2];
@@ -3264,7 +3672,7 @@ function viewNew(resumeId) {
     let stage = "audio";
     try {
       settings.lang = lang; settings.lang2 = lang2; settings.maxChars = maxChars; settings.vocab = $("#vocab").value.trim();
-      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoCut = autoCut; settings.autoSplit = autoSplit; settings.splitLook = npOrient; saveSettings();
+      settings.style = { ...npStyle }; settings.autoSfx = autoSfx; settings.autoFix = autoFix; settings.autoKw = autoKw; settings.autoCut = autoCut; settings.autoFx = autoFx; settings.autoSplit = autoSplit; settings.splitLook = npOrient; saveSettings();
       if (saving) await saving;
       let raw, detected = lang, duration = meta ? meta.duration : 0;
       if (haveRaw) { raw = draft.raw; detected = draft.detected || lang; mark("audio", "done"); mark("ai", "done"); }
@@ -3337,6 +3745,11 @@ function viewNew(resumeId) {
         stage = "cut"; mark("cut", "doing");
         try { await aiAutoEdit(p, { blob: file }); mark("cut", "done"); p.updatedAt = Date.now(); await DB.put(p); }
         catch (e) { mark("cut", "fail"); toast("ข้ามการตัดต่ออัตโนมัติ: " + e.message + " กดตัดใหม่ได้ในหน้าแก้ไข", 5000); }
+      }
+      if (autoFx) {
+        stage = "fx"; mark("fx", "doing");
+        try { p.fxTheme = settings.fxTheme || "ss59"; await aiEffects(p); mark("fx", "done"); p.updatedAt = Date.now(); await DB.put(p); }
+        catch (e) { mark("fx", "fail"); toast("ข้ามการใส่เอฟเฟกต์: " + e.message + " กดใส่ใหม่ได้ในหน้าแก้ไข", 5000); }
       }
       if (autoKw) {
         stage = "kw"; mark("kw", "doing");
@@ -3427,7 +3840,10 @@ async function viewEditor(id) {
           <div class="cutbox">
             <button class="btn primary block" id="qCut">✂️ ตัดต่อให้อัตโนมัติ</button>
             <span class="hint" id="qCutStat">ตัดช่วงเงียบ เทคที่พูดซ้ำ และคำพูดนอกบทออก แล้วซูมสลับจังหวะให้ · ต้นฉบับไม่ถูกลบ เอาคืนได้ทุกจุด</span>
-            <div class="row" id="qCutCtl" hidden><button class="btn small" id="qCutOn"></button><button class="btn small" id="qZoom"></button><button class="btn small" id="qCutAgain">ตัดใหม่</button></div>
+            <div class="row" id="qCutCtl" hidden><button class="btn small" id="qCutOn"></button><button class="btn small" id="qZoom"></button><button class="btn small" id="qPace"></button><button class="btn small" id="qCutAgain">ให้ AI ตัดใหม่</button></div>
+            <div class="fxrow"><button class="btn block" id="qFx">✨ ใส่เอฟเฟกต์อัตโนมัติ</button><select class="input" id="qFxTheme" aria-label="ธีมเอฟเฟกต์">${Object.entries(FX_THEMES).map(([k, T]) => `<option value="${k}"${k === p.fxTheme ? " selected" : ""}>${T.n}</option>`).join("")}</select></div>
+            <span class="hint" id="qFxStat">AI ฟังเนื้อหาแล้วเลือกเอฟเฟกต์ตามอารมณ์: ป้ายกระดาษ พาดหัว เช็กลิสต์ ควร/ไม่ควร ตัวเลข ซูม REC สปอตไลต์ ชวนคอมเมนต์</span>
+            <div class="row" id="qFxCtl" hidden><button class="btn small" id="qFxAgain">สุ่มชุดใหม่</button><button class="btn small" id="qFxOff">ลบเอฟเฟกต์ทั้งหมด</button></div>
           </div>
           <div class="aibar">
             <b>ซับหรือคำแปลไม่ตรง? ให้ AI ทำใหม่ในปุ่มเดียว</b>
@@ -3589,7 +4005,7 @@ async function viewEditor(id) {
     </div>`;
 
   /* ---------- save + undo/redo ---------- */
-  const snap = () => JSON.stringify({ captions: p.captions, sfx: p.sfx, style: p.style, tr: p.tr, layout: p.layout, fit: p.fit, lang: p.lang, audio: p.audio, maxChars: p.maxChars, split: p.split, edit: p.edit || null });
+  const snap = () => JSON.stringify({ captions: p.captions, sfx: p.sfx, style: p.style, tr: p.tr, layout: p.layout, fit: p.fit, lang: p.lang, audio: p.audio, maxChars: p.maxChars, split: p.split, edit: p.edit || null, fx: p.fx, fxTheme: p.fxTheme });
   let hist = [snap()], hi = 0;
   const syncUndo = () => { $("#undo").disabled = hi <= 0 && !histT; $("#redo").disabled = hi >= hist.length - 1; };
   const pushHist = () => { clearTimeout(histT); histT = 0; const s = snap(); if (s !== hist[hi]) { hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 80) hist.shift(); hi = hist.length - 1; } syncUndo(); };
@@ -3602,7 +4018,7 @@ async function viewEditor(id) {
   }
   function restore(i) {
     Object.assign(p, JSON.parse(hist[i])); hi = i; save(); syncUndo();
-    renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); syncSplitUI(); renderScenes(); sizeStage(); syncCut(); draw(); loadMediaEls(p, pvMedia).then(hookMedia);
+    renderList(); syncStyleUI(); renderSfx(); syncLang(); syncFrame(); syncSplitUI(); renderScenes(); sizeStage(); syncCut(); syncFx(); draw(); loadMediaEls(p, pvMedia).then(hookMedia);
     if (sid) { if (p.captions.some(c => c.id === sid)) fillSheet(); else closeSheet(); }
   }
   $("#mvOut").onclick = async () => {
@@ -3784,6 +4200,7 @@ async function viewEditor(id) {
     ctx.clearRect(0, 0, cv.width, cv.height);
     paintBg(video && video.paused);
     if (p.split.on) paintScene(t);
+    if (!(p.split.on && p.split.mode === "split")) { try { drawFx(ctx, cv.width, cv.height, p, t); } catch (e) { console.error(e); } }
     const c = captionAt(p.captions, t);
     if (c && c.id !== edId) { try { drawCaption(ctx, cv.width, cv.height, c, p, t); } catch (e) { console.error(e); } }
     if (guideOn) { ctx.save(); ctx.strokeStyle = "rgba(255,212,0,.95)"; ctx.setLineDash([10, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cv.width / 2, 0); ctx.lineTo(cv.width / 2, cv.height); ctx.stroke(); ctx.restore(); }
@@ -3836,14 +4253,15 @@ async function viewEditor(id) {
 
   /* ---------- caption list ---------- */
   const grow = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
-  const WHY = { retake: "เทคซ้ำ", offscript: "นอกบท", filler: "คำติดปาก", silence: "เงียบ" };
+  const WHY = { retake: "เทคซ้ำ", offscript: "นอกบท", filler: "คำติดปาก", silence: "เงียบ", manual: "ตัดเอง" };
   const capCut = c => { if (!p.edit || !p.edit.on) return ""; const m = (c.start + c.end) / 2; if (!cutAt(p, m) || !cutAt(p, c.start + 0.02)) return ""; const d = (p.edit.dropped || []).find(x => x.id === c.id); return d ? (WHY[d.why] || "ตัดออก") : "ตัดออก"; };
+  const fxChips = c => (p.fx || []).filter(f => f.t0 >= c.start - 0.01 && f.t0 < c.end).map(f => `<button type="button" class="mini fxchip" data-fx="${f.id}">✨ ${FX_KINDS[f.k]}${f.text ? ": " + esc(f.text) : ""}</button>`).join("");
   const rowHTML = c => {
     const fx = p.sfx.filter(x => x.t >= c.start && x.t < c.end).map(x => sfxName(x.key)).join(", ");
     return `<button type="button" class="ln-t mono" data-open aria-label="ตั้งค่าบรรทัดเวลา ${fmtT(c.start)}">${fmtT(c.start)}</button><textarea class="ln-in" data-f="text" rows="1" enterkeyhint="enter" aria-label="ข้อความซับ" placeholder="พิมพ์ซับ…">${esc(c.text)}</textarea>${p.tr.lang ? `<textarea class="ln-in tr" data-f="tr" rows="1" aria-label="คำแปล" placeholder="คำแปลภาษา${LNAME[p.tr.lang]}">${esc(c.tr || "")}</textarea>` : ""}${c.hl && c.hl.length ? `<span class="ln-sfx">เน้น: ${esc(c.hl.join(", "))}</span>` : ""}${fx ? `<span class="ln-sfx">♪ ${esc(fx)}</span>` : ""}`;
   };
   function renderList(focusId, caret) {
-    $("#lines").innerHTML = p.captions.map(c => { const cut = capCut(c); return `<li class="ln${c.id === sid ? " sel" : ""}${cut ? " cut" : ""}" data-id="${c.id}">${rowHTML(c)}${cut ? `<button type="button" class="mini" data-restore>✂ ${cut} · เอาคืน</button>` : ""}</li>`; }).join("");
+    $("#lines").innerHTML = p.captions.map(c => { const cut = capCut(c); return `<li class="ln${c.id === sid ? " sel" : ""}${cut ? " cut" : ""}" data-id="${c.id}">${rowHTML(c)}${cut ? `<button type="button" class="mini" data-restore>✂ ${cut} · เอาคืน</button>` : `<button type="button" class="mini" data-cutline aria-label="ตัดบรรทัดนี้ออก">✂ ตัด</button>`}${fxChips(c)}</li>`; }).join("");
     $$("#lines .ln-in").forEach(grow);
     activeId = undefined; draw();
     if (focusId) { const ta = $(`.ln[data-id="${focusId}"] .ln-in`); if (ta) { ta.focus(); const pos = caret == null ? ta.value.length : caret; try { ta.setSelectionRange(pos, pos); } catch {} } }
@@ -4125,13 +4543,14 @@ async function viewEditor(id) {
     $("#qCutCtl").hidden = !on; $("#qCut").hidden = on;
     if (!on) return;
     $("#qCutOn").textContent = E.on ? "ดูต้นฉบับ (ไม่ตัด)" : "ใช้คลิปที่ตัดแล้ว";
-    $("#qZoom").textContent = E.zoom === false ? "ซูม: ปิด" : "ซูม: เปิด";
+    $("#qZoom").textContent = E.zoom === false ? "ซูม: ปิด" : E.zoom === "strong" ? "ซูม: แรง" : "ซูม: นุ่ม";
+    $("#qPace").textContent = E.pace === "natural" ? "จังหวะ: ธรรมชาติ" : "จังหวะ: กระชับ";
     $("#qCutStat").textContent = E.on ? `ตัดแล้ว ${E.cuts.length} จุด · เหลือ ${fmtDur(keptDuration(p))} จาก ${fmtDur(p.duration)}${(E.dropped || []).length ? ` · เอาบรรทัดที่พูดซ้ำ/นอกบทออก ${E.dropped.length} บรรทัด (ขีดฆ่าในรายการด้านล่าง กด "เอาคืน" ได้)` : ""}` : "กำลังดูต้นฉบับ ยังไม่ได้ใช้การตัด";
   }
   async function runCut(btn) {
     if (!hasKey()) { openSettings(); return; }
     btn.disabled = true; const st = $("#qCutStat"); st.textContent = "AI กำลังดูทั้งคลิป หาช่วงเงียบ เทคซ้ำ และคำพูดนอกบท…";
-    try { const r = await aiAutoEdit(p, { blob }); changed(); renderList(); syncCut(); video && video.pause(); seekTo(0); draw();
+    try { const r = await aiAutoEdit(p, { blob }); changed(); renderList(); syncCut(); video && video.pause(); { const c0 = cutAt(p, 0); seekTo(c0 ? c0[1] : 0); } draw();
       toast(r.aiError ? `ตัดช่วงเงียบแล้ว เหลือ ${fmtDur(r.after)} แต่ AI ตรวจเทคซ้ำไม่ได้: ${r.aiError}` : `ตัดแล้ว เหลือ ${fmtDur(r.after)} จาก ${fmtDur(r.before)} กดเล่นดูได้เลย`, r.aiError ? 7000 : 4000); }
     catch (e) { st.textContent = ""; toast(e.message, 5000); syncCut(); }
     btn.disabled = false;
@@ -4139,10 +4558,39 @@ async function viewEditor(id) {
   $("#qCut").onclick = () => runCut($("#qCut"));
   $("#qCutAgain").onclick = () => runCut($("#qCutAgain"));
   $("#qCutOn").onclick = () => { p.edit.on = !p.edit.on; changed(); renderList(); syncCut(); draw(); };
-  $("#qZoom").onclick = () => { p.edit.zoom = p.edit.zoom === false; changed(); syncCut(); draw(); };
-  $("#lines").addEventListener("click", e => { const b = e.target.closest("[data-restore]"); if (!b) return; const c = capOf(b); if (!c) return;
+  $("#qZoom").onclick = () => { const z = p.edit.zoom; p.edit.zoom = z === false ? "soft" : z === "strong" ? false : "strong"; changed(); syncCut(); draw(); };
+  $("#qPace").onclick = async () => { const nx = p.edit.pace === "natural" ? "tight" : "natural"; try { await aiAutoEdit(p, { blob, pace: nx, reuse: true }); changed(); renderList(); syncCut(); draw(); toast(nx === "tight" ? "ตัดแบบกระชับ เว้นช่วงหายใจสั้น" : "ตัดแบบธรรมชาติ เว้นช่วงหายใจยาวขึ้น"); } catch (e) { toast(e.message); } };
+  function syncFx() {
+    const n = (p.fx || []).length; $("#qFxCtl").hidden = !n; $("#qFx").textContent = n ? `✨ เอฟเฟกต์ ${n} จุด · ไปดู` : "✨ ใส่เอฟเฟกต์อัตโนมัติ";
+    $("#qFxTheme").value = p.fxTheme;
+  }
+  async function runFx(btn) {
+    if (!hasKey()) { openSettings(); return; }
+    btn.disabled = true; const st = $("#qFxStat"), old = st.textContent; st.textContent = "AI กำลังฟังเนื้อหาและเลือกเอฟเฟกต์ตามอารมณ์ของแต่ละช่วง…";
+    try { await document.fonts.load('600 40px "IBM Plex Sans Thai"'); await document.fonts.load('700 40px "Mali"'); } catch {}
+    try { const n = await aiEffects(p); changed(); renderList(); renderSfx(); syncFx(); st.textContent = `ใส่แล้ว ${n} จุด (ดูได้ในรายการซับ แตะ ✨ เพื่อแก้ข้อความหรือลบ)`; video && video.pause(); seekTo(Math.max(0, p.fx[0].t0 - 1)); draw(); }
+    catch (e) { st.textContent = old; toast(e.message, 5000); }
+    btn.disabled = false;
+  }
+  $("#qFx").onclick = () => { if ((p.fx || []).length) { video && video.pause(); seekTo(Math.max(0, p.fx[0].t0 - 1)); draw(); toast("เลื่อนไปที่เอฟเฟกต์แรกแล้ว กดเล่นดูได้เลย"); return; } runFx($("#qFx")); };
+  $("#qFxAgain").onclick = () => runFx($("#qFxAgain"));
+  $("#qFxOff").onclick = () => { p.fx = []; p.sfx = p.sfx.filter(x => x.src !== "fx"); changed(); renderList(); renderSfx(); syncFx(); draw(); };
+  $("#qFxTheme").onchange = e => { p.fxTheme = e.target.value; settings.fxTheme = p.fxTheme; saveSettings(); changed(); draw(); };
+  $("#lines").addEventListener("click", e => {
+    const fb = e.target.closest("[data-fx]");
+    if (fb) { const f = p.fx.find(x => x.id === fb.dataset.fx); if (!f) return; video && video.pause(); seekTo(Math.max(0, f.t0 - 0.3)); draw();
+      const cur = f.k === "list" || f.k === "vs" ? [f.text, ...(f.items || []).map(i => i.text)].filter(Boolean).join(" | ") : f.text;
+      const v = prompt(`แก้ข้อความ "${FX_KINDS[f.k]}" (ลบข้อความทั้งหมด = ลบเอฟเฟกต์นี้)${f.k === "list" || f.k === "vs" ? "\nคั่นแต่ละข้อด้วย |" : ""}`, cur || "");
+      if (v === null) return;
+      if (!v.trim() && f.k !== "flash" && f.k !== "rec") { p.fx = p.fx.filter(x => x !== f); p.sfx = p.sfx.filter(x => !(x.src === "fx" && Math.abs(x.t - f.t0) < 0.05)); }
+      else if (f.k === "list" || f.k === "vs") { const parts = v.split("|").map(x => x.trim()).filter(Boolean); if (f.k === "list") f.text = parts.shift() || ""; parts.forEach((x, i) => { if (f.items[i]) f.items[i].text = x; else f.items.push({ t: f.t0 + i, text: x }); }); f.items.length = Math.min(f.items.length, parts.length); }
+      else f.text = v.trim();
+      changed(); renderList(); renderSfx(); syncFx(); draw(); return; }
+    const kb = e.target.closest("[data-cutline]");
+    if (kb) { const c = capOf(kb); if (!c) return; addCut(p, Math.max(0, c.start - 0.04), c.end + 0.04); p.edit.dropped = (p.edit.dropped || []).filter(x => x.id !== c.id).concat({ id: c.id, why: "manual" }); changed(); renderList(); syncCut(); draw(); return; }
+    const b = e.target.closest("[data-restore]"); if (!b) return; const c = capOf(b); if (!c) return;
     restoreRange(p, c.start - 0.12, c.end + 0.12); p.edit.dropped = (p.edit.dropped || []).filter(x => x.id !== c.id); changed(); renderList(); syncCut(); seekTo(c.start); draw(); });
-  syncCut();
+  syncCut(); syncFx();
   $("#qRe").onclick = () => {
     const v = $("#qTr").value;
     if (v && v !== p.lang && v !== p.tr.lang) { p.captions.forEach(c => c.tr = ""); p.tr.lang = v; if (p.tr.mode === "main") p.tr.mode = "both"; syncLang(); }
@@ -4539,6 +4987,7 @@ async function viewEditor(id) {
       await unlock;
       if (v.readyState < 1) await once(v, "loadedmetadata");
       await ensureFont(p.style);
+      if ((p.fx || []).length) { try { await document.fonts.load('600 40px "IBM Plex Sans Thai"'); await document.fonts.load('500 40px "IBM Plex Sans Thai"'); await document.fonts.load('700 40px "Mali"'); } catch {} }
       const bufs = {};
       for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
       const { W, H } = frameDims(p, v.videoWidth, v.videoHeight);
