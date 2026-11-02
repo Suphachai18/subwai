@@ -140,7 +140,7 @@ input.input,select.input,textarea.input{max-width:100%}
 .tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
 .pane{padding:14px;display:grid;gap:14px}
 .subseg{margin:12px 14px 0}
-.claudebox{display:grid;gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:12px} .claudebox .row{flex-wrap:wrap}
+.claudebox{display:grid;gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:12px} .claudebox .row{flex-wrap:wrap} .pkmore summary{cursor:pointer;padding:4px 0} .pkmore .row{margin-top:6px}
 #pkModal textarea{width:100%;min-height:200px;font-family:var(--mono);font-size:12px}
 .chk{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px} .chk li{display:grid} .chk li.ok .hint{color:var(--ok)} .chk li.bad .hint{color:var(--danger)} .chk li.warn .hint{color:var(--accent-text)}
 .cloudchip{min-height:34px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-family:var(--ui);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
@@ -366,7 +366,7 @@ details.box .in{display:grid;gap:8px;padding-bottom:12px}
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (8) · นำเข้ากราฟิกจาก Claude</span>
+  <span class="ver">ซับไว เวอร์ชัน 2 พ.ย. (9) · กราฟิกจาก Claude ปรับตามทุกโหมด</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2300,6 +2300,10 @@ function packRequest(p) {
 - ห้ามโหลดรูป ฟอนต์ หรือเน็ตจากภายนอก ไม่ต้องวาดซับ (แอปวาดให้แล้ว) ภาษาในกราฟิกให้ตรงกับคลิป
 - ตัวช่วย A: A.ease.{out,expo,back,inOut,spring}(x 0..1), A.clamp(x), A.lerp(a,b,k), A.rrect(ctx,x,y,w,h,r), A.font(weight,px) (ฟอนต์ Kanit รองรับไทย), A.fit(ctx,text,maxW,px,weight,maxLines) → {size,lines}, A.words(text) ตัดคำไทย, A.art(ctx,name,cx,cy,size,t) ภาพแอนิเมชันสำเร็จรูป: ${Object.keys(ART).join(", ")}, A.tint(hex,amt), A.rgba(hex,a), A.grain(ctx,W,H,alpha), A.sparkle(ctx,x,y,r,color), A.accent, A.PAL
 - เฟรมคลิป: ${fd.W}×${fd.H}
+- เลย์เอาต์ต้องปรับตาม W,H เอง (ใช้ได้ทั้งเต็มจอ แบ่งจอ และการ์ด) วัดขนาดจาก min(W,H) ไม่ใช้พิกัดตายตัว เนื้อหาไม่ทับกัน ในเฟรมแนวตั้งเต็มจอ ให้กราฟิกอยู่ช่วงบน ~62% เพราะซับอยู่ด้านล่าง
+- ข้อความไทย: วาดทั้งบรรทัดด้วย fillText ครั้งเดียว (เผยทีละคำด้วย clip ได้) ห้ามวาดแยกทีละคำ/ตัวอักษร ห้ามใช้ shadowBlur คู่กับสีไล่ระดับบนตัวอักษร (iPhone แสดงเพี้ยน) ตัดบรรทัดเองด้วย \n ตรงรอยคำ ไม่ให้ "?" หรือพยางค์ตกบรรทัดเดี่ยว
+- สะกดและถ้อยคำต้องตรงกับคำพูดในคลิปทุกตัวอักษร
+- สไตล์มืออาชีพแบบงานบรรณาธิการ: สีพื้นเรียบ ตัวอักษรใหญ่ชัด ระยะห่างโปร่ง ไม่ใช้แสงเรือง ประกาย หรือลวดลายรก ๆ ที่ดูเป็นงาน AI
 
 [CLIP]
 ${JSON.stringify(clip)}
@@ -3197,9 +3201,9 @@ async function viewEditor(id) {
           <button class="btn primary block" id="spAi">✨ ให้ AI ออกแบบภาพประกอบจากสคริปต์</button>
           <div class="xbox claudebox">
             <b>กราฟิกระดับมืออาชีพจาก Claude (ทำทีละคลิป)</b>
-            <span class="hint">1) กดส่งสคริปต์ แล้วส่งให้ Claude ในแชต 2) Claude ส่งไฟล์ชุดกราฟิกกลับมา 3) กดนำเข้า</span>
-            <div class="row"><button class="btn small" id="pkSend">① ส่งสคริปต์ให้ Claude</button><button class="btn small" id="pkCopy">คัดลอกเป็นข้อความ</button></div>
-            <div class="row"><label class="btn small primary" for="pkFile">③ นำเข้าชุดกราฟิก (.js)</label><input type="file" id="pkFile" accept=".js,.txt,text/javascript,text/plain,application/javascript" hidden><button class="btn small" id="pkPaste">วางโค้ด</button><button class="btn small" id="pkOff" hidden>เอาชุดกราฟิกออก</button></div>
+            <span class="hint">กด ① แล้วส่งไฟล์ให้ Claude ในแชต · ได้ไฟล์ .js กลับมา กด ② เป็นอันเสร็จ (กราฟิกปรับตามโหมดที่เลือกให้เอง)</span>
+            <div class="row"><button class="btn small" id="pkSend">① ส่งสคริปต์ให้ Claude</button><label class="btn small primary" for="pkFile">② นำเข้าไฟล์ที่ได้ (.js)</label><input type="file" id="pkFile" accept=".js,.txt,text/javascript,text/plain,application/javascript" hidden></div>
+            <details class="pkmore"><summary class="hint">ตัวเลือกอื่น</summary><div class="row"><button class="btn small" id="pkCopy">คัดลอกเป็นข้อความ</button><button class="btn small" id="pkPaste">วางโค้ด</button><button class="btn small" id="pkOff" hidden>เอาชุดกราฟิกออก</button></div></details>
             <span class="hint" id="pkStat"></span>
           </div>
           <span class="hint" id="spStat" style="margin-top:-8px"></span>
