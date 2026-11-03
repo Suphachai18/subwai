@@ -372,7 +372,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (34) · เสียงประกอบชุดมินิมอล</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (35) · เสียงมินิมอลชุดใหม่</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -998,6 +998,9 @@ function osc(c, out, type, f0, f1, t0, dur, peak, att = 0.005) {
   const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + att); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   o.connect(g).connect(out); o.start(t0); o.stop(t0 + dur + 0.05); return o;
 }
+/* warm muted marimba: slightly detuned body, short wooden attack, soft sub */
+function mar(c, o, f, dur) { osc(c, o, "sine", f, 0, 0, dur, 0.62, 0.003); osc(c, o, "sine", f * 1.004, 0, 0, dur * 0.9, 0.3, 0.004); osc(c, o, "sine", f * 2, 0, 0, dur * 0.35, 0.1, 0.002); osc(c, o, "sine", f * 4.02, 0, 0, 0.05, 0.05, 0.001); osc(c, o, "triangle", f / 2, 0, 0, dur * 0.7, 0.16, 0.006);
+  const n = nzb(c, 0.015), b = bq(c, "bandpass", f * 3, 2), g = envG(c, [[0, 0], [0.001, 0.08], [0.012, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(0); }
 function bellTone(c, out, f, t0, dur, peak) { [[1, 1], [2.76, 0.4], [5.4, 0.16], [8.93, 0.06]].forEach(([r, a], i) => osc(c, out, "sine", f * r, 0, t0, dur / (1 + i * 0.9), peak * a, 0.003)); }
 function panTo(c, out, from, to, t0, dur) {
   if (!c.createStereoPanner) return out;
@@ -1029,11 +1032,11 @@ const BUILTIN = {
   boing: { n: "ดึ๋ง", d: 0.6, rv: 0.08, lp: 2500, en: "light playful boing, funny moment", f: (c, o) => { const s = c.createOscillator(); s.type = "sine"; s.frequency.setValueAtTime(200, 0); s.frequency.exponentialRampToValueAtTime(420, 0.45); const l = c.createOscillator(); l.frequency.value = 11; const lg = c.createGain(); lg.gain.setValueAtTime(40, 0); lg.gain.linearRampToValueAtTime(4, 0.55); l.connect(lg).connect(s.frequency); const g = envG(c, [[0, 0], [0.01, 0.6], [0.55, 0.0001, "e"]]); s.connect(g).connect(o); s.start(0); l.start(0); s.stop(0.6); l.stop(0.6); } },
   /* minimal "studio" set: soft, warm, low level — for premium motion graphics */
   tap: { n: "แตะนุ่ม", d: 0.12, rv: 0.14, lp: 5200, en: "soft felt tap, a small item appears", f: (c, o) => { osc(c, o, "sine", 1480, 1240, 0, 0.07, 0.5, 0.002); osc(c, o, "sine", 740, 700, 0, 0.09, 0.35, 0.002); const n = nzb(c, 0.02), b = bq(c, "bandpass", 3000, 1.2), g = envG(c, [[0, 0], [0.002, 0.12], [0.018, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(0); } },
-  glide: { n: "เลื่อนนุ่ม", d: 0.6, rv: 0.18, lp: 3800, en: "very soft airy glide, scene or card slides in", f: (c, o) => air(c, o, 0.6, 380, 1300, 520, 0.26, 0.55, 0.55, [-0.35, 0.35]) },
+  glide: { n: "เลื่อนนุ่ม", d: 0.65, rv: 0.2, lp: 5200, en: "soft airy glide, scene or card slides in", f: (c, o) => { air(c, o, 0.65, 320, 1200, 450, 0.28, 0.6, 0.8, [-0.45, 0.45]); air(c, o, 0.5, 1800, 4200, 2600, 0.24, 1.1, 0.22, [0.3, -0.3]); osc(c, o, "sine", 120, 90, 0.1, 0.4, 0.08, 0.15); } },
   felt: { n: "ปั๊มนุ่ม", d: 0.26, rv: 0.12, lp: 2600, en: "soft rubber-stamp thump", f: (c, o) => { osc(c, o, "sine", 150, 68, 0, 0.2, 0.9, 0.002); const n = nzb(c, 0.06, true), b = bq(c, "bandpass", 900, 0.9), g = envG(c, [[0, 0], [0.003, 0.35], [0.05, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(0); } },
-  note: { n: "โน้ตนุ่ม", d: 0.5, rv: 0.32, lp: 4800, en: "warm muted marimba note, a point is revealed", f: (c, o) => { osc(c, o, "sine", 784, 0, 0, 0.42, 0.6, 0.003); osc(c, o, "sine", 3136, 0, 0, 0.08, 0.06, 0.002); osc(c, o, "triangle", 392, 0, 0, 0.3, 0.12, 0.004); } },
-  notelo: { n: "โน้ตต่ำ", d: 0.55, rv: 0.32, lp: 4200, en: "warm low marimba note", f: (c, o) => { osc(c, o, "sine", 587.3, 0, 0, 0.46, 0.6, 0.003); osc(c, o, "sine", 2349, 0, 0, 0.08, 0.05, 0.002); osc(c, o, "triangle", 293.7, 0, 0, 0.32, 0.12, 0.004); } },
-  notehi: { n: "โน้ตสูง", d: 0.45, rv: 0.32, lp: 5600, en: "warm high marimba note", f: (c, o) => { osc(c, o, "sine", 987.8, 0, 0, 0.38, 0.55, 0.003); osc(c, o, "sine", 3951, 0, 0, 0.07, 0.05, 0.002); osc(c, o, "triangle", 493.9, 0, 0, 0.28, 0.1, 0.004); } },
+  note: { n: "โน้ตนุ่ม", d: 0.6, rv: 0.34, lp: 5200, en: "warm muted marimba note, a point is revealed", f: (c, o) => mar(c, panTo(c, o, -0.1, -0.1, 0, 1), 784, 0.5) },
+  notelo: { n: "โน้ตต่ำ", d: 0.65, rv: 0.34, lp: 4600, en: "warm low marimba note", f: (c, o) => mar(c, panTo(c, o, -0.25, -0.25, 0, 1), 587.3, 0.56) },
+  notehi: { n: "โน้ตสูง", d: 0.55, rv: 0.34, lp: 6000, en: "warm high marimba note", f: (c, o) => mar(c, panTo(c, o, 0.2, 0.2, 0, 1), 987.8, 0.46) },
   bloom: { n: "บลูม", d: 1.8, rv: 0.5, lp: 2600, en: "soft warm swell, a big reveal or title", f: (c, o) => { [[220, 0.5], [329.6, 0.34], [440, 0.2], [659.3, 0.08]].forEach(([fr, a]) => { const s = c.createOscillator(); s.type = "sine"; s.frequency.value = fr; const g = envG(c, [[0, 0], [0.45, a], [1.0, a * 0.7], [1.75, 0]]); s.connect(g).connect(o); s.start(0); s.stop(1.8); }); } },
   paper: { n: "กระดาษ", d: 0.4, rv: 0.06, lp: 6500, en: "paper card or photo sliding onto a table", f: (c, o) => { const n = nzb(c, 0.4, true), b = bq(c, "bandpass", 2400, 0.5), hp = bq(c, "highpass", 700, 0.6), g = envG(c, [[0, 0], [0.07, 0.6], [0.2, 0.25], [0.38, 0]]); n.connect(b).connect(hp).connect(g).connect(o); n.start(0); } },
   wrong: { n: "ผิด", d: 0.55, rv: 0.12, lp: 1800, en: "soft two-note wrong answer, mistake, no", f: (c, o) => { osc(c, o, "triangle", 392, 0, 0, 0.22, 0.5, 0.008); osc(c, o, "triangle", 311, 0, 0.17, 0.35, 0.5, 0.008); } }
