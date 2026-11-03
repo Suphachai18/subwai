@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (25) · ส่งออก Full HD + แก้เสียง</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (26) · ส่งออก Full HD + วิธีสำรอง</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -5468,12 +5468,12 @@ async function viewEditor(id) {
       if (wc) { try { ac.close(); } catch {} runExportWC(v, vurl, wc); } else runExport(ac, v, vurl, unlock);
     })();
   };
-  async function runExportWC(v, vurl, wc) {
+  async function runExportWC(v, vurl, wc, opts = {}) {
     const job = { cancel: false }; exporting = job; setBusy(true);
     $("#burn").disabled = true; $("#exProg").hidden = false; $("#exRes").hidden = true; $("#exBar").style.width = "0%"; $("#exTxt").textContent = "กำลังเตรียม…";
     let wake = null; try { wake = await navigator.wakeLock.request("screen"); } catch {}
     const exMedia = {}; let venc = null, aenc = null;
-    const finish = () => { freeMedia(exMedia); try { venc && venc.state !== "closed" && venc.close(); } catch {} try { aenc && aenc.state !== "closed" && aenc.close(); } catch {} try { v.pause(); } catch {} v.remove(); URL.revokeObjectURL(vurl); try { wake && wake.release(); } catch {} exporting = null; setBusy(false); $("#burn").disabled = false; $("#exProg").hidden = true; };
+    const finish = keep => { freeMedia(exMedia); try { venc && venc.state !== "closed" && venc.close(); } catch {} try { aenc && aenc.state !== "closed" && aenc.close(); } catch {} try { v.pause(); } catch {} if (!keep) { v.remove(); URL.revokeObjectURL(vurl); } try { wake && wake.release(); } catch {} exporting = null; setBusy(false); $("#burn").disabled = false; $("#exProg").hidden = true; };
     const say = (pct, txt) => { $("#exBar").style.width = Math.min(100, pct).toFixed(1) + "%"; $("#exTxt").textContent = txt; };
     try {
       await ensureFont(p.style);
@@ -5530,8 +5530,9 @@ async function viewEditor(id) {
       /* a) decode the camera file directly: every real frame, in order */
       let ix = null; try { ix = await mp4Index(blob); } catch {}
       let dcfg = ix && ix.v && ix.v.cstr ? { codec: ix.v.cstr, codedWidth: ix.v.w, codedHeight: ix.v.h, ...(ix.v.desc ? { description: ix.v.desc } : {}) } : null;
+      if (opts.seek) dcfg = null;
       if (dcfg) { try { const r = await VideoDecoder.isConfigSupported(dcfg); if (!r || !r.supported) dcfg = null; } catch { dcfg = null; } }
-      if (dcfg) {
+      if (dcfg) try {
         how = "ถอดรหัสทีละเฟรม";
         const V = ix.v, rot = V.rot || 0, side = rot === 90 || rot === 270, sc = document.createElement("canvas"), sx = sc.getContext("2d");
         const q = []; let decErr = null;
@@ -5554,10 +5555,12 @@ async function viewEditor(id) {
         }
         await dec.flush(); await drain(); try { dec.close(); } catch {}
         if (decErr) throw decErr;
-      } else {
+      } catch (de) { if (job.cancel || (de && de.message === "CANCEL") || de === encErr) throw de; const e2 = new Error("ถอดรหัสภาพ " + dcfg.codec + " ไม่ได้: " + ((de && de.message) || de)); e2.fallback = true; throw e2; }
+      else {
         /* b) step the video element frame by frame and wait until the new frame is really on screen */
-        how = "เลื่อนทีละเฟรม";
-        const shown = () => new Promise(r => { let done = false; const fin = () => { if (!done) { done = true; r(); } }; if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => fin()); setTimeout(fin, 250); });
+        how = "เลื่อนทีละเฟรม" + (opts.why ? " (สำรอง)" : "");
+        let hits = 0, tries = 0; /* wait for the new frame to be painted when the browser can tell us; stop waiting if it never does */
+        const shown = () => new Promise(r => { if (!v.requestVideoFrameCallback || (tries >= 12 && !hits)) return r(); tries++; let done = false; const fin = () => { if (!done) { done = true; r(); } }; v.requestVideoFrameCallback(() => { hits++; fin(); }); setTimeout(fin, 300); });
         const seek = t => new Promise(r => { const done = () => { clearTimeout(to); r(); }; const to = setTimeout(done, 4000); v.addEventListener("seeked", done, { once: true }); v.currentTime = t; });
         let si = 0, segK = 0;
         for (let k = 0; k < N; k++) {
@@ -5580,9 +5583,10 @@ async function viewEditor(id) {
       $("#oShare").onclick = () => shareOrSave(file, name);
       $("#oDl").onclick = () => downloadBlob(file, name);
     } catch (e) {
+      if (e && e.fallback && !opts.seek && !job.cancel) { finish(true); toast("วิธีถอดรหัสภาพใช้กับไฟล์นี้ไม่ได้ เปลี่ยนเป็นวิธีสำรองแล้วกำลังสร้างใหม่ (ช้ากว่าแต่ลื่นเท่ากัน)", 6000); return runExportWC(v, vurl, wc, { seek: true, why: e.message }); }
       finish();
       if (e && e.message === "CANCEL") { toast("ยกเลิกแล้ว"); return; }
-      const res = $("#exRes"); res.hidden = false; res.innerHTML = `<div class="err">สร้างวิดีโอไม่สำเร็จ: ${esc((e && e.message) || e)}</div>`;
+      const res = $("#exRes"); res.hidden = false; res.innerHTML = `<div class="err">สร้างวิดีโอไม่สำเร็จ: ${esc((e && e.message) || e)}${opts.why ? `<br><small>${esc(opts.why)}</small>` : ""}</div>`;
     }
   }
   async function runExport(ac, v, vurl, unlock) {
