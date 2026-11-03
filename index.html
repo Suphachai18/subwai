@@ -372,7 +372,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (29) · แก้จอพรีวิวหาย + ซับตรงเสียง</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (30) · เอฟเฟกต์ไม่ทับกราฟิก</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2701,7 +2701,7 @@ async function decodeTrackAudio(file) {
   return { L, R, length: len, rate: A.sr };
 }
 async function decodeClipAudio(file, SR) {
-  try { const r = await decodeTrackAudio(file); if (r === null) return null; return r; } catch (e) { console.warn("track decoder failed", e); }
+  try { const r = await decodeTrackAudio(file); if (r) return r; } catch (e) { console.warn("track decoder failed", e); } /* not found or unsupported: try the other ways before deciding there is no sound */
   const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   const dec = async ab => { const c = new AC(2, SR, SR); return await new Promise((res, rej) => { const pr = c.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); }); };
   /* the sound track alone (small .m4a pieces) decodes far more reliably on iPhone than the whole video */
@@ -2888,6 +2888,7 @@ const fxSpring = x => { x = Math.max(0, x); return x >= 1.4 ? 1 : 1 - Math.exp(-
 const fxRand = (seed, i) => { const s = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return s - Math.floor(s); };
 /* how much the REC effect pushes the camera in */
 function fxZoom(p, t) {
+  if (sceneShowing(p, t)) return 1;
   for (const f of p.fx || []) if (f.k === "rec" && t >= f.t0 && t < f.t1 + 0.3) { const e = fxEnv(f, t, 0.25, 0.3), k = Math.min(e.i, e.o); return 1 + 0.32 * (k * k * (3 - 2 * k)); }
   return 1;
 }
@@ -3303,8 +3304,10 @@ function fxWipe(ctx, W, H, p, f, t) {
   if (f.text) { ctx.font = `600 ${6 * u}px ${T.font}`; ctx.fillStyle = T.ink; ctx.textBaseline = "middle"; ctx.textAlign = "left"; const tw = ctx.measureText(f.text).width; ctx.fillText(f.text, sw / 2 - tw / 2, H * 0.5); ctx.fillStyle = T.acc; ctx.fillRect(sw / 2 - tw / 2, H * 0.5 + 4.5 * u, tw * 0.4, 1.2 * u); }
   ctx.restore(); ctx.restore();
 }
+/* is a graphic scene (pack or built-in) on screen right now? effects then stay out of its way */
+function sceneShowing(p, t) { const sp = p.split; if (!sp || !sp.on) return false; const m = sceneMix(p, t); return !!(m && m.sc && !m.sc.gap && m.sc.show !== false); }
 function drawFx(ctx, W, H, p, t) {
-  const list = fxAt(p, t); if (!list.length) return; fxCurP = p;
+  const list = fxAt(p, t).filter(f => f.k === "wipe" || !sceneShowing(p, t)); if (!list.length) return; fxCurP = p;
   const T = fxTheme(p), u = Math.min(W, H) / 100, port = H > W, topY = port ? H * 0.15 : H * 0.17, maxW = port ? W * 0.82 : W * 0.5;
   for (const f of list) {
     const seed = hashStr(f.id || f.text || "x") % 997;
