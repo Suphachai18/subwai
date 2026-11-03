@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (23) · ส่งออกวิดีโอลื่น 30 fps</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (24) · ส่งออก Full HD ทีละเฟรม</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1295,6 +1295,8 @@ function pickMime() {
 
 /* ================= frame rendering (preview, fullscreen and export share this) ================= */
 const LAYOUTS = { orig: { n: "ต้นฉบับ", r: 0 }, "9:16": { n: "9:16", r: 9 / 16 }, "4:5": { n: "4:5", r: 4 / 5 }, "1:1": { n: "1:1", r: 1 }, "16:9": { n: "16:9", r: 16 / 9 } };
+/* exported videos are always at least Full HD (long side 1920), even from a smaller source */
+const exportDims = (p, vw, vh) => { vw = vw || p.width || 1080; vh = vh || p.height || 1920; const s = 1920 / Math.max(vw, vh); return frameDims(p, vw * s, vh * s); };
 function frameDims(p, vw, vh, maxSide = 1920) {
   vw = vw || p.width || 1080; vh = vh || p.height || 1920;
   const r = p.split && p.split.on && p.split.mode === "split" ? (p.split.orient === "h" ? 16 / 9 : 9 / 16) : (LAYOUTS[p.layout] || LAYOUTS.orig).r || vw / vh;
@@ -2643,6 +2645,18 @@ function wordTime(p, c, w) {
   return +(c.start + (c.end - c.start) * pre / tot).toFixed(2);
 }
 const EMPH_SFX = { hit: "punchy default for an important word", pop: "light or fun word", sparkle: "benefit, beauty or wow", ding: "tip or idea", kaching: "price, money or saving", whoosh: "speed, change or movement", boom: "big reveal or shocking fact (use rarely)" };
+/* ================= smooth export helpers ================= */
+async function decodeClipAudio(file, SR) {
+  const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const dec = async ab => { const c = new AC(2, SR, SR); return await new Promise((res, rej) => { const pr = c.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); }); };
+  /* the sound track alone (small .m4a pieces) decodes far more reliably on iPhone than the whole video */
+  try {
+    const r = await demuxAudio(file, 600, 20e6), len = Math.ceil((r.duration + 1) * SR), L = new Float32Array(len), R = new Float32Array(len);
+    for (const ch of r.chunks) { const b = await dec(await ch.blob.arrayBuffer()), o = Math.round(ch.offset * SR), l = b.getChannelData(0), rr = b.numberOfChannels > 1 ? b.getChannelData(1) : l, n = Math.min(b.length, len - o); L.set(l.subarray(0, n), o); R.set(rr.subarray(0, n), o); }
+    return { L, R, length: len };
+  } catch (e) { if (e && e.message === "no audio track") return null; console.warn("audio track decode failed, trying whole file", e); }
+  const b = await dec(await file.arrayBuffer()); return { L: b.getChannelData(0), R: b.numberOfChannels > 1 ? b.getChannelData(1) : b.getChannelData(0), length: b.length };
+}
 /* ================= smooth export: can this browser encode H.264 + AAC itself? ================= */
 async function wcConfig(W, H) {
   if (!window.VideoEncoder || !window.AudioEncoder || !window.VideoFrame || !window.AudioData) return null;
@@ -2689,8 +2703,14 @@ async function mp4Index(file) {
     const T = { kind, ts, fmt: ent.t, samples: [] };
     if (kind === "vide") {
       T.w = u16(ent.s + 32); T.h = u16(ent.s + 34);
-      const cfg = kids(ent.s + 86, ent.b).find(k => k.t === "avcC" || k.t === "hvcC"); if (!cfg) continue;
-      T.codec = cfg.t === "avcC" ? "avc" : "hevc"; T.desc = B.slice(cfg.a, cfg.b);
+      const cfg = kids(ent.s + 86, ent.b).find(k => k.t === "avcC" || k.t === "hvcC" || k.t === "vpcC"); if (!cfg) continue;
+      T.codec = cfg.t === "avcC" ? "avc" : cfg.t === "hvcC" ? "hevc" : "vp9"; T.desc = B.slice(cfg.a, cfg.b);
+      const D = T.desc, hx = n => n.toString(16).padStart(2, "0");
+      if (T.codec === "avc") T.cstr = "avc1." + hx(D[1]) + hx(D[2]) + hx(D[3]);
+      else if (T.codec === "vp9") { T.cstr = "vp09." + String(D[4]).padStart(2, "0") + "." + String(D[5]).padStart(2, "0") + "." + String(D[6] >> 4).padStart(2, "0"); T.desc = null; }
+      else { const ps = D[1] >> 6, tier = (D[1] >> 5) & 1, prof = D[1] & 31; let cf = ((D[2] << 24) | (D[3] << 16) | (D[4] << 8) | D[5]) >>> 0, rv = 0; for (let i = 0; i < 32; i++) { rv = (rv << 1) | (cf & 1); cf >>>= 1; } rv >>>= 0;
+        const cons = Array.from(D.slice(6, 12)); while (cons.length && !cons[cons.length - 1]) cons.pop();
+        T.cstr = (ent.t === "hev1" ? "hev1" : "hvc1") + "." + ["", "A", "B", "C"][ps] + prof + "." + rv.toString(16).toUpperCase() + "." + (tier ? "H" : "L") + D[12] + (cons.length ? "." + cons.map(x => x.toString(16).toUpperCase()).join(".") : ""); }
       if (tkhd) { const m = tkhd.a + (B[tkhd.a] === 1 ? 52 : 40), a = i32(m), b = i32(m + 4); const r = Math.round(Math.atan2(b, a) * 180 / Math.PI); T.rot = ((r % 360) + 360) % 360; }
     } else {
       const e = scan(ent.a, ent.b, "esds"); if (e < 0) continue;
@@ -5398,7 +5418,7 @@ async function viewEditor(id) {
   $$("#fitSeg button").forEach(b => b.onclick = () => { p.fit = b.dataset.v; syncFrame(); changed(); });
 
   /* ---------- export ---------- */
-  function syncExportHint() { const { W, H } = frameDims(p, video && video.videoWidth, video && video.videoHeight); $("#exHint").textContent = `ขนาด ${W}×${H} · 30 fps ทีละเฟรม ลื่นทุกเฟรม ใช้เวลาประมาณ 1–3 เท่าของความยาวคลิป (${fmtDur(keptDuration(p) || p.duration)}) เปิดหน้าจอค้างไว้จนเสร็จ ห้ามสลับแอป`; }
+  function syncExportHint() { const { W, H } = exportDims(p, video && video.videoWidth, video && video.videoHeight); $("#exHint").textContent = `ขนาด ${W}×${H} · 30 fps ทีละเฟรม ลื่นทุกเฟรม ใช้เวลาประมาณ 1–3 เท่าของความยาวคลิป (${fmtDur(keptDuration(p) || p.duration)}) เปิดหน้าจอค้างไว้จนเสร็จ ห้ามสลับแอป`; }
   $("#srt").onclick = () => {
     const mode = $("#srtMode").value;
     const ts = t => { const ms = Math.round(t * 1000), h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60; return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms % 1000, 3)}`; };
@@ -5421,7 +5441,7 @@ async function viewEditor(id) {
     ac.resume().catch(() => {});
     (async () => {
       /* frame-by-frame export when the browser can encode video itself: smooth 30 fps no matter how heavy the graphics are */
-      let wc = null; try { await unlock; if (v.readyState < 1) await once(v, "loadedmetadata"); const d = frameDims(p, v.videoWidth, v.videoHeight); wc = await wcConfig(d.W, d.H); } catch {}
+      let wc = null; try { await unlock; if (v.readyState < 1) await once(v, "loadedmetadata"); const d = exportDims(p, v.videoWidth, v.videoHeight); wc = await wcConfig(d.W, d.H); } catch {}
       if (wc) { try { ac.close(); } catch {} runExportWC(v, vurl, wc); } else runExport(ac, v, vurl, unlock);
     })();
   };
@@ -5435,15 +5455,16 @@ async function viewEditor(id) {
     try {
       await ensureFont(p.style);
       try { await document.fonts.load('600 40px "IBM Plex Sans Thai"'); await document.fonts.load('500 40px "IBM Plex Sans Thai"'); await document.fonts.load('700 40px "Mali"'); } catch {}
-      const { W, H } = frameDims(p, v.videoWidth, v.videoHeight), FPS = 30, dur = v.duration || p.duration;
+      const { W, H } = exportDims(p, v.videoWidth, v.videoHeight), FPS = 30, dur = v.duration || p.duration;
       /* the pieces of the clip that stay, in order */
       const segs = []; { let a = 0; const cuts = p.edit && p.edit.on ? p.edit.cuts : []; for (const c of cuts) { if (c[0] > a + 0.02) segs.push([a, Math.min(c[0], dur)]); a = Math.max(a, c[1]); } if (dur > a + 0.02) segs.push([a, dur]); }
       const total = segs.reduce((m, [a, b]) => m + b - a, 0);
       /* 1) sound: original speech with tiny fades at every cut + sound effects, mixed offline */
       say(1, "กำลังเตรียมเสียง…");
       const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext, SR = 48000;
-      const ab = await blob.arrayBuffer(); const tmp = new AC(2, SR, SR);
-      let orig = null; try { orig = await new Promise((res, rej) => { const pr = tmp.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); }); } catch {}
+      let pcm = null; try { pcm = await decodeClipAudio(blob, SR); } catch (e) { throw new Error("แยกเสียงจากวิดีโอไม่ได้ (" + ((e && e.message) || e) + ")"); }
+      const mix0 = new AC(2, SR, SR); let orig = null;
+      if (pcm) { orig = mix0.createBuffer(2, pcm.length, SR); orig.copyToChannel(pcm.L, 0); orig.copyToChannel(pcm.R, 1); pcm = null; }
       const bufs = {}; for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
       const mix = new AC(2, Math.max(1, Math.ceil(total * SR)), SR);
       let at = 0; const F = 0.012;
@@ -5463,36 +5484,76 @@ async function viewEditor(id) {
       const target = new Mp4Muxer.StreamTarget({ onData: (data, pos) => { const d = data.slice(); if (pos === end) { pend.push(d); pendN += d.length; end += d.length; if (pendN > 32e6) flush(); return; } flush(); out = new Blob([out.slice(0, pos), d, out.slice(pos + d.length)]); end = Math.max(end, pos + d.length); } });
       const mux = new Mp4Muxer.Muxer({ target, fastStart: false, firstTimestampBehavior: "offset", video: { codec: wc.video.codec.startsWith("avc") ? "avc" : "vp9", width: W, height: H, frameRate: FPS }, audio: { codec: wc.audio.codec === "opus" ? "opus" : "aac", numberOfChannels: 2, sampleRate: SR } });
       let encErr = null;
-      venc = new VideoEncoder({ output: (ch, meta) => mux.addVideoChunk(ch, meta), error: e => { encErr = e; } });
+      venc = new VideoEncoder({ output: (ch, meta) => { vOut++; mux.addVideoChunk(ch, meta); }, error: e => { encErr = e; } });
       venc.configure({ ...wc.video, width: W, height: H });
-      aenc = new AudioEncoder({ output: (ch, meta) => mux.addAudioChunk(ch, meta), error: e => { encErr = e; } });
+      let aOut = 0, vOut = 0;
+      aenc = new AudioEncoder({ output: (ch, meta) => { aOut++; mux.addAudioChunk(ch, meta); }, error: e => { encErr = e; } });
       aenc.configure({ ...wc.audio, sampleRate: SR, numberOfChannels: 2 });
       const BLK = 4096, ch0 = audio.getChannelData(0), ch1 = audio.numberOfChannels > 1 ? audio.getChannelData(1) : ch0;
       for (let i = 0; i < audio.length; i += BLK) { const n = Math.min(BLK, audio.length - i), d = new Float32Array(n * 2); d.set(ch0.subarray(i, i + n), 0); d.set(ch1.subarray(i, i + n), n);
         const ad = new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(i / SR * 1e6), data: d }); aenc.encode(ad); ad.close(); }
-      /* 3) every frame: seek, draw, encode */
+      /* 3) every frame of the clip, drawn with the graphics and encoded */
       const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
       await loadMediaEls(p, exMedia);
-      const seek = t => new Promise(r => { const done = () => { clearTimeout(to); r(); }; const to = setTimeout(done, 4000); v.addEventListener("seeked", done, { once: true }); v.currentTime = t; });
-      const N = Math.max(1, Math.round(total * FPS)), t0 = performance.now();
-      let si = 0, segK = 0;
-      for (let k = 0; k < N; k++) {
-        if (job.cancel) throw new Error("CANCEL"); if (encErr) throw encErr;
-        const kt = k / FPS; while (si < segs.length - 1 && kt >= segK + (segs[si][1] - segs[si][0])) { segK += segs[si][1] - segs[si][0]; si++; }
-        const t = Math.min(segs[si][1] - 0.001, segs[si][0] + (kt - segK));
-        await seek(t);
-        renderFrame(ctx, W, H, v, p, t, (sc, tt) => mediaFor(exMedia, sc, tt, false));
-        const fr = new VideoFrame(c, { timestamp: Math.round(kt * 1e6), duration: Math.round(1e6 / FPS) });
-        venc.encode(fr, { keyFrame: k % (FPS * 2) === 0 }); fr.close();
-        while (venc.encodeQueueSize > 3) await sleep(4);
-        if (k % 5 === 0) { const el = (performance.now() - t0) / 1000, left = el / (k + 1) * (N - k - 1); say(5 + 93 * k / N, `${Math.round(k / N * 100)}% · เฟรม ${k + 1}/${N} · เหลือประมาณ ${fmtDur(left)}`); }
+      const t0 = performance.now(); let lastTs = -1, made = 0, how = "";
+      const N = Math.max(1, Math.round(total * FPS));
+      const emit = async (src, t) => {
+        const ts = Math.round(keptBefore(p, t) * 1e6); if (ts <= lastTs || ts - lastTs < 1e6 / FPS * 0.6 && lastTs >= 0) return;
+        renderFrame(ctx, W, H, src, p, t, (sc, tt) => mediaFor(exMedia, sc, tt, false));
+        const fr = new VideoFrame(c, { timestamp: ts, duration: Math.round(1e6 / FPS) }); venc.encode(fr, { keyFrame: made % (FPS * 2) === 0 }); fr.close(); lastTs = ts; made++;
+        while (venc.encodeQueueSize > 3) await sleep(3);
+        if (made % 5 === 0) { const el = (performance.now() - t0) / 1000, left = el / made * Math.max(0, N - made); say(5 + 93 * Math.min(1, made / N), `${Math.round(Math.min(1, made / N) * 100)}% · เฟรม ${made}/${N} · เหลือประมาณ ${fmtDur(left)}`); }
+      };
+      /* a) decode the camera file directly: every real frame, in order */
+      let ix = null; try { ix = await mp4Index(blob); } catch {}
+      let dcfg = ix && ix.v && ix.v.cstr ? { codec: ix.v.cstr, codedWidth: ix.v.w, codedHeight: ix.v.h, ...(ix.v.desc ? { description: ix.v.desc } : {}) } : null;
+      if (dcfg) { try { const r = await VideoDecoder.isConfigSupported(dcfg); if (!r || !r.supported) dcfg = null; } catch { dcfg = null; } }
+      if (dcfg) {
+        how = "ถอดรหัสทีละเฟรม";
+        const V = ix.v, rot = V.rot || 0, side = rot === 90 || rot === 270, sc = document.createElement("canvas"), sx = sc.getContext("2d");
+        const q = []; let decErr = null;
+        const dec = new VideoDecoder({ output: f => q.push(f), error: e => { decErr = e; } }); dec.configure(dcfg);
+        const vMin = Math.min(...V.samples.map(x => x.dts + x.cto));
+        const drain = async () => { while (q.length) { const f = q.shift(); try {
+          const t = f.timestamp / 1e6; if (t >= dur || cutAt(p, t) || job.cancel) continue;
+          const dw = f.displayWidth, dh = f.displayHeight, ow = side ? dh : dw, oh = side ? dw : dh;
+          if (sc.width !== ow || sc.height !== oh) { sc.width = ow; sc.height = oh; }
+          sx.save(); if (rot === 90) { sx.translate(ow, 0); sx.rotate(Math.PI / 2); } else if (rot === 180) { sx.translate(ow, oh); sx.rotate(Math.PI); } else if (rot === 270) { sx.translate(0, oh); sx.rotate(-Math.PI / 2); } sx.drawImage(f, 0, 0, dw, dh); sx.restore();
+          sc.readyState = 4; sc.videoWidth = ow; sc.videoHeight = oh;
+          await emit(sc, t); } finally { f.close(); } } };
+        let win = null, wa = 0;
+        for (const x of V.samples) {
+          if (job.cancel) throw new Error("CANCEL"); if (decErr) throw decErr; if (encErr) throw encErr;
+          if (!win || x.off < wa || x.off + x.size > wa + win.length) { wa = x.off; win = new Uint8Array(await blob.slice(wa, wa + Math.max(x.size, 8e6)).arrayBuffer()); }
+          dec.decode(new EncodedVideoChunk({ type: x.key ? "key" : "delta", timestamp: Math.round((x.dts + x.cto - vMin) / V.ts * 1e6), duration: Math.round(x.dur / V.ts * 1e6), data: win.subarray(x.off - wa, x.off - wa + x.size) }));
+          while (dec.decodeQueueSize > 6) { await drain(); await sleep(2); }
+          await drain();
+        }
+        await dec.flush(); await drain(); try { dec.close(); } catch {}
+        if (decErr) throw decErr;
+      } else {
+        /* b) step the video element frame by frame and wait until the new frame is really on screen */
+        how = "เลื่อนทีละเฟรม";
+        const shown = () => new Promise(r => { let done = false; const fin = () => { if (!done) { done = true; r(); } }; if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => fin()); setTimeout(fin, 250); });
+        const seek = t => new Promise(r => { const done = () => { clearTimeout(to); r(); }; const to = setTimeout(done, 4000); v.addEventListener("seeked", done, { once: true }); v.currentTime = t; });
+        let si = 0, segK = 0;
+        for (let k = 0; k < N; k++) {
+          if (job.cancel) throw new Error("CANCEL"); if (encErr) throw encErr;
+          const kt = k / FPS; while (si < segs.length - 1 && kt >= segK + (segs[si][1] - segs[si][0])) { segK += segs[si][1] - segs[si][0]; si++; }
+          const t = Math.min(segs[si][1] - 0.001, segs[si][0] + (kt - segK));
+          const sh = shown(); await seek(t); await sh;
+          await emit(v, t);
+        }
       }
       say(99, "กำลังรวมไฟล์…");
-      await venc.flush(); await aenc.flush(); if (encErr) throw encErr; mux.finalize(); flush();
+      await venc.flush(); await aenc.flush(); if (encErr) throw encErr;
+      if (!vOut) throw new Error("ไม่ได้ภาพออกมาเลย");
+      if (orig && !aOut) throw new Error("เครื่องนี้เข้ารหัสเสียงไม่สำเร็จ");
+      mux.finalize(); flush();
       const file = out.slice(0, end, "video/mp4"), name = safeName(p.name) + "_ซับ.mp4";
       finish();
       const res = $("#exRes"); res.hidden = false;
-      res.innerHTML = `<video controls playsinline src="${URL.createObjectURL(file)}"></video><span class="hint">${esc(name)} · ${fmtSize(file.size)} · 30 fps ลื่นทุกเฟรม</span><div class="row"><button class="btn primary" id="oShare">บันทึก / แชร์</button><button class="btn" id="oDl">ดาวน์โหลด</button></div>`;
+      res.innerHTML = `<video controls playsinline src="${URL.createObjectURL(file)}"></video><span class="hint">${esc(name)} · ${W}×${H} · ${fmtSize(file.size)} · ${made} เฟรม · ${how} · เสียง ${orig ? "มี" : "ไม่มีในคลิปต้นฉบับ"}</span><div class="row"><button class="btn primary" id="oShare">บันทึก / แชร์</button><button class="btn" id="oDl">ดาวน์โหลด</button></div>`;
       $("#oShare").onclick = () => shareOrSave(file, name);
       $("#oDl").onclick = () => downloadBlob(file, name);
     } catch (e) {
@@ -5515,7 +5576,8 @@ async function viewEditor(id) {
       const bufs = {};
       for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
       /* real-time recording: an iPhone cannot draw full-HD graphics 30 times a second, so record at 720p there to keep it smooth */
-      const { W, H } = frameDims(p, v.videoWidth, v.videoHeight, IOS ? 1280 : 1920);
+      const { W, H } = exportDims(p, v.videoWidth, v.videoHeight);
+      if (IOS) toast("iPhone เครื่องนี้ยังส่งออกแบบทีละเฟรมไม่ได้ (ต้อง iOS 26 ขึ้นไป) จึงใช้วิธีอัดสด ภาพอาจกระตุก", 6000);
       const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
       const dest = ac.createMediaStreamDestination();
       const src = ac.createMediaElementSource(v), og = ac.createGain(); og.gain.value = p.audio.orig; src.connect(og).connect(dest);
