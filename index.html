@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (27) · แก้ไฟล์ไม่มีเสียง</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (28) · แบ่งจอเลื่อนขึ้นลงแบบสมูท</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2100,13 +2100,17 @@ function drawScene(ctx, X, Y, W, H, sc, t, media, theme, bgSrc) {
   ctx.restore();
 }
 /* ---- transitions between scenes (and between your face and a graphic) ---- */
-const TRANS = { auto: "อัตโนมัติ (สลับหลายแบบ)", push: "สไลด์ผลัก", wipe: "กวาดแถบสี", zoom: "ซูมทะลุ", iris: "วงกลมเปิด", flash: "แฟลช", fade: "เฟดนุ่ม" };
+const TRANS = { auto: "อัตโนมัติ (สลับหลายแบบ)", slide: "เลื่อนขึ้น-ลง", push: "สไลด์ผลัก", wipe: "กวาดแถบสี", zoom: "ซูมทะลุ", iris: "วงกลมเปิด", flash: "แฟลช", fade: "เฟดนุ่ม" };
 const TR_D = 0.45;
 function transOf(p, sc) { const s = (p.split && p.split.tr) || "auto"; if (s !== "auto" && TRANS[s]) return s; const L = ["push", "wipe", "zoom", "push", "iris", "wipe"]; return L[hashStr(sc.id) % L.length]; }
 const easeIO = x => { x = clamp01(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
 function drawTrans(ctx, r, k, style, A, B, accent) {
   const e = easeIO(k), clip = () => { ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); };
-  if (style === "push") {
+  if (style === "slide") { /* vertical pan: the old panel glides up and out, the new one rises from below */
+    ctx.save(); clip(); ctx.translate(0, -r.h * e); A(); ctx.restore();
+    ctx.save(); clip(); ctx.translate(0, r.h * (1 - e)); B(); ctx.restore();
+    const s = Math.sin(Math.PI * k); if (s > 0.05) { ctx.save(); clip(); ctx.globalAlpha = 0.9 * s; ctx.fillStyle = accent; ctx.fillRect(r.x, r.y + r.h * (1 - e) - Math.max(2, r.h * 0.008), r.w, Math.max(2, r.h * 0.008)); ctx.restore(); }
+  } else if (style === "push") {
     ctx.save(); clip(); ctx.translate(-r.w * e, 0); A(); ctx.restore();
     ctx.save(); clip(); ctx.translate(r.w * (1 - e), 0); B(); ctx.restore();
     const s = Math.sin(Math.PI * k); if (s > 0.05) { ctx.save(); clip(); ctx.globalAlpha = 0.35 * s; ctx.fillStyle = accent; for (let i = 0; i < 6; i++) { const yy = r.y + r.h * ((i * 0.37 + 0.11) % 1), len = r.w * (0.25 + 0.3 * ((i * 0.53) % 1)); ctx.fillRect(r.x + r.w * (1 - e) - len * 0.5, yy, len, Math.max(1, r.h * 0.004)); } ctx.restore(); }
@@ -2159,7 +2163,7 @@ function drawSplitVis(ctx, r, p, t, mediaCb, bgSrc) {
   if (m.sc.gap && m.prev) { drawScene(ctx, r.x, r.y, r.w, r.h, m.prev, holdT(m.prev, m.prev.end - 0.01), mediaCb ? mediaCb(m.prev, t) : null, p.split.theme, bgSrc); return true; }
   const T = SCENE_THEMES[p.split.theme] || SCENE_THEMES.glass;
   const one = (sc, tt) => drawScene(ctx, r.x, r.y, r.w, r.h, sc, tt, mediaCb ? mediaCb(sc, sc.start + tt) : null, p.split.theme, bgSrc);
-  if (m.prev && m.k < 1) drawTrans(ctx, r, m.k, transOf(p, m.sc), () => one(m.prev, holdT(m.prev, t)), () => one(m.sc, t - m.sc.start), T.accent);
+  if (m.prev && m.k < 1) drawTrans(ctx, r, m.k, "slide", () => one(m.prev, holdT(m.prev, t)), () => one(m.sc, t - m.sc.start), T.accent);
   else one(m.sc, t - m.sc.start);
   return true;
 }
@@ -2205,6 +2209,25 @@ function drawMixLayer(ctx, p, W, H, t, mediaCb, bgSrc, vsrc) {
   };
   const e = t - sc.start, dur = sc.end - sc.start;
   const L = sp.scenes, n = L[L.indexOf(sc) + 1], nextOff = !n || n.show === false || Math.abs(n.start - sc.end) > 0.05;
+  /* split looks: the graphic panel slides in from its edge while your video glides smoothly into its half (and back out) */
+  const isSplit = s2 => s2 && lookOf(p, s2) === "split";
+  const vsrcOk = vsrc && vsrc.videoWidth ? vsrc : (bgSrc && (bgSrc.videoWidth || bgSrc.naturalWidth) ? bgSrc : null);
+  const morph = (s2, tt, k) => {
+    const { vis, vid } = mixRects(p, W, H), lr = (a, b) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k });
+    ctx.save(); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    if (vsrcOk) { try { drawFramed(ctx, vsrcOk, lr(F, vid), sp.fx, sp.fy, 1 + (sp.zoom - 1) * k); } catch {} }
+    const horiz = W > H, before = horiz ? vis.x < vid.x : vis.y < vid.y, d = before ? -1 : 1;
+    const pr = horiz ? { ...vis, x: vis.x + d * vis.w * (1 - k) } : { ...vis, y: vis.y + d * vis.h * (1 - k) };
+    ctx.beginPath(); ctx.rect(pr.x, pr.y, pr.w, pr.h); ctx.clip(); drawScene(ctx, pr.x, pr.y, pr.w, pr.h, s2, tt, mediaCb ? mediaCb(s2, s2.start + tt) : null, sp.theme, bgSrc);
+    ctx.restore();
+  };
+  if (m.k < 1 && curOn && isSplit(sc) && !prevOn) return morph(sc, e, easeIO(m.k));
+  if (m.k < 1 && curOn && prevOn && isSplit(sc) && isSplit(m.prev)) {
+    const { vis, vid } = mixRects(p, W, H);
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); if (vsrcOk) { try { drawFramed(ctx, vsrcOk, vid, sp.fx, sp.fy, sp.zoom); } catch {} }
+    return drawTrans(ctx, vis, m.k, "slide", () => drawScene(ctx, vis.x, vis.y, vis.w, vis.h, m.prev, holdT(m.prev, t), mediaCb ? mediaCb(m.prev, t) : null, sp.theme, bgSrc), () => drawScene(ctx, vis.x, vis.y, vis.w, vis.h, sc, e, mediaCb ? mediaCb(sc, t) : null, sp.theme, bgSrc), T.accent);
+  }
+  if (curOn && nextOff && isSplit(sc) && dur - e < TR_D) return morph(sc, holdT(sc, t), easeIO((dur - e) / TR_D));
   if (m.k < 1 && (prevOn || curOn)) {
     if (!prevOn && lookOf(p, sc) === "card") return pop(sc, e, m.k, true);
     if (!curOn && lookOf(p, m.prev) === "card") return pop(m.prev, holdT(m.prev, t), 1 - m.k, false);
