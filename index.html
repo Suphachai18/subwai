@@ -372,7 +372,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (30) · เอฟเฟกต์ไม่ทับกราฟิก</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (31) · แปลอังกฤษตรงบรรทัด</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -924,7 +924,7 @@ async function chatJSONWith(P, messages, opt = {}, only) {
   }
   throw lastErr || new Error("ไม่พบโมเดล AI ที่ใช้กับ key นี้ได้");
 }
-async function translateCaptions(caps, src, tgt, onProg) {
+async function translateCaptions(caps, src, tgt, onProg, only) {
   const SL = LEN[src] || "the spoken language", TL = LEN[tgt];
   const vocab = settings.vocab ? ` Always keep these exactly as written: ${settings.vocab}.` : "";
   const style = tgt === "th"
@@ -943,8 +943,11 @@ async function translateCaptions(caps, src, tgt, onProg) {
   } catch (e) { if (e && /401|429|key/i.test(String(e.message))) throw e; }
   /* 2) translate in batches, each line keyed by its index so translations can never shift onto the wrong line */
   const B = 30, maxLen = Math.max(28, Math.round(Math.max(...caps.map(c => vlen ? vlen(c.text) : c.text.length)) * (tgt === "th" ? 1.1 : 1.35)));
-  for (let i = 0; i < caps.length; i += B) {
-    const batch = caps.slice(i, i + B);
+  const todo = only ? caps.map((c, k) => k).filter(k => only(caps[k])) : caps.map((c, k) => k);
+  const runs = []; for (const k of todo) { const r = runs[runs.length - 1]; if (r && r[r.length - 1] === k - 1 && r.length < B) r.push(k); else runs.push([k]); } // consecutive lines only
+  let s0 = 0;
+  for (const ids of runs) {
+    const batch = ids.map(k => caps[k]), i = ids[0], last = ids[ids.length - 1]; s0 += ids.length;
     const sys = `You are a senior professional subtitle translator (${SL} to ${TL}).
 ${style}
 Rules:
@@ -957,8 +960,8 @@ Reply only JSON: {"t": [{"i": line index, "tr": "translation"}, ...]} with exact
     const user = JSON.stringify({
       glossary: brief.glossary,
       before: caps.slice(Math.max(0, i - 6), i).map(c => ({ text: c.text, tr: c.tr || "" })),
-      lines: batch.map((c, k) => ({ i: i + k, text: c.text })),
-      after: caps.slice(i + B, i + B + 3).map(c => c.text)
+      lines: batch.map((c, k) => ({ i: k, text: c.text })),
+      after: caps.slice(last + 1, last + 4).map(c => c.text)
     });
     let out = null;
     for (let a = 0; a < 3 && !out; a++) {
@@ -967,12 +970,12 @@ Reply only JSON: {"t": [{"i": line index, "tr": "translation"}, ...]} with exact
       if (!arr) continue;
       if (arr.length && typeof arr[0] === "string") { if (arr.length === batch.length) out = arr; continue; }
       const m = new Map(arr.map(x => [Number(x && x.i), x && (x.tr ?? x.t ?? x.text)]));
-      const got = batch.map((c, k) => m.get(i + k));
+      const got = batch.map((c, k) => m.get(k));
       if (got.filter(x => typeof x === "string" && x.trim()).length >= batch.length - (a === 2 ? Math.floor(batch.length / 10) : 0)) out = got;
     }
     if (!out) throw new Error("AI แปลไม่ครบทุกบรรทัด กดแปลใหม่อีกครั้ง");
-    batch.forEach((c, k) => { const t = String(out[k] ?? "").replace(/^["“”'«»]+|["“”'«»]+$/g, "").trim(); if (t) c.tr = t; else if (!c.tr) c.tr = ""; });
-    if (onProg) onProg(Math.min(caps.length, i + B), caps.length);
+    batch.forEach((c, k) => { const t = String(out[k] ?? "").replace(/^["“”'«»]+|["“”'«»]+$/g, "").trim(); if (t) { c.tr = t; c.trSrc = c.text; } else if (!c.tr) c.tr = ""; });
+    if (onProg) onProg(s0, todo.length);
   }
 }
 
@@ -2560,7 +2563,7 @@ function simText(a, b) {
 async function aiSubtitle(p, opt = {}) {
   const units = speechUnits(p.raw, p.lang);
   if (units.length < 2) throw new Error("ไม่มีข้อมูลเวลาของคำจากการถอดเสียง");
-  const SL = LEN[p.lang] || "the spoken language", tgt = opt.tgt || "", TL = tgt ? LEN[tgt] : "";
+  const SL = LEN[p.lang] || "the spoken language", wantTr = opt.tgt || "", tgt = "", TL = "";
   const maxC = p.maxChars || 22, vocab = settings.vocab ? ` Names, brands and models that appear, spelled correctly: ${settings.vocab}.` : "";
   const unitTxt = (a, b) => { let s = ""; for (let k = a; k <= b; k++) s = joinTok(s, units[k].t); return s; };
   /* the whole script once: topic, tone and glossary keep every batch consistent */
@@ -2624,15 +2627,10 @@ Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt
     if (c.end <= c.start) c.end = c.start + 0.3;
   }
   const res = caps.map(c => ({ id: uid(), start: +c.start.toFixed(2), end: +c.end.toFixed(2), text: c.text, tr: c.tr }));
-  /* any line the AI left without a translation gets one now (with its neighbours as context) */
-  if (tgt && res.some(c => !c.tr)) {
-    for (let k = 0; k < res.length; k++) {
-      if (res[k].tr) continue;
-      let e = k; while (e + 1 < res.length && !res[e + 1].tr && e - k < 40) e++;
-      const a0 = Math.max(0, k - 4), win = res.slice(a0, Math.min(res.length, e + 3)).map(x => ({ ...x }));
-      try { await translateCaptions(win, p.lang, tgt); for (let q = k; q <= e; q++) res[q].tr = win[q - a0].tr || ""; } catch (err) { if (/API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(err.message))) throw err; }
-      k = e;
-    }
+  /* translate the FINAL text in its own pass (whole-script brief + glossary), so every English line matches its Thai line */
+  if (wantTr && res.length) {
+    try { await translateCaptions(res, p.lang, wantTr, opt.onTr); }
+    catch (err) { if (/API key|โควตา|เครดิต|เชื่อมต่อ/.test(String(err.message))) throw err; }
   }
   return res;
 }
@@ -2663,7 +2661,7 @@ async function aiProofread(p, onProg) {
     ]);
     if (Array.isArray(j.t) && j.t.length === batch.length) batch.forEach((c, k) => {
       const n = String(j.t[k] || "").trim(), a = vlen(c.text), b = vlen(n);
-      if (n && n !== c.text && b >= a * 0.5 && b <= a * 1.8 + 4) { c.text = n; c.hl = (c.hl || []).filter(w => n.includes(w)); changedN++; }
+      if (n && n !== c.text && b >= a * 0.5 && b <= a * 1.8 + 4) { if (c.tr && c.trSrc === undefined) c.trSrc = c.text; c.text = n; c.hl = (c.hl || []).filter(w => n.includes(w)); changedN++; }
     });
     if (onProg) onProg(Math.min(p.captions.length, i + B), p.captions.length);
   }
@@ -4246,7 +4244,7 @@ function viewNew(resumeId) {
         const what = (autoFix ? "จัดบรรทัด แก้คำผิด" : "จัดบรรทัด") + (p.tr.lang ? " และแปล" + LNAME[p.tr.lang] : "");
         $("#fixLab").textContent = "AI " + what;
         try {
-          const caps = await aiSubtitle(p, { tgt: p.tr.lang, keepText: !autoFix, blob: file, onProg: (d, t) => $("#fixLab").textContent = `AI ${what} ${Math.round(d / t * 100)}%` });
+          const caps = await aiSubtitle(p, { tgt: p.tr.lang, keepText: !autoFix, blob: file, onProg: (d, t) => $("#fixLab").textContent = `AI ${what} ${Math.round(d / t * 100)}%`, onTr: (d, t) => $("#fixLab").textContent = `AI แปลเป็นภาษา${LNAME[p.tr.lang]} ${d}/${t} บรรทัด` });
           if (caps.length) { p.captions = caps; subDone = true; }
           mark("fix", "done"); if (p.tr.lang) { $('li[data-s="tr"]', steps).hidden = true; } p.updatedAt = Date.now(); await DB.put(p);
         } catch (e) { mark("fix", "fail"); toast("ใช้วิธีสำรอง: " + e.message, 4000); }
@@ -4532,8 +4530,20 @@ async function viewEditor(id) {
   const syncUndo = () => { $("#undo").disabled = hi <= 0 && !histT; $("#redo").disabled = hi >= hist.length - 1; };
   const pushHist = () => { clearTimeout(histT); histT = 0; const s = snap(); if (s !== hist[hi]) { hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 80) hist.shift(); hi = hist.length - 1; } syncUndo(); };
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { p.updatedAt = Date.now(); DB.put(p); }, 400); };
+  /* a line whose text changed after it was translated gets a fresh translation a moment later */
+  let trT = 0;
+  const trStale = c => !!(c.text && c.text.trim() && (!c.tr || (c.trSrc !== undefined && c.trSrc !== c.text)));
+  function queueRetr(ms = 2500) {
+    clearTimeout(trT);
+    trT = setTimeout(async () => {
+      if (!p.tr || !p.tr.lang || !hasKey() || !p.captions.some(trStale)) return;
+      const ae = document.activeElement;
+      if (BUSY || (ae && (/^(TEXTAREA|INPUT)$/.test(ae.tagName) || ae.isContentEditable))) { queueRetr(2500); return; }
+      try { await translateCaptions(p.captions, p.lang, p.tr.lang, null, trStale); save(); renderList(); if (sid) fillSheet(); } catch {}
+    }, ms);
+  }
   function changed(opts = {}) {
-    save();
+    save(); if (p.tr && p.tr.lang) queueRetr();
     clearTimeout(histT); histT = 0;
     if (opts.typing) { histT = setTimeout(pushHist, 700); syncUndo(); } else pushHist();
     draw();
@@ -4804,7 +4814,7 @@ async function viewEditor(id) {
       const ratio = Math.max(1, vlen(left)) / (Math.max(1, vlen(left)) + Math.max(1, vlen(right)));
       st = c.start + (c.end - c.start) * ratio; en = c.end; c.end = +st.toFixed(2);
     }
-    c.text = left;
+    if (c.tr && c.trSrc === undefined) c.trSrc = c.text; c.text = left;
     const n = { id: uid(), start: +st.toFixed(2), end: +en.toFixed(2), text: right, tr: "", hl: (c.hl || []).filter(w => right.includes(w)) };
     c.hl = (c.hl || []).filter(w => left.includes(w));
     p.captions.splice(i + 1, 0, n); return n;
@@ -4824,7 +4834,7 @@ async function viewEditor(id) {
   });
   lines.addEventListener("input", e => {
     const ta = e.target.closest(".ln-in"); if (!ta) return; const c = capOf(ta), f = ta.dataset.f; if (!c) return;
-    if (f === "text" && ta.value.includes("\n")) { const nl = ta.value.indexOf("\n"); c.text = ta.value.replace(/\n/g, ""); const n = splitAt(c, nl); changed(); renderList(n ? n.id : c.id, 0); if (n) seekTo(n.start); return; }
+    if (f === "text" && ta.value.includes("\n")) { const nl = ta.value.indexOf("\n"); if (c.tr && c.trSrc === undefined) c.trSrc = c.text; c.text = ta.value.replace(/\n/g, ""); const n = splitAt(c, nl); changed(); renderList(n ? n.id : c.id, 0); if (n) seekTo(n.start); return; }
     c[f] = ta.value; grow(ta); if (c.id === sid) fillSheet(); changed({ typing: true });
   });
   lines.addEventListener("keydown", e => {
@@ -4865,8 +4875,8 @@ async function viewEditor(id) {
     ov.addEventListener("input", () => {
       const c = capById(edId); if (!c) return;
       const v = ov.value, nl = v.indexOf("\n");
-      if (nl >= 0) { c.text = v.replace(/\n/g, ""); const n = splitAt(c, nl); changed(); renderList(); if (n) { seekTo(n.start); startInline(n, 0); } else startInline(c); return; }
-      c.text = v; syncRowText(c); styleInline(); if (c.id === sid) fillSheet(); changed({ typing: true });
+      if (nl >= 0) { if (c.tr && c.trSrc === undefined) c.trSrc = c.text; c.text = v.replace(/\n/g, ""); const n = splitAt(c, nl); changed(); renderList(); if (n) { seekTo(n.start); startInline(n, 0); } else startInline(c); return; }
+      if (c.tr && c.trSrc === undefined) c.trSrc = c.text; c.text = v; syncRowText(c); styleInline(); if (c.id === sid) fillSheet(); changed({ typing: true });
     });
     ov.addEventListener("blur", () => setTimeout(() => { if (edId && document.activeElement !== ov) endInline(); }, 250));
     $("#ovDone").addEventListener("pointerdown", e => e.preventDefault());
@@ -4908,7 +4918,7 @@ async function viewEditor(id) {
   }
   const pauseOnFocus = () => { if (video) { video.pause(); playUntil = null; } };
   $("#lsText").addEventListener("focus", pauseOnFocus); $("#lsTr").addEventListener("focus", pauseOnFocus);
-  $("#lsText").oninput = e => { const c = capById(sid); if (!c) return; c.text = e.target.value; syncRowText(c); renderWords(c); changed({ typing: true }); };
+  $("#lsText").oninput = e => { const c = capById(sid); if (!c) return; if (c.tr && c.trSrc === undefined) c.trSrc = c.text; c.text = e.target.value; syncRowText(c); renderWords(c); changed({ typing: true }); };
   $("#lsTr").oninput = e => { const c = capById(sid); if (!c) return; c.tr = e.target.value; const ta = $(`.ln[data-id="${c.id}"] .ln-in[data-f="tr"]`); if (ta) { ta.value = c.tr; grow(ta); } changed({ typing: true }); };
   $("#lsWords").addEventListener("click", e => {
     const b = e.target.closest(".word"); const c = capById(sid); if (!b || !c) return;
@@ -4944,7 +4954,7 @@ async function viewEditor(id) {
       b.disabled = true; b.textContent = "กำลังแปล…";
       const a0 = Math.max(0, i - 6), win = p.captions.slice(a0, i + 4).map(x => ({ ...x }));
       win[i - a0].tr = "";
-      translateCaptions(win, p.lang, p.tr.lang).then(() => { c.tr = win[i - a0].tr; changed(); renderList(); if (sid === c.id) fillSheet(); toast("แปลบรรทัดนี้ใหม่แล้ว", 1400); })
+      translateCaptions(win, p.lang, p.tr.lang).then(() => { c.tr = win[i - a0].tr; c.trSrc = c.text; changed(); renderList(); if (sid === c.id) fillSheet(); toast("แปลบรรทัดนี้ใหม่แล้ว", 1400); })
         .catch(err => toast(err.message, 4000)).finally(() => { b.disabled = false; b.textContent = "✨ แปลบรรทัดนี้ใหม่"; });
       return;
     }
@@ -4984,7 +4994,7 @@ async function viewEditor(id) {
     settings.vocab = $("#fxVocab").value.trim(); saveSettings();
     const b = $("#reGo"), st = $("#fixStat"); b.disabled = true; setBusy(true);
     try {
-      const caps = await aiSubtitle(p, { tgt: p.tr.lang, blob, onProg: (d, t) => { st.textContent = $("#qStat").textContent = `AI กำลังจัดซับ${p.tr.lang ? "และแปล" : ""} ${Math.round(d / t * 100)}%…`; } });
+      const caps = await aiSubtitle(p, { tgt: p.tr.lang, blob, onTr: (d, t) => { st.textContent = $("#qStat").textContent = `AI กำลังแปล ${d}/${t} บรรทัด…`; }, onProg: (d, t) => { st.textContent = $("#qStat").textContent = `AI กำลังจัดซับ${p.tr.lang ? "และแปล" : ""} ${Math.round(d / t * 100)}%…`; } });
       if (caps.length) {
         if (sid) closeSheet(); p.captions = caps;
         if (p.style.kw !== false) { st.textContent = $("#qStat").textContent = "AI กำลังเน้นคำสำคัญ + ใส่เสียง…"; try { await aiEmphasis(p, true); renderSfx(); } catch {} }
@@ -5008,7 +5018,7 @@ async function viewEditor(id) {
   const countMatches = () => { const f = $("#fFind").value; if (!f) return 0; return p.captions.reduce((n, c) => n + countIn(c.text, f) + countIn(c.tr, f), 0); };
   const updFind = () => { const n = countMatches(); $("#fGo").disabled = !n; $("#fGo").textContent = n ? `แทนที่ทั้งหมด (${n} จุด)` : ($("#fFind").value ? "ไม่พบคำนี้" : "แทนที่ทั้งหมด"); };
   $("#fFind").oninput = updFind;
-  $("#fGo").onclick = () => { const f = $("#fFind").value, r = $("#fRep").value, n = countMatches(); p.captions.forEach(c => { c.text = c.text.split(f).join(r); if (c.tr) c.tr = c.tr.split(f).join(r); }); changed(); renderList(); if (sid) fillSheet(); updFind(); toast(`แทนที่แล้ว ${n} จุด`); };
+  $("#fGo").onclick = () => { const f = $("#fFind").value, r = $("#fRep").value, n = countMatches(); p.captions.forEach(c => { const fresh = c.trSrc === c.text; c.text = c.text.split(f).join(r); if (c.tr) c.tr = c.tr.split(f).join(r); if (fresh) c.trSrc = c.text; }); changed(); renderList(); if (sid) fillSheet(); updFind(); toast(`แทนที่แล้ว ${n} จุด`); };
   let rmc = p.maxChars || 22;
   $$("#rmc button").forEach(b => b.onclick = () => { $$("#rmc button").forEach(x => x.setAttribute("aria-pressed", x === b)); rmc = +b.dataset.v; });
   $("#rGo").onclick = () => {
