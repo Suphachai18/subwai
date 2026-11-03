@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (26) · ส่งออก Full HD + วิธีสำรอง</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (27) · แก้ไฟล์ไม่มีเสียง</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -5510,7 +5510,9 @@ async function viewEditor(id) {
       venc = new VideoEncoder({ output: (ch, meta) => { vOut++; mux.addVideoChunk(ch, meta); }, error: e => { encErr = e; } });
       venc.configure({ ...wc.video, width: W, height: H });
       let aOut = 0, vOut = 0;
-      aenc = new AudioEncoder({ output: (ch, meta) => { aOut++; mux.addAudioChunk(ch, meta); }, error: e => { encErr = e; } });
+      /* Safari hands back the whole MPEG-4 descriptor instead of the 2-byte AAC config; players then see "no sound". Always write the plain AAC-LC config ourselves. */
+      const SRI = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000].indexOf(SR), ASC = new Uint8Array([(2 << 3) | (SRI >> 1), ((SRI & 1) << 7) | (2 << 3)]);
+      aenc = new AudioEncoder({ output: (ch, meta) => { aOut++; if (wc.audio.codec !== "opus") meta = { ...(meta || {}), decoderConfig: { ...((meta && meta.decoderConfig) || {}), codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, description: ASC } }; mux.addAudioChunk(ch, meta); }, error: e => { encErr = e; } });
       aenc.configure({ ...wc.audio, sampleRate: SR, numberOfChannels: 2 });
       const BLK = 4096, ch0 = audio.getChannelData(0), ch1 = audio.numberOfChannels > 1 ? audio.getChannelData(1) : ch0;
       for (let i = 0; i < audio.length; i += BLK) { const n = Math.min(BLK, audio.length - i), d = new Float32Array(n * 2); d.set(ch0.subarray(i, i + n), 0); d.set(ch1.subarray(i, i + n), n);
