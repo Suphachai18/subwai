@@ -372,7 +372,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (32) · ไฟล์แก้ซับ</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (33) · ลากจัดหน้าในฉากแบ่งจอ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -4666,7 +4666,7 @@ async function viewEditor(id) {
       const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * 100, x = (e.clientX - r.left) / r.width * 100;
       const c = captionAt(p.captions, video.currentTime), px = p.style.posX == null ? 50 : p.style.posX;
       pd = { x0: e.clientX, y0: e.clientY, pos: p.style.pos, posX: px, w: r.width, h: r.height, moved: false, onCap: !!c && Math.abs(y - p.style.pos) < 22 && Math.abs(x - px) < 50 };
-      if (!pd.onCap && p.split.on && p.split.mode === "split") { const { vid } = splitRects(p, r.width, r.height), lx = e.clientX - r.left, ly = e.clientY - r.top; if (lx >= vid.x && lx < vid.x + vid.w && ly >= vid.y && ly < vid.y + vid.h) Object.assign(pd, { pan: true, fx: p.split.fx, fy: p.split.fy, vw: vid.w, vh: vid.h }); }
+      if (!pd.onCap && p.split.on && (p.split.mode === "split" || (p.split.mode === "mix" && (sc0 => sc0 && !sc0.gap && lookOf(p, sc0) === "split")(sceneAt(p, video.currentTime))))) { const { vid } = splitRects(p, r.width, r.height), lx = e.clientX - r.left, ly = e.clientY - r.top; if (lx >= vid.x && lx < vid.x + vid.w && ly >= vid.y && ly < vid.y + vid.h) Object.assign(pd, { pan: true, fx: p.split.fx, fy: p.split.fy, vw: vid.w, vh: vid.h }); }
       try { cv.setPointerCapture(e.pointerId); } catch {}
     });
     cv.addEventListener("pointermove", e => {
