@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (22) · AI ฟังเสียงซ้ำแก้คำผิด</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (23) · ส่งออกวิดีโอลื่น 30 fps</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2643,6 +2643,20 @@ function wordTime(p, c, w) {
   return +(c.start + (c.end - c.start) * pre / tot).toFixed(2);
 }
 const EMPH_SFX = { hit: "punchy default for an important word", pop: "light or fun word", sparkle: "benefit, beauty or wow", ding: "tip or idea", kaching: "price, money or saving", whoosh: "speed, change or movement", boom: "big reveal or shocking fact (use rarely)" };
+/* ================= smooth export: can this browser encode H.264 + AAC itself? ================= */
+async function wcConfig(W, H) {
+  if (!window.VideoEncoder || !window.AudioEncoder || !window.VideoFrame || !window.AudioData) return null;
+  const br = Math.min(14e6, Math.max(5e6, W * H * 5));
+  let video = null;
+  for (const codec of ["avc1.640033", "avc1.640028", "avc1.4d0033", "avc1.4d0028", "avc1.42e033", "avc1.42e028"].concat(window.__subwaiAllowOpus ? ["vp09.00.10.08"] : [])) {
+    const cfg = { codec, width: W, height: H, bitrate: br, framerate: 30 }; if (codec.startsWith("avc")) cfg.avc = { format: "avc" };
+    try { const r = await VideoEncoder.isConfigSupported(cfg); if (r && r.supported) { video = cfg; break; } } catch {}
+  }
+  if (!video) return null;
+  const codecs = ["mp4a.40.2"].concat(window.__subwaiAllowOpus ? ["opus"] : []);
+  for (const codec of codecs) { const cfg = { codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 }; try { const r = await AudioEncoder.isConfigSupported(cfg); if (r && r.supported) return { video, audio: cfg }; } catch {} }
+  return null;
+}
 /* ================= join several camera clips into one video =================
    Same camera settings (the usual case for clips shot on one phone): copy the compressed frames into one MP4, no quality loss, takes seconds.
    Different settings or formats: play them one after another into a recorder (takes as long as the clips). */
@@ -5384,7 +5398,7 @@ async function viewEditor(id) {
   $$("#fitSeg button").forEach(b => b.onclick = () => { p.fit = b.dataset.v; syncFrame(); changed(); });
 
   /* ---------- export ---------- */
-  function syncExportHint() { const { W, H } = frameDims(p, video && video.videoWidth, video && video.videoHeight); $("#exHint").textContent = `ขนาด ${W}×${H} · ใช้เวลาประมาณเท่าความยาวคลิป (${fmtDur(p.duration)}) เปิดหน้าจอค้างไว้จนเสร็จ ห้ามสลับแอป`; }
+  function syncExportHint() { const { W, H } = frameDims(p, video && video.videoWidth, video && video.videoHeight); $("#exHint").textContent = `ขนาด ${W}×${H} · 30 fps ทีละเฟรม ลื่นทุกเฟรม ใช้เวลาประมาณ 1–3 เท่าของความยาวคลิป (${fmtDur(keptDuration(p) || p.duration)}) เปิดหน้าจอค้างไว้จนเสร็จ ห้ามสลับแอป`; }
   $("#srt").onclick = () => {
     const mode = $("#srtMode").value;
     const ts = t => { const ms = Math.round(t * 1000), h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60; return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms % 1000, 3)}`; };
@@ -5405,8 +5419,88 @@ async function viewEditor(id) {
     const vurl = URL.createObjectURL(blob); v.src = vurl;
     const unlock = v.play().then(() => v.pause()).catch(() => {});
     ac.resume().catch(() => {});
-    runExport(ac, v, vurl, unlock);
+    (async () => {
+      /* frame-by-frame export when the browser can encode video itself: smooth 30 fps no matter how heavy the graphics are */
+      let wc = null; try { await unlock; if (v.readyState < 1) await once(v, "loadedmetadata"); const d = frameDims(p, v.videoWidth, v.videoHeight); wc = await wcConfig(d.W, d.H); } catch {}
+      if (wc) { try { ac.close(); } catch {} runExportWC(v, vurl, wc); } else runExport(ac, v, vurl, unlock);
+    })();
   };
+  async function runExportWC(v, vurl, wc) {
+    const job = { cancel: false }; exporting = job; setBusy(true);
+    $("#burn").disabled = true; $("#exProg").hidden = false; $("#exRes").hidden = true; $("#exBar").style.width = "0%"; $("#exTxt").textContent = "กำลังเตรียม…";
+    let wake = null; try { wake = await navigator.wakeLock.request("screen"); } catch {}
+    const exMedia = {}; let venc = null, aenc = null;
+    const finish = () => { freeMedia(exMedia); try { venc && venc.state !== "closed" && venc.close(); } catch {} try { aenc && aenc.state !== "closed" && aenc.close(); } catch {} try { v.pause(); } catch {} v.remove(); URL.revokeObjectURL(vurl); try { wake && wake.release(); } catch {} exporting = null; setBusy(false); $("#burn").disabled = false; $("#exProg").hidden = true; };
+    const say = (pct, txt) => { $("#exBar").style.width = Math.min(100, pct).toFixed(1) + "%"; $("#exTxt").textContent = txt; };
+    try {
+      await ensureFont(p.style);
+      try { await document.fonts.load('600 40px "IBM Plex Sans Thai"'); await document.fonts.load('500 40px "IBM Plex Sans Thai"'); await document.fonts.load('700 40px "Mali"'); } catch {}
+      const { W, H } = frameDims(p, v.videoWidth, v.videoHeight), FPS = 30, dur = v.duration || p.duration;
+      /* the pieces of the clip that stay, in order */
+      const segs = []; { let a = 0; const cuts = p.edit && p.edit.on ? p.edit.cuts : []; for (const c of cuts) { if (c[0] > a + 0.02) segs.push([a, Math.min(c[0], dur)]); a = Math.max(a, c[1]); } if (dur > a + 0.02) segs.push([a, dur]); }
+      const total = segs.reduce((m, [a, b]) => m + b - a, 0);
+      /* 1) sound: original speech with tiny fades at every cut + sound effects, mixed offline */
+      say(1, "กำลังเตรียมเสียง…");
+      const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext, SR = 48000;
+      const ab = await blob.arrayBuffer(); const tmp = new AC(2, SR, SR);
+      let orig = null; try { orig = await new Promise((res, rej) => { const pr = tmp.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); }); } catch {}
+      const bufs = {}; for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
+      const mix = new AC(2, Math.max(1, Math.ceil(total * SR)), SR);
+      let at = 0; const F = 0.012;
+      for (const [a, b] of segs) {
+        if (orig) { const src = mix.createBufferSource(), g = mix.createGain(), L = b - a, gv = p.audio.orig; src.buffer = orig;
+          g.gain.setValueAtTime(segs.length > 1 && at > 0 ? 0 : gv, at); g.gain.linearRampToValueAtTime(gv, at + F); g.gain.setValueAtTime(gv, Math.max(at + F, at + L - F)); g.gain.linearRampToValueAtTime(b < dur - 0.05 ? 0 : gv, at + L);
+          src.connect(g).connect(mix.destination); src.start(at, a, L); }
+        at += b - a;
+      }
+      for (const s of p.sfx) { if (!bufs[s.key] || cutAt(p, s.t)) continue; const src = mix.createBufferSource(), g = mix.createGain(); src.buffer = bufs[s.key]; g.gain.value = s.vol * p.audio.sfx; src.connect(g).connect(mix.destination); src.start(Math.max(0, keptBefore(p, s.t))); }
+      const audio = await mix.startRendering();
+      if (job.cancel) throw new Error("CANCEL");
+      /* 2) encoders into an MP4 file */
+      if (!window.Mp4Muxer) await loadScript(MP4MUX_URL);
+      let out = new Blob([]), pend = [], pendN = 0, end = 0;
+      const flush = () => { if (pend.length) { out = new Blob([out, ...pend]); pend = []; pendN = 0; } };
+      const target = new Mp4Muxer.StreamTarget({ onData: (data, pos) => { const d = data.slice(); if (pos === end) { pend.push(d); pendN += d.length; end += d.length; if (pendN > 32e6) flush(); return; } flush(); out = new Blob([out.slice(0, pos), d, out.slice(pos + d.length)]); end = Math.max(end, pos + d.length); } });
+      const mux = new Mp4Muxer.Muxer({ target, fastStart: false, firstTimestampBehavior: "offset", video: { codec: wc.video.codec.startsWith("avc") ? "avc" : "vp9", width: W, height: H, frameRate: FPS }, audio: { codec: wc.audio.codec === "opus" ? "opus" : "aac", numberOfChannels: 2, sampleRate: SR } });
+      let encErr = null;
+      venc = new VideoEncoder({ output: (ch, meta) => mux.addVideoChunk(ch, meta), error: e => { encErr = e; } });
+      venc.configure({ ...wc.video, width: W, height: H });
+      aenc = new AudioEncoder({ output: (ch, meta) => mux.addAudioChunk(ch, meta), error: e => { encErr = e; } });
+      aenc.configure({ ...wc.audio, sampleRate: SR, numberOfChannels: 2 });
+      const BLK = 4096, ch0 = audio.getChannelData(0), ch1 = audio.numberOfChannels > 1 ? audio.getChannelData(1) : ch0;
+      for (let i = 0; i < audio.length; i += BLK) { const n = Math.min(BLK, audio.length - i), d = new Float32Array(n * 2); d.set(ch0.subarray(i, i + n), 0); d.set(ch1.subarray(i, i + n), n);
+        const ad = new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(i / SR * 1e6), data: d }); aenc.encode(ad); ad.close(); }
+      /* 3) every frame: seek, draw, encode */
+      const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
+      await loadMediaEls(p, exMedia);
+      const seek = t => new Promise(r => { const done = () => { clearTimeout(to); r(); }; const to = setTimeout(done, 4000); v.addEventListener("seeked", done, { once: true }); v.currentTime = t; });
+      const N = Math.max(1, Math.round(total * FPS)), t0 = performance.now();
+      let si = 0, segK = 0;
+      for (let k = 0; k < N; k++) {
+        if (job.cancel) throw new Error("CANCEL"); if (encErr) throw encErr;
+        const kt = k / FPS; while (si < segs.length - 1 && kt >= segK + (segs[si][1] - segs[si][0])) { segK += segs[si][1] - segs[si][0]; si++; }
+        const t = Math.min(segs[si][1] - 0.001, segs[si][0] + (kt - segK));
+        await seek(t);
+        renderFrame(ctx, W, H, v, p, t, (sc, tt) => mediaFor(exMedia, sc, tt, false));
+        const fr = new VideoFrame(c, { timestamp: Math.round(kt * 1e6), duration: Math.round(1e6 / FPS) });
+        venc.encode(fr, { keyFrame: k % (FPS * 2) === 0 }); fr.close();
+        while (venc.encodeQueueSize > 3) await sleep(4);
+        if (k % 5 === 0) { const el = (performance.now() - t0) / 1000, left = el / (k + 1) * (N - k - 1); say(5 + 93 * k / N, `${Math.round(k / N * 100)}% · เฟรม ${k + 1}/${N} · เหลือประมาณ ${fmtDur(left)}`); }
+      }
+      say(99, "กำลังรวมไฟล์…");
+      await venc.flush(); await aenc.flush(); if (encErr) throw encErr; mux.finalize(); flush();
+      const file = out.slice(0, end, "video/mp4"), name = safeName(p.name) + "_ซับ.mp4";
+      finish();
+      const res = $("#exRes"); res.hidden = false;
+      res.innerHTML = `<video controls playsinline src="${URL.createObjectURL(file)}"></video><span class="hint">${esc(name)} · ${fmtSize(file.size)} · 30 fps ลื่นทุกเฟรม</span><div class="row"><button class="btn primary" id="oShare">บันทึก / แชร์</button><button class="btn" id="oDl">ดาวน์โหลด</button></div>`;
+      $("#oShare").onclick = () => shareOrSave(file, name);
+      $("#oDl").onclick = () => downloadBlob(file, name);
+    } catch (e) {
+      finish();
+      if (e && e.message === "CANCEL") { toast("ยกเลิกแล้ว"); return; }
+      const res = $("#exRes"); res.hidden = false; res.innerHTML = `<div class="err">สร้างวิดีโอไม่สำเร็จ: ${esc((e && e.message) || e)}</div>`;
+    }
+  }
   async function runExport(ac, v, vurl, unlock) {
     const job = { cancel: false }; exporting = job; setBusy(true);
     $("#burn").disabled = true; $("#exProg").hidden = false; $("#exRes").hidden = true; $("#exBar").style.width = "0%"; $("#exTxt").textContent = "กำลังเตรียม…";
@@ -5420,7 +5514,8 @@ async function viewEditor(id) {
       if ((p.fx || []).length) { try { await document.fonts.load('600 40px "IBM Plex Sans Thai"'); await document.fonts.load('500 40px "IBM Plex Sans Thai"'); await document.fonts.load('700 40px "Mali"'); } catch {} }
       const bufs = {};
       for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
-      const { W, H } = frameDims(p, v.videoWidth, v.videoHeight);
+      /* real-time recording: an iPhone cannot draw full-HD graphics 30 times a second, so record at 720p there to keep it smooth */
+      const { W, H } = frameDims(p, v.videoWidth, v.videoHeight, IOS ? 1280 : 1920);
       const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
       const dest = ac.createMediaStreamDestination();
       const src = ac.createMediaElementSource(v), og = ac.createGain(); og.gain.value = p.audio.orig; src.connect(og).connect(dest);
