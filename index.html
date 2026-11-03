@@ -29,7 +29,7 @@
   :root{ --bg:#F3F5F8; --surface:#FFFFFF; --raise:#ECEFF4; --line:#D9DEE6; --fg:#121821; --muted:#5A6473; --accent-text:#866200; --danger:#C93A34; --ok:#1F8A5B; color-scheme:light }
 }
 *{box-sizing:border-box}
-html,body{margin:0;overscroll-behavior:none;overscroll-behavior-y:none;overflow-x:hidden}
+html,body{margin:0;overscroll-behavior:none;overscroll-behavior-y:none;overflow-x:hidden;overflow-x:clip}
 /* the page scrolls normally (works in Safari, Chrome and in-app browsers); work is autosaved so a refresh never loses it */
 #scroller{min-height:100%}
 .ver{display:block;margin-top:10px;text-align:center;font-size:12px;color:var(--muted)}
@@ -286,6 +286,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
 .ln-tr{grid-column:2;font-size:13.5px;color:var(--accent-text)}
 .ln-sfx{grid-column:2;font-size:12px;color:var(--muted)}
 .lsheet{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--surface);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.35);padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));display:grid;gap:10px;max-height:56vh;overflow:auto}
+@media (max-width:899px){.lsheet{max-height:min(52vh,460px);overflow-y:auto;-webkit-overflow-scrolling:touch}}
 @media (min-width:900px){.lsheet{left:auto;right:24px;bottom:24px;width:460px;border-radius:16px;border:1px solid var(--line)}}
 .ls-head{display:flex;align-items:center;gap:10px;font-family:var(--ui)}
 .ls-head .x{margin-left:auto;width:36px;height:36px}
@@ -371,7 +372,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (28) · แบ่งจอเลื่อนขึ้นลงแบบสมูท</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (29) · แก้จอพรีวิวหาย + ซับตรงเสียง</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2549,6 +2550,13 @@ function speechUnits(raw, lang) {
   for (let k = 1; k < units.length; k++) if (units[k].s < units[k - 1].s) units[k].s = units[k - 1].s;
   return units;
 }
+/* how much two pieces of text share (letter pairs), 0..1 */
+function simText(a, b) {
+  const n = x => String(x || "").toLowerCase().replace(/[\s.,!?…"'“”()\-]/g, ""), A = n(a), B = n(b); if (A.length < 2 || B.length < 2) return A === B ? 1 : 0;
+  const m = new Map(); for (let i = 0; i < A.length - 1; i++) { const k = A.slice(i, i + 2); m.set(k, (m.get(k) || 0) + 1); }
+  let hit = 0; for (let i = 0; i < B.length - 1; i++) { const k = B.slice(i, i + 2), c = m.get(k); if (c) { hit++; m.set(k, c - 1); } }
+  return 2 * hit / (A.length - 1 + B.length - 1);
+}
 async function aiSubtitle(p, opt = {}) {
   const units = speechUnits(p.raw, p.lang);
   if (units.length < 2) throw new Error("ไม่มีข้อมูลเวลาของคำจากการถอดเสียง");
@@ -2601,6 +2609,7 @@ Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt
       const orig = unitTxt(L.a, L.b); let text = L.mod || opt.keepText ? orig : String(L.text || "").trim();
       const r = vlen(text) / Math.max(1, vlen(orig));
       if (!text || r < (pcm ? 0.3 : 0.4) || r > (pcm ? 2.6 : 1.9) + 6 / Math.max(1, vlen(orig))) text = orig; // AI rewrote too much: keep what was said
+      else if (vlen(orig) >= 6 && simText(text, orig) < (pcm ? 0.22 : 0.3)) text = orig; // the words belong to another line: keep the line in sync with the speech
       out.push({ a: L.a, b: L.b, text, tr: tgt ? String(L.tr || "").replace(/^["“”'«»]+|["“”'«»]+$/g, "").trim() : "" });
     }
     i0 = lines[lines.length - 1].b + 1;
