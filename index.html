@@ -372,7 +372,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (31) · แปลอังกฤษตรงบรรทัด</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (32) · ไฟล์แก้ซับ</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2445,7 +2445,8 @@ function compilePack(code) {
   let got = null;
   const fn = new Function("SUBWAI_PACK", "\"use strict\";\n" + String(code));
   fn(o => { got = o; });
-  if (!got || !Array.isArray(got.scenes) || !got.scenes.length) throw new Error("ไฟล์นี้ไม่ใช่ชุดกราฟิกของซับไว");
+  if (got && !Array.isArray(got.scenes) && Array.isArray(got.subs)) got.scenes = [];
+  if (!got || !Array.isArray(got.scenes) || (!got.scenes.length && !Array.isArray(got.subs))) throw new Error("ไฟล์นี้ไม่ใช่ชุดกราฟิกของซับไว");
   got.scenes.forEach((x, i) => { if (typeof x.draw !== "function") throw new Error(`ฉากที่ ${i + 1} ไม่มีส่วนวาดภาพ`); if (!isFinite(x.start) || !isFinite(x.end) || x.end <= x.start) throw new Error(`ฉากที่ ${i + 1} เวลาไม่ถูกต้อง`); });
   return got;
 }
@@ -2454,8 +2455,28 @@ function ensurePack(p) {
   if (PACKFN.has(pk.id + ":0")) return true;
   try { const g = compilePack(pk.code); g.scenes.forEach((x, i) => PACKFN.set(pk.id + ":" + i, x.draw)); loadPackAssets(pk.id, g); return true; } catch (e) { console.error(e); return false; }
 }
+/* Thai text cleanup: hidden zero-width characters, ํ+า written instead of ำ, double spaces */
+function cleanThai(s) { return String(s || "").normalize("NFC").replace(/[\u200b-\u200d\ufeff]/g, "").replace(/\u0e4d\u0e32/g, "\u0e33").replace(/\s+/g, " ").trim(); }
+/* a pack may carry subtitle fixes: [{ at: seconds, from: "text now", text: "fixed text" }] — text "" removes the line */
+let PACK_SUBS = 0;
+function applyPackSubs(p, subs) {
+  let n = 0; if (!Array.isArray(subs)) return 0;
+  for (const f of subs) {
+    const at = +(f && f.at); if (!isFinite(at)) continue;
+    const want = cleanThai(f.from);
+    const c = p.captions.filter(c => Math.abs(c.start - at) < 0.35 && (!want || cleanThai(c.text) === want)).sort((a, b) => Math.abs(a.start - at) - Math.abs(b.start - at))[0];
+    if (!c) continue;
+    const text = cleanThai(f.text), i = p.captions.indexOf(c);
+    if (!text) { const pr = p.captions[i - 1]; if (pr && pr.end >= c.start - 0.35) pr.end = Math.max(pr.end, c.end); p.captions.splice(i, 1); n++; continue; }
+    if (c.tr && c.trSrc === undefined) c.trSrc = c.text;
+    if (text !== c.text) { c.text = text; c.hl = (c.hl || []).filter(w => text.includes(w)); n++; }
+  }
+  return n;
+}
 function applyPack(p, code, name) {
   const g = compilePack(code), id = "pk" + uid();
+  PACK_SUBS = applyPackSubs(p, g.subs);
+  if (!g.scenes.length) return 0;
   g.scenes.forEach((x, i) => PACKFN.set(id + ":" + i, x.draw)); loadPackAssets(id, g);
   p.pack = { id, code: String(code), name: name || "ชุดกราฟิก", at: Date.now(), accent: g.theme && g.theme.accent || "" };
   const list = g.scenes.map((x, i) => ({ id: uid(), start: +x.start, end: +x.end, type: "custom", pk: id + ":" + i, show: x.show !== false, title: String(x.title || "กราฟิกฉากที่ " + (i + 1)).slice(0, 60), overlay: !!x.overlay, look: LOOKS3[x.look] ? x.look : undefined, items: [], media: null })).sort((a, b) => a.start - b.start);
@@ -2626,7 +2647,7 @@ Reply only JSON: {"lines": [{"a": first unit, "b": last unit, "text": "..."${tgt
     if (n && n.start - c.end < 0.25) c.end = n.start;
     if (c.end <= c.start) c.end = c.start + 0.3;
   }
-  const res = caps.map(c => ({ id: uid(), start: +c.start.toFixed(2), end: +c.end.toFixed(2), text: c.text, tr: c.tr }));
+  const res = caps.map(c => ({ id: uid(), start: +c.start.toFixed(2), end: +c.end.toFixed(2), text: cleanThai(c.text), tr: c.tr }));
   /* translate the FINAL text in its own pass (whole-script brief + glossary), so every English line matches its Thai line */
   if (wantTr && res.length) {
     try { await translateCaptions(res, p.lang, wantTr, opt.onTr); }
@@ -5330,7 +5351,7 @@ async function viewEditor(id) {
   };
   $("#pkCopy").onclick = async () => { try { await navigator.clipboard.writeText(packRequest(p)); toast("คัดลอกแล้ว ไปวางในแชตกับ Claude ได้เลย", 3000); } catch { toast("คัดลอกไม่ได้ ใช้ปุ่มส่งสคริปต์แทน"); } };
   const pkLoad = (code, name) => {
-    try { const n = applyPack(p, code, name); changed(); syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); pkPaint(); toast(`นำเข้าชุดกราฟิกแล้ว ${n} ฉาก กดเล่นดูได้เลย`, 3500); seekTo(0); draw(); }
+    try { const n = applyPack(p, code, name); changed(); syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); pkPaint(); toast(n ? `นำเข้าชุดกราฟิกแล้ว ${n} ฉาก${PACK_SUBS ? ` · แก้ซับ ${PACK_SUBS} บรรทัด` : ""} กดเล่นดูได้เลย` : `แก้ซับแล้ว ${PACK_SUBS} บรรทัด`, 3500); renderList(); seekTo(0); draw(); }
     catch (e) { toast("นำเข้าไม่ได้: " + e.message, 5000); }
   };
   $("#pkFile").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; pkLoad(await f.text(), f.name.replace(/\.[^.]+$/, "")); };
