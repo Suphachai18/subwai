@@ -372,7 +372,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (33) · ลากจัดหน้าในฉากแบ่งจอ</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (34) · เสียงประกอบชุดมินิมอล</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -1027,6 +1027,15 @@ const BUILTIN = {
   shutter: { n: "ชัตเตอร์", d: 0.22, rv: 0.05, lp: 7000, en: "camera shutter, photo or screenshot", f: (c, o) => { [0, 0.075].forEach((t, i) => { const n = nzb(c, 0.05), b = bq(c, "bandpass", i ? 1700 : 2400, 1.6), g = envG(c, [[t, 0], [t + 0.002, 0.6], [t + 0.045, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(t); }); } },
   typing: { n: "พิมพ์", d: 1.0, rv: 0.05, lp: 4500, en: "soft keyboard typing, text or search appears", f: (c, o) => { let t = 0.02; while (t < 0.9) { const n = nzb(c, 0.03), b = bq(c, "bandpass", 2000 + Math.random() * 1500, 2), g = envG(c, [[t, 0], [t + 0.002, 0.3 + Math.random() * 0.2], [t + 0.025, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(t); t += 0.07 + Math.random() * 0.07; } } },
   boing: { n: "ดึ๋ง", d: 0.6, rv: 0.08, lp: 2500, en: "light playful boing, funny moment", f: (c, o) => { const s = c.createOscillator(); s.type = "sine"; s.frequency.setValueAtTime(200, 0); s.frequency.exponentialRampToValueAtTime(420, 0.45); const l = c.createOscillator(); l.frequency.value = 11; const lg = c.createGain(); lg.gain.setValueAtTime(40, 0); lg.gain.linearRampToValueAtTime(4, 0.55); l.connect(lg).connect(s.frequency); const g = envG(c, [[0, 0], [0.01, 0.6], [0.55, 0.0001, "e"]]); s.connect(g).connect(o); s.start(0); l.start(0); s.stop(0.6); l.stop(0.6); } },
+  /* minimal "studio" set: soft, warm, low level — for premium motion graphics */
+  tap: { n: "แตะนุ่ม", d: 0.12, rv: 0.14, lp: 5200, en: "soft felt tap, a small item appears", f: (c, o) => { osc(c, o, "sine", 1480, 1240, 0, 0.07, 0.5, 0.002); osc(c, o, "sine", 740, 700, 0, 0.09, 0.35, 0.002); const n = nzb(c, 0.02), b = bq(c, "bandpass", 3000, 1.2), g = envG(c, [[0, 0], [0.002, 0.12], [0.018, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(0); } },
+  glide: { n: "เลื่อนนุ่ม", d: 0.6, rv: 0.18, lp: 3800, en: "very soft airy glide, scene or card slides in", f: (c, o) => air(c, o, 0.6, 380, 1300, 520, 0.26, 0.55, 0.55, [-0.35, 0.35]) },
+  felt: { n: "ปั๊มนุ่ม", d: 0.26, rv: 0.12, lp: 2600, en: "soft rubber-stamp thump", f: (c, o) => { osc(c, o, "sine", 150, 68, 0, 0.2, 0.9, 0.002); const n = nzb(c, 0.06, true), b = bq(c, "bandpass", 900, 0.9), g = envG(c, [[0, 0], [0.003, 0.35], [0.05, 0.0001, "e"]]); n.connect(b).connect(g).connect(o); n.start(0); } },
+  note: { n: "โน้ตนุ่ม", d: 0.5, rv: 0.32, lp: 4800, en: "warm muted marimba note, a point is revealed", f: (c, o) => { osc(c, o, "sine", 784, 0, 0, 0.42, 0.6, 0.003); osc(c, o, "sine", 3136, 0, 0, 0.08, 0.06, 0.002); osc(c, o, "triangle", 392, 0, 0, 0.3, 0.12, 0.004); } },
+  notelo: { n: "โน้ตต่ำ", d: 0.55, rv: 0.32, lp: 4200, en: "warm low marimba note", f: (c, o) => { osc(c, o, "sine", 587.3, 0, 0, 0.46, 0.6, 0.003); osc(c, o, "sine", 2349, 0, 0, 0.08, 0.05, 0.002); osc(c, o, "triangle", 293.7, 0, 0, 0.32, 0.12, 0.004); } },
+  notehi: { n: "โน้ตสูง", d: 0.45, rv: 0.32, lp: 5600, en: "warm high marimba note", f: (c, o) => { osc(c, o, "sine", 987.8, 0, 0, 0.38, 0.55, 0.003); osc(c, o, "sine", 3951, 0, 0, 0.07, 0.05, 0.002); osc(c, o, "triangle", 493.9, 0, 0, 0.28, 0.1, 0.004); } },
+  bloom: { n: "บลูม", d: 1.8, rv: 0.5, lp: 2600, en: "soft warm swell, a big reveal or title", f: (c, o) => { [[220, 0.5], [329.6, 0.34], [440, 0.2], [659.3, 0.08]].forEach(([fr, a]) => { const s = c.createOscillator(); s.type = "sine"; s.frequency.value = fr; const g = envG(c, [[0, 0], [0.45, a], [1.0, a * 0.7], [1.75, 0]]); s.connect(g).connect(o); s.start(0); s.stop(1.8); }); } },
+  paper: { n: "กระดาษ", d: 0.4, rv: 0.06, lp: 6500, en: "paper card or photo sliding onto a table", f: (c, o) => { const n = nzb(c, 0.4, true), b = bq(c, "bandpass", 2400, 0.5), hp = bq(c, "highpass", 700, 0.6), g = envG(c, [[0, 0], [0.07, 0.6], [0.2, 0.25], [0.38, 0]]); n.connect(b).connect(hp).connect(g).connect(o); n.start(0); } },
   wrong: { n: "ผิด", d: 0.55, rv: 0.12, lp: 1800, en: "soft two-note wrong answer, mistake, no", f: (c, o) => { osc(c, o, "triangle", 392, 0, 0, 0.22, 0.5, 0.008); osc(c, o, "triangle", 311, 0, 0.17, 0.35, 0.5, 0.008); } }
 };
 const SFX_ALIAS = { correct: "chime", glitch: "swish" };
@@ -2477,6 +2486,14 @@ function applyPack(p, code, name) {
   const g = compilePack(code), id = "pk" + uid();
   PACK_SUBS = applyPackSubs(p, g.subs);
   if (!g.scenes.length) return 0;
+  /* a pack may carry its own sound design: sfx: [{ t, key, vol }] — replaces the auto whooshes when trSfx is false */
+  if (Array.isArray(g.sfx)) {
+    p.sfx = (p.sfx || []).filter(x => x.src !== "pk" && !(g.trSfx === false && x.src === "tr"));
+    for (const x of g.sfx) { let k = String(x && x.key || ""); if (!/^[bc]:/.test(k)) k = "b:" + k; if (k.startsWith("b:") && !bkey(k.slice(2))) continue; const t = +x.t; if (!isFinite(t) || t < 0) continue;
+      p.sfx.push({ id: uid(), key: k, t: +t.toFixed(2), vol: Math.max(0, Math.min(1, x.vol == null ? 0.5 : +x.vol)), src: "pk" }); }
+    p.sfx.sort((a, b) => a.t - b.t);
+  }
+  if (g.trSfx === false) p.split.trSfx = false;
   g.scenes.forEach((x, i) => PACKFN.set(id + ":" + i, x.draw)); loadPackAssets(id, g);
   p.pack = { id, code: String(code), name: name || "ชุดกราฟิก", at: Date.now(), accent: g.theme && g.theme.accent || "" };
   const list = g.scenes.map((x, i) => ({ id: uid(), start: +x.start, end: +x.end, type: "custom", pk: id + ":" + i, show: x.show !== false, title: String(x.title || "กราฟิกฉากที่ " + (i + 1)).slice(0, 60), overlay: !!x.overlay, look: LOOKS3[x.look] ? x.look : undefined, items: [], media: null })).sort((a, b) => a.start - b.start);
@@ -5351,7 +5368,7 @@ async function viewEditor(id) {
   };
   $("#pkCopy").onclick = async () => { try { await navigator.clipboard.writeText(packRequest(p)); toast("คัดลอกแล้ว ไปวางในแชตกับ Claude ได้เลย", 3000); } catch { toast("คัดลอกไม่ได้ ใช้ปุ่มส่งสคริปต์แทน"); } };
   const pkLoad = (code, name) => {
-    try { const n = applyPack(p, code, name); changed(); syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); pkPaint(); toast(n ? `นำเข้าชุดกราฟิกแล้ว ${n} ฉาก${PACK_SUBS ? ` · แก้ซับ ${PACK_SUBS} บรรทัด` : ""} กดเล่นดูได้เลย` : `แก้ซับแล้ว ${PACK_SUBS} บรรทัด`, 3500); renderList(); seekTo(0); draw(); }
+    try { const n = applyPack(p, code, name); changed(); syncSplitUI(); syncStyleUI(); syncFrame(); renderScenes(); sizeStage(); pkPaint(); toast(n ? `นำเข้าชุดกราฟิกแล้ว ${n} ฉาก${p.sfx.some(x => x.src === "pk") ? ` · เสียงประกอบ ${p.sfx.filter(x => x.src === "pk").length} จุด` : ""}${PACK_SUBS ? ` · แก้ซับ ${PACK_SUBS} บรรทัด` : ""} กดเล่นดูได้เลย` : `แก้ซับแล้ว ${PACK_SUBS} บรรทัด`, 3500); renderList(); try { renderSfx(); } catch {} seekTo(0); draw(); }
     catch (e) { toast("นำเข้าไม่ได้: " + e.message, 5000); }
   };
   $("#pkFile").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; pkLoad(await f.text(), f.name.replace(/\.[^.]+$/, "")); };
