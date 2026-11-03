@@ -371,7 +371,7 @@ html.fsmode .stage-col{z-index:100!important;position:static!important} html.fsm
     </button>
   </header>
   <main id="app"></main>
-  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (24) · ส่งออก Full HD ทีละเฟรม</span>
+  <span class="ver">ซับไว เวอร์ชัน 3 พ.ย. (25) · ส่งออก Full HD + แก้เสียง</span>
 </div></div>
 <div id="modalRoot"></div>
 
@@ -2646,7 +2646,30 @@ function wordTime(p, c, w) {
 }
 const EMPH_SFX = { hit: "punchy default for an important word", pop: "light or fun word", sparkle: "benefit, beauty or wow", ding: "tip or idea", kaching: "price, money or saving", whoosh: "speed, change or movement", boom: "big reveal or shocking fact (use rarely)" };
 /* ================= smooth export helpers ================= */
+/* decode the compressed sound frames with the browser's own audio decoder (most reliable on iPhone) */
+async function decodeTrackAudio(file) {
+  if (!window.AudioDecoder) throw new Error("no AudioDecoder");
+  const ix = await mp4Index(file), A = ix.a; if (!A) return null;
+  const cfg = A.codec === "aac" ? { codec: "mp4a.40." + (A.aot || 2), sampleRate: A.sr, numberOfChannels: A.ch, description: A.desc } : { codec: "mp3", sampleRate: A.sr, numberOfChannels: A.ch };
+  const ok = await AudioDecoder.isConfigSupported(cfg); if (!ok || !ok.supported) throw new Error("decoder unsupported " + cfg.codec);
+  const durS = A.samples.reduce((m, x) => Math.max(m, (x.dts + x.dur) / A.ts), 0), len = Math.ceil((durS + 0.5) * A.sr) + 4096;
+  const L = new Float32Array(len), R = new Float32Array(len); let err = null, got = 0;
+  const dec = new AudioDecoder({ output: d => { try { const n = d.numberOfFrames, o = Math.round(d.timestamp / 1e6 * A.sr); if (o >= 0 && o < len) { const m = Math.min(n, len - o), b0 = new Float32Array(n); d.copyTo(b0, { planeIndex: 0, format: "f32-planar" }); L.set(b0.subarray(0, m), o);
+    if (d.numberOfChannels > 1) { const b1 = new Float32Array(n); d.copyTo(b1, { planeIndex: 1, format: "f32-planar" }); R.set(b1.subarray(0, m), o); } else R.set(b0.subarray(0, m), o); got += m; } } catch (e) { err = e; } finally { d.close(); } }, error: e => { err = e; } });
+  dec.configure(cfg);
+  let win = null, wa = 0;
+  for (const x of A.samples) {
+    if (err) throw err;
+    if (!win || x.off < wa || x.off + x.size > wa + win.length) { wa = x.off; win = new Uint8Array(await file.slice(wa, wa + Math.max(x.size, 4e6)).arrayBuffer()); }
+    dec.decode(new EncodedAudioChunk({ type: "key", timestamp: Math.round(x.dts / A.ts * 1e6), duration: Math.round(x.dur / A.ts * 1e6), data: win.slice(x.off - wa, x.off - wa + x.size) }));
+    if (dec.decodeQueueSize > 50) await new Promise(r => setTimeout(r, 1));
+  }
+  await dec.flush(); try { dec.close(); } catch {}
+  if (err) throw err; if (!got) throw new Error("decoded nothing");
+  return { L, R, length: len, rate: A.sr };
+}
 async function decodeClipAudio(file, SR) {
+  try { const r = await decodeTrackAudio(file); if (r === null) return null; return r; } catch (e) { console.warn("track decoder failed", e); }
   const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   const dec = async ab => { const c = new AC(2, SR, SR); return await new Promise((res, rej) => { const pr = c.decodeAudioData(ab, res, rej); if (pr && pr.then) pr.then(res, rej); }); };
   /* the sound track alone (small .m4a pieces) decodes far more reliably on iPhone than the whole video */
@@ -2716,10 +2739,10 @@ async function mp4Index(file) {
       const e = scan(ent.a, ent.b, "esds"); if (e < 0) continue;
       let p = e + 12; const end = Math.min(ent.b, e + u32(e));
       const len = () => { let n = 0, c; do { c = B[p++]; n = (n << 7) | (c & 127); } while (c & 128 && p < end); return n; };
-      while (p < end) { const tag = B[p++], n = len(); if (tag === 3) { const fl = B[p + 2]; p += 3 + (fl & 128 ? 2 : 0) + (fl & 64 ? 1 + B[p + 3] : 0) + (fl & 32 ? 2 : 0); } else if (tag === 4) p += 13; else if (tag === 5) { T.desc = B.slice(p, p + n); break; } else p += n; }
-      if (!T.desc) continue;
-      const SR = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350], x = (T.desc[0] << 8) | T.desc[1];
-      T.codec = "aac"; T.sr = SR[(x >> 7) & 15] || 48000; T.ch = ((x >> 3) & 15) || 2;
+      while (p < end) { const tag = B[p++], n = len(); if (tag === 3) { const fl = B[p + 2]; p += 3 + (fl & 128 ? 2 : 0) + (fl & 64 ? 1 + B[p + 3] : 0) + (fl & 32 ? 2 : 0); } else if (tag === 4) { T.oti = B[p]; p += 13; } else if (tag === 5) { T.desc = B.slice(p, p + n); break; } else p += n; }
+      if (!T.desc) { if (T.oti === 0x6B || T.oti === 0x69) { T.codec = "mp3"; T.ch = u16(ent.s + 24) || 2; T.sr = u32(ent.s + 32) >>> 16 || 44100; } else continue; }
+      else { const SR = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350], x = (T.desc[0] << 8) | T.desc[1];
+        T.codec = "aac"; T.aot = T.desc[0] >> 3; T.sr = SR[(x >> 7) & 15] || 48000; T.ch = ((x >> 3) & 15) || 2; }
     }
     /* sample table */
     const stts = one(stbl, "stts"), ctts = one(stbl, "ctts"), stss = one(stbl, "stss"), stsz = one(stbl, "stsz"), stsc = one(stbl, "stsc"), stco = one(stbl, "stco") || one(stbl, "co64");
@@ -5462,9 +5485,9 @@ async function viewEditor(id) {
       /* 1) sound: original speech with tiny fades at every cut + sound effects, mixed offline */
       say(1, "กำลังเตรียมเสียง…");
       const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext, SR = 48000;
-      let pcm = null; try { pcm = await decodeClipAudio(blob, SR); } catch (e) { throw new Error("แยกเสียงจากวิดีโอไม่ได้ (" + ((e && e.message) || e) + ")"); }
+      let pcm = null; try { pcm = await decodeClipAudio(blob, SR); } catch (e) { throw new Error("แยกเสียงจากวิดีโอไม่ได้ (" + ((e && e.message) || (e && e.name) || "เบราว์เซอร์ไม่บอกสาเหตุ") + ")"); }
       const mix0 = new AC(2, SR, SR); let orig = null;
-      if (pcm) { orig = mix0.createBuffer(2, pcm.length, SR); orig.copyToChannel(pcm.L, 0); orig.copyToChannel(pcm.R, 1); pcm = null; }
+      if (pcm) { orig = mix0.createBuffer(2, pcm.length, pcm.rate || SR); orig.copyToChannel(pcm.L, 0); orig.copyToChannel(pcm.R, 1); pcm = null; }
       const bufs = {}; for (const s of p.sfx) if (!bufs[s.key]) bufs[s.key] = await getSfxBuffer(s.key);
       const mix = new AC(2, Math.max(1, Math.ceil(total * SR)), SR);
       let at = 0; const F = 0.012;
